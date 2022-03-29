@@ -1,0 +1,78 @@
+body {
+    color: white;
+    background-image: url("bg.jpg");
+}
+
+.team {
+    display: flex;
+    /* margin: 10px; */
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .winner {
+    background-color: green;
+  }
+  
+  .team > * {
+    padding: 10px;
+  }
+  
+  .team-label {
+    
+  }
+  
+  .team-score {
+    background-color: grey;
+    border-radius: 3px;
+  }
+  
+  .bracket-matches{
+    /* background-color: blue; */
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .match {
+    background-color: brown;
+    /* background-color: grey; */
+    border-radius: 3px;
+    margin: 10px;
+  }
+  
+  .bracket-round {
+    margin: 10px;
+    /* background-color: cadetblue; */
+  }
+  
+  .navbar {
+    width: 100vh;
+  }
+  
+  .navbar ul {
+    list-style: none;
+  }
+  
+  .navbar li {
+    display: inline;
+    padding: 3px;
+  }
+  
+  .navbar li a {
+    color: greenyellow;
+    text-decoration: none;
+  }
+  
+  .table-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .link-inline {
+    text-decoration: none;
+    color:greenyellow;
+  }
+  
