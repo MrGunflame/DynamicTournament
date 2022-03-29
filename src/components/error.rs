@@ -1,24 +1,20 @@
 use yew::prelude::*;
 
-pub struct Error {
-    error: String,
-}
+pub struct Error;
 
 impl Component for Error {
     type Message = ();
     type Properties = ErrorProperties;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        Self {
-            error: ctx.props().error.clone(),
-        }
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
+    fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <>
                 <span>{"sadge"}</span>
-                <span>{ self.error.clone() }</span>
+                <span>{ ctx.props().error.clone() }</span>
             </>
         }
     }

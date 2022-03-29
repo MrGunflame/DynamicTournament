@@ -1,4 +1,3 @@
-use yew::callback::Callback;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -20,11 +19,7 @@ impl Component for Teams {
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        false
-    }
-
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         let teams: Html = self
             .teams
             .teams

@@ -3,15 +3,15 @@ mod routes;
 
 use yew::prelude::*;
 
-extern crate wee_alloc;
+use crate::components::config_provider::ConfigProvider;
 
-use yew::prelude::*;
+extern crate wee_alloc;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn main() {
-    yew::start_app::<crate::routes::tournament::Tournament>();
+    yew::start_app::<App>();
 }
 
 pub struct App {}
@@ -20,13 +20,15 @@ impl Component for App {
     type Message = ();
     type Properties = ();
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {}
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
-            <crate::routes::tournament::Tournament />
+            <ConfigProvider>
+                <crate::routes::tournament::Tournament />
+            </ConfigProvider>
         }
     }
 }
@@ -54,10 +56,6 @@ pub struct Player {
     account_name: String,
     role: i64,
     discord: String,
-}
-
-pub enum Msg {
-    AddOne,
 }
 
 pub fn render_data<T, F>(data: &Option<Result<T, Box<dyn std::error::Error>>>, f: F) -> Html

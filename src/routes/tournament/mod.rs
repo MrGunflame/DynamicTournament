@@ -10,6 +10,7 @@ use reqwasm::http::Request;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::components::config_provider::Config;
 use crate::{render_data, Data, DataResult};
 
 pub struct Tournament {
@@ -23,10 +24,11 @@ impl Component for Tournament {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
+        let (config, _) = ctx.link().context::<Config>(Callback::noop()).unwrap();
 
         link.send_future(async move {
-            async fn fetch_data() -> DataResult<crate::MatchmakerInput> {
-                let data = Request::get("http://localhost:8000/data.json")
+            async fn fetch_data(config: Config) -> DataResult<crate::MatchmakerInput> {
+                let data = Request::get(&format!("{}/data.json", config.api_url))
                     .send()
                     .await?
                     .json()
@@ -35,7 +37,7 @@ impl Component for Tournament {
                 Ok(data)
             }
 
-            let data = Some(fetch_data().await);
+            let data = Some(fetch_data(config).await);
 
             Msg::Update(data)
         });
@@ -43,7 +45,7 @@ impl Component for Tournament {
         Self { data: None }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Update(data) => {
                 self.data = data;

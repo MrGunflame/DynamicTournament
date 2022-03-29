@@ -18,11 +18,7 @@ impl Component for TeamDetails {
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        false
-    }
-
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         let team = match self.teams.teams.get(self.index as usize) {
             Some(team) => team.clone(),
             None => {
