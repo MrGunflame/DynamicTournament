@@ -15,8 +15,9 @@ serde = { version = "1.0", features = ["derive"] }
 wasm-bindgen-futures = "0.4"
 yew-router = "0.16"
 gloo-console = "0.2.1"
+serde_repr = "0.1.7"
 
 [profile.release]
 debug-assertions = false
-opt-level = "s"
+opt-level = "z"
 lto = "fat"
