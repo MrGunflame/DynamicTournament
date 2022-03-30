@@ -1,25 +1,21 @@
 use yew::prelude::*;
 
+use crate::api::tournament as api;
+
 use std::rc::Rc;
 
-pub struct TeamDetails {
-    teams: Rc<crate::MatchmakerInput>,
-    index: u32,
-}
+pub struct TeamDetails;
 
 impl Component for TeamDetails {
     type Message = ();
     type Properties = TeamDetailsProps;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        Self {
-            teams: ctx.props().teams.clone(),
-            index: ctx.props().index,
-        }
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        let team = match self.teams.teams.get(self.index as usize) {
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let team = match ctx.props().teams.teams.get(ctx.props().index as usize) {
             Some(team) => team.clone(),
             None => {
                 return html! {
@@ -34,7 +30,7 @@ impl Component for TeamDetails {
             .map(|player| {
                 html! {
                     <tr>
-                        <td>{player.role}</td>
+                        <td>{player.role.to_string()}</td>
                         <td>{player.account_name}</td>
                     </tr>
                 }
@@ -60,6 +56,6 @@ impl Component for TeamDetails {
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct TeamDetailsProps {
-    pub teams: Rc<crate::MatchmakerInput>,
+    pub teams: Rc<api::Tournament>,
     pub index: u32,
 }

@@ -6,6 +6,8 @@ use super::team::Team;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::api::tournament as api;
+
 pub struct Match {
     scores: Rc<RefCell<[u64; 2]>>,
 }
@@ -91,7 +93,7 @@ pub struct MatchProperties {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MatchMember {
-    Entrant(crate::Team),
+    Entrant(api::Team),
     Placeholder(String),
 }
 

@@ -10,12 +10,13 @@ use reqwasm::http::Request;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::api::tournament as api;
 use crate::components::config_provider::Config;
 use crate::{render_data, Data, DataResult};
 
 pub struct Tournament {
     // data: Option<crate::MatchmakerInput>,
-    data: Data<crate::MatchmakerInput>,
+    data: Data<api::Tournament>,
 }
 
 impl Component for Tournament {
@@ -27,7 +28,7 @@ impl Component for Tournament {
         let (config, _) = ctx.link().context::<Config>(Callback::noop()).unwrap();
 
         link.send_future(async move {
-            async fn fetch_data(config: Config) -> DataResult<crate::MatchmakerInput> {
+            async fn fetch_data(config: Config) -> DataResult<api::Tournament> {
                 let data = Request::get(&format!("{}/data.json", config.api_url))
                     .send()
                     .await?
@@ -94,7 +95,7 @@ impl Component for Tournament {
 }
 
 pub enum Msg {
-    Update(Data<crate::MatchmakerInput>),
+    Update(Data<api::Tournament>),
 }
 
 #[derive(Clone, Routable, PartialEq)]

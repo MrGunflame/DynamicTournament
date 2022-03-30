@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::api::tournament as api;
 use crate::components::r#match::{Match, MatchMember};
 
 use yew::prelude::*;
@@ -110,7 +111,7 @@ impl Component for Bracket {
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct BracketProperties {
-    pub tournament: Rc<crate::MatchmakerInput>,
+    pub tournament: Rc<api::Tournament>,
 }
 
 struct BracketState {

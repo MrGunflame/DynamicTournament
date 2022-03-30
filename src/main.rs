@@ -1,3 +1,4 @@
+mod api;
 mod components;
 mod routes;
 
@@ -31,31 +32,6 @@ impl Component for App {
             </ConfigProvider>
         }
     }
-}
-
-#[derive(serde::Deserialize, Debug)]
-pub struct Config {
-    api_url: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
-pub struct MatchmakerInput {
-    teams: Vec<Team>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct Team {
-    pub name: String,
-    pub memberCount: u64,
-    pub players: Vec<Player>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct Player {
-    #[serde(rename = "accountName")]
-    account_name: String,
-    role: i64,
-    discord: String,
 }
 
 pub fn render_data<T, F>(data: &Option<Result<T, Box<dyn std::error::Error>>>, f: F) -> Html

@@ -3,24 +3,22 @@ use yew_router::prelude::*;
 
 use super::Route;
 
+use crate::api::tournament as api;
+
 use std::rc::Rc;
 
-pub struct Teams {
-    teams: Rc<crate::MatchmakerInput>,
-}
+pub struct Teams;
 
 impl Component for Teams {
     type Message = ();
     type Properties = TeamsProps;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        Self {
-            teams: ctx.props().teams.clone(),
-        }
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        let teams: Html = self
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let teams: Html = ctx.props()
             .teams
             .teams
             .iter()
@@ -52,5 +50,5 @@ impl Component for Teams {
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct TeamsProps {
-    pub teams: Rc<crate::MatchmakerInput>,
+    pub teams: Rc<api::Tournament>,
 }
