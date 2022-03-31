@@ -1,4 +1,4 @@
-# DynamicTournamentUI
+# DynamicTournament
 
 
 ## TODO
