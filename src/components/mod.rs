@@ -4,4 +4,3 @@ pub mod loader;
 pub mod r#match;
 pub mod providers;
 pub mod team;
-pub mod tournament;
