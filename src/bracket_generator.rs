@@ -68,8 +68,6 @@ where
             i += 1;
         }
 
-        gloo_console::log!(format!("{:?}", placeholder_matches));
-
         // Fill `matches` will TBD matches.
         while i < matches.capacity() {
             matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
@@ -158,7 +156,16 @@ where
         }
     }
 
+    /// Update the winner of a match, moving the bracket state forward.
     pub fn update_winner(&mut self, index: usize, winner: Winner) {
+        self.update_winner_callback(index, winner, |_| {});
+    }
+
+    /// Update a winner, calling `f` ON THE NEXT MATCH.
+    pub fn update_winner_callback<F>(&mut self, index: usize, winner: Winner, f: F)
+    where
+        F: FnOnce(&mut Match<T>),
+    {
         // index is out of bounds.
         if index >= self.matches.len() {
             return;
@@ -175,6 +182,8 @@ where
                 };
 
                 m.entrants[index % 2] = entrant;
+
+                f(m);
             }
             Winner::None => {
                 // Get the next match, or return if there's no next match.
@@ -186,6 +195,35 @@ where
                 m.entrants[index % 2] = EntrantSpot::TBD;
             }
         }
+    }
+
+    /// Returns the index of the round the match is located in based on the
+    /// match index.
+    pub fn round_index(&self, index: usize) -> usize {
+        let mut counter = 0;
+        let mut buffer = 0;
+        let mut start = self.initial_matches;
+        while index >= buffer + start {
+            counter += 1;
+            buffer += start;
+            start /= 2;
+        }
+
+        return counter;
+    }
+
+    /// Returns the index of the match within its round based on the match index.
+    pub fn match_index(&self, index: usize) -> usize {
+        let mut buffer = 0;
+        let mut start = self.initial_matches;
+        while index >= buffer + start {
+            buffer += start;
+            start /= 2;
+        }
+
+        let counter = index - buffer;
+
+        return counter;
     }
 }
 
@@ -293,6 +331,44 @@ impl<T> EntrantSpot<T> {
     pub fn take(&mut self) -> Self {
         std::mem::replace(self, Self::Empty)
     }
+
+    /// Unwraps `self` value, panicking if it is not [`Self::Entrant`].
+    ///
+    /// # Panics
+    ///
+    /// This method panics when `self` is not [`Self::Entrant`].
+    pub fn unwrap(self) -> T {
+        match self {
+            Self::Entrant(entrant) => entrant,
+            _ => panic!(
+                "called unwrap on a value of EntrantSpot::{}",
+                match self {
+                    Self::Empty => "Empty",
+                    Self::TBD => "TBD",
+                    _ => unreachable!(),
+                }
+            ),
+        }
+    }
+
+    /// Unwraps `self` value, panicking if it is not [`Self::Entrant`].
+    ///
+    /// # Panics
+    ///
+    /// This method panics when `self` is not [`Self::Entrant`].
+    pub fn unwrap_ref_mut(&mut self) -> &mut T {
+        match self {
+            Self::Entrant(ref mut entrant) => entrant,
+            _ => panic!(
+                "called unwrap on a value of EntrantSpot::{}",
+                match self {
+                    Self::Empty => "Empty",
+                    Self::TBD => "TBD",
+                    _ => unreachable!(),
+                }
+            ),
+        }
+    }
 }
 
 /// Calculates the amount of entrants in the first round.
@@ -317,6 +393,27 @@ fn predict_amount_of_matches(starting_amount: usize) -> usize {
     }
 
     counter
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct EntrantWithScore<T, S> {
+    pub entrant: T,
+    pub score: S,
+    pub winner: bool,
+}
+
+impl<T, S> EntrantWithScore<T, S>
+where
+    S: Default,
+{
+    /// Creates a new `EntrantWithScore` with a score of 0.
+    pub fn new(entrant: T) -> Self {
+        EntrantWithScore {
+            entrant,
+            score: S::default(),
+            winner: false,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -464,5 +561,33 @@ mod tests {
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
         );
+    }
+
+    #[test]
+    pub fn test_single_elimination_round_index() {
+        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let tournament = SingleElimination::new(entrants);
+
+        assert_eq!(tournament.round_index(0), 0);
+        assert_eq!(tournament.round_index(1), 0);
+        assert_eq!(tournament.round_index(2), 0);
+        assert_eq!(tournament.round_index(3), 0);
+        assert_eq!(tournament.round_index(4), 1);
+        assert_eq!(tournament.round_index(5), 1);
+        assert_eq!(tournament.round_index(6), 2);
+    }
+
+    #[test]
+    pub fn test_single_elimination_match_index() {
+        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let tournament = SingleElimination::new(entrants);
+
+        assert_eq!(tournament.match_index(0), 0);
+        assert_eq!(tournament.match_index(1), 1);
+        assert_eq!(tournament.match_index(2), 2);
+        assert_eq!(tournament.match_index(3), 3);
+        assert_eq!(tournament.match_index(4), 0);
+        assert_eq!(tournament.match_index(5), 1);
+        assert_eq!(tournament.match_index(6), 0);
     }
 }
