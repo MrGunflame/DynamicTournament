@@ -1,10 +1,9 @@
 mod api;
+mod bracket_generator;
 mod components;
 mod routes;
 
 use yew::prelude::*;
-
-use crate::components::config_provider::ConfigProvider;
 
 extern crate wee_alloc;
 
@@ -12,26 +11,7 @@ extern crate wee_alloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn main() {
-    yew::start_app::<App>();
-}
-
-pub struct App {}
-
-impl Component for App {
-    type Message = ();
-    type Properties = ();
-
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self {}
-    }
-
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        html! {
-            <ConfigProvider>
-                <crate::routes::tournament::Tournament />
-            </ConfigProvider>
-        }
-    }
+    yew::start_app::<routes::App>();
 }
 
 pub fn render_data<T, F>(data: &Option<Result<T, Box<dyn std::error::Error>>>, f: F) -> Html
