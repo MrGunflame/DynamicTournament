@@ -11,7 +11,7 @@ pub struct SingleElimination<T> {
 // FIMXE: Remove T: Clone trait bound
 impl<T> SingleElimination<T>
 where
-    T: Clone,
+    T: Entrant + Clone,
 {
     /// Creates a new `SingleElimination` tournament.
     // FIXME: Replace Vec<T> with a better suited type.
@@ -82,11 +82,14 @@ where
 
         // Move all placeholder matches to the second round.
         for index in placeholder_matches {
-            // FIXME: Remove unncessary clone.
-            let entrant = this.get(index).unwrap().entrants[0].clone();
+            let entrant = this.get_mut(index).unwrap().entrants[0].unwrap_ref_mut();
+            entrant.set_winner(true);
+
+            let mut entrant = entrant.clone();
+            entrant.set_winner(false);
 
             if let Some(m) = this.next_match_mut(index) {
-                m.entrants[index % 2] = entrant;
+                m.entrants[index % 2] = EntrantSpot::Entrant(entrant);
             }
         }
 
@@ -416,9 +419,25 @@ where
     }
 }
 
+pub trait Entrant {
+    /// Sets the winner state of the entrant.
+    fn set_winner(&mut self, winner: bool);
+}
+
+impl<T, S> Entrant for EntrantWithScore<T, S> {
+    fn set_winner(&mut self, winner: bool) {
+        self.winner = winner;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Implement Entrant for i32 for testing only.
+    impl Entrant for i32 {
+        fn set_winner(&mut self, _winner: bool) {}
+    }
 
     #[test]
     fn test_predict_amount_of_matches() {
