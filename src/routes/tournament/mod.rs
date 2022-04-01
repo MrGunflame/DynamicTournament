@@ -15,7 +15,6 @@ use crate::components::config_provider::Config;
 use crate::{render_data, Data, DataResult};
 
 pub struct Tournament {
-    // data: Option<crate::MatchmakerInput>,
     data: Data<api::Tournament>,
 }
 
@@ -79,16 +78,7 @@ impl Component for Tournament {
             };
 
             html! {
-                <BrowserRouter>
-                    <div class="navbar">
-                        <ul>
-                            <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                            <li><Link<Route> to={Route::Bracket}>{ "Bracket" }</Link<Route>></li>
-                            <li><Link<Route> to={Route::Teams}>{ "Teams" }</Link<Route>></li>
-                        </ul>
-                    </div>
-                    <Switch<Route> render={Switch::render(switch)} />
-                </BrowserRouter>
+                <Switch<Route> render={Switch::render(switch)} />
             }
         })
     }
@@ -100,12 +90,12 @@ pub enum Msg {
 
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
-    #[at("/")]
+    #[at("/tournament")]
     Index,
-    #[at("/bracket")]
+    #[at("/tournament/bracket")]
     Bracket,
-    #[at("/teams")]
+    #[at("/tournament/teams")]
     Teams,
-    #[at("/teams/:id")]
+    #[at("/tournament/teams/:id")]
     TeamDetails { id: u32 },
 }
