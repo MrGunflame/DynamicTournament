@@ -6,6 +6,7 @@ pub struct Properties {
     pub text: String,
     pub on_score_update: Callback<u64>,
     pub score: u64,
+    pub is_winner: bool,
 }
 
 pub struct Team;
@@ -31,9 +32,10 @@ impl Component for Team {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let onclick = ctx.link().callback(|_| Msg::UpdateScore);
 
-        let classes = match ctx.props().score {
-            n if n >= 3 => "team winner",
-            _ => "team",
+        let classes = if ctx.props().is_winner {
+            "team winner"
+        } else {
+            "team"
         };
 
         html! {
