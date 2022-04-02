@@ -1,13 +1,17 @@
 use std::rc::Rc;
 
 use crate::api::tournament as api;
-use crate::bracket_generator::{EntrantSpot, EntrantWithScore, SingleElimination, Winner};
-use crate::components::r#match::{CallbackArgs, Match, MatchMember};
+use crate::bracket_generator::{EntrantSpot, EntrantWithScore, MatchWinner, SingleElimination};
+use crate::components::popup::Popup;
+use crate::components::r#match::{Match, MatchMember};
+use crate::components::update_bracket::BracketUpdate;
 
 use yew::prelude::*;
 
 pub struct Bracket {
     state: SingleElimination<EntrantWithScore<api::Team, u64>>,
+    // Popup open for match with index.
+    popup: Option<usize>,
 }
 
 impl Component for Bracket {
@@ -26,32 +30,44 @@ impl Component for Bracket {
 
         Self {
             state: SingleElimination::new(teams),
+            popup: None,
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::UpdateEntrant {
-                index,
-                team_index,
-                new_score,
-            } => {
-                // Target index of the winning team updated.
-                let target_index = self.state.match_index(index) % 2;
+            Msg::UpdateScore { index, scores } => {
+                self.state.update_match(index, |m| {
+                    m.entrants[0].unwrap_ref_mut().score = scores[0];
+                    m.entrants[1].unwrap_ref_mut().score = scores[1];
 
-                let m = self.state.get_mut(index).unwrap();
-                m.entrants[team_index].unwrap_ref_mut().score = new_score;
+                    for m in m.entrants.iter_mut() {
+                        let m = m.unwrap_ref_mut();
 
-                if new_score >= (ctx.props().tournament.best_of / 2) + 1 {
-                    m.entrants[team_index].unwrap_ref_mut().winner = true;
+                        // Team is the winner.
+                        if m.score >= (ctx.props().tournament.best_of / 2) + 1 {
+                            m.winner = true;
 
-                    self.state
-                        .update_winner_callback(index, Winner::Team(team_index), |m| {
-                            m.entrants[target_index].unwrap_ref_mut().score = 0;
-                            m.entrants[target_index].unwrap_ref_mut().winner = false;
-                        });
-                }
+                            return Some(MatchWinner::Entrant(EntrantWithScore::new(
+                                m.entrant.clone(),
+                            )));
+                        }
+                    }
 
+                    None
+                });
+
+                // Close the score update popup.
+                self.popup = None;
+
+                true
+            }
+            Msg::OpenUpdateMatchPopup { index } => {
+                self.popup = Some(index);
+                true
+            }
+            Msg::CloseUpdateMatchPopup => {
+                self.popup = None;
                 true
             }
         }
@@ -67,24 +83,19 @@ impl Component for Bracket {
                     .iter()
                     .enumerate()
                     .map(|(index, m)| {
-                        let on_score_update =
-                            ctx.link()
-                                .callback(move |args: CallbackArgs| Msg::UpdateEntrant {
-                                    index: starting_index + index,
-                                    team_index: args.team_index,
-                                    new_score: args.new_score,
-                                });
-
                         let teams = m.entrants.clone().map(|e| match e {
                             EntrantSpot::Entrant(team) => MatchMember::Entrant(team),
-                            EntrantSpot::Empty => MatchMember::Placeholder("null".to_owned()),
+                            EntrantSpot::Empty => MatchMember::Placeholder("BYE".to_owned()),
                             EntrantSpot::TBD => MatchMember::Placeholder("TBD".to_owned()),
                         });
 
-                        // gloo_console::log!(format!("{:?}", teams));
+                        let on_score_set =
+                            ctx.link().callback(move |_| Msg::OpenUpdateMatchPopup {
+                                index: starting_index + index,
+                            });
 
                         html! {
-                            <Match teams={teams} on_score_update={on_score_update} />
+                            <Match teams={teams} on_score_set={on_score_set} />
                         }
                     })
                     .collect();
@@ -97,10 +108,42 @@ impl Component for Bracket {
             })
             .collect();
 
+        let popup = match self.popup {
+            Some(index) => {
+                let m = self.state.get(index).unwrap();
+                let scores = [
+                    match m.entrants[0] {
+                        EntrantSpot::Entrant(ref e) => e.score,
+                        _ => 0,
+                    },
+                    match m.entrants[1] {
+                        EntrantSpot::Entrant(ref e) => e.score,
+                        _ => 0,
+                    },
+                ];
+
+                let on_submit = ctx
+                    .link()
+                    .callback(move |scores| Msg::UpdateScore { index, scores });
+
+                let on_close = ctx.link().callback(|_| Msg::CloseUpdateMatchPopup);
+
+                html! {
+                    <Popup on_close={on_close}>
+                        <BracketUpdate scores={scores} on_submit={on_submit} />
+                    </Popup>
+                }
+            }
+            None => html! {},
+        };
+
         html! {
-            <div class="bracket-matches">
-                {rounds}
-            </div>
+            <>
+                <div class="bracket-matches">
+                    {rounds}
+                </div>
+                {popup}
+            </>
         }
     }
 }
@@ -111,9 +154,7 @@ pub struct BracketProperties {
 }
 
 pub enum Msg {
-    UpdateEntrant {
-        index: usize,
-        team_index: usize,
-        new_score: u64,
-    },
+    UpdateScore { index: usize, scores: [u64; 2] },
+    OpenUpdateMatchPopup { index: usize },
+    CloseUpdateMatchPopup,
 }

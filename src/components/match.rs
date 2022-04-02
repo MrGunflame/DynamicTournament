@@ -18,50 +18,49 @@ impl Component for Match {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Update(args) => {
-                ctx.props().on_score_update.emit(args);
+            Msg::ScoreSet => {
+                ctx.props().on_score_set.emit(());
                 false
             }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let link = ctx.link();
-
         let teams: Html = ctx
             .props()
             .teams
             .iter()
             .cloned()
-            .enumerate()
-            .map(|(i, team)| match team {
+            .map(|team| match team {
                 MatchMember::Entrant(team) => {
                     let name = team.entrant.name.clone();
                     let score = team.score;
 
-
-                    let cb = link.callback(move |score| {
-                        Msg::Update(CallbackArgs {
-                            team_index: i,
-                            new_score: score + 1,
-                        })
-                    });
-
-                    html! {<Team text={name} is_winner={team.winner} on_score_update={cb.clone()} score={score} />}
+                    html! {<Team text={name} is_winner={team.winner} score={score} />}
                 }
                 MatchMember::Placeholder(s) => {
-                    let clos = Callback::from(|_: u64| {});
-
                     html! {
-                        <Team text={s} is_winner={false} on_score_update={clos} score={0} />
+                        <Team text={s} is_winner={false} score={0} />
                     }
                 }
             })
             .collect();
 
+        // All spots must be filled for the button to become active.
+        let score_set_button = if ctx.props().teams[0].is_entrant()
+            && ctx.props().teams[1].is_entrant()
+        {
+            let on_score_set = ctx.link().callback(|_| Msg::ScoreSet);
+
+            html! { <button onclick={on_score_set} disabled=false>{ "Set Score" }</button> }
+        } else {
+            html! { <button title="Some entrant spots are not occupied." disabled=true>{ "Set Score" }</button> }
+        };
+
         html! {
             <div class="match">
                 {teams}
+                {score_set_button}
             </div>
         }
     }
@@ -70,7 +69,7 @@ impl Component for Match {
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct MatchProperties {
     pub teams: [MatchMember; 2],
-    pub on_score_update: Callback<CallbackArgs>,
+    pub on_score_set: Callback<()>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -79,11 +78,20 @@ pub enum MatchMember {
     Placeholder(String),
 }
 
-pub struct CallbackArgs {
-    pub team_index: usize,
-    pub new_score: u64,
+impl MatchMember {
+    pub fn is_entrant(&self) -> bool {
+        match self {
+            Self::Entrant(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_placeholder(&self) -> bool {
+        !self.is_entrant()
+    }
 }
 
 pub enum Msg {
-    Update(CallbackArgs),
+    // ScoreSet button
+    ScoreSet,
 }
