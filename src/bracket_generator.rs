@@ -159,6 +159,35 @@ where
         }
     }
 
+    /// Gets the match with the given `index`, then calls `F` on it.
+    /// The return value indicates the winner of a match, a value of `None` means that
+    /// no winner has been determined yet (no additional operation is performed).
+    /// If `index` is out-of-bounds, `F` will never execute.
+    pub fn update_match<F>(&mut self, index: usize, f: F)
+    where
+        F: FnOnce(&mut Match<T>) -> Option<MatchWinner<T>>,
+    {
+        if index >= self.matches.len() {
+            return;
+        }
+
+        let m = self.get_mut(index).unwrap();
+
+        let winner = f(m);
+
+        if let Some(winner) = winner {
+            if let Some(next_match) = self.next_match_mut(index) {
+                match winner {
+                    MatchWinner::Entrant(entrant) => {
+                        next_match.entrants[index % 2] = EntrantSpot::Entrant(entrant)
+                    }
+                    MatchWinner::None => next_match.entrants[index % 2] = EntrantSpot::TBD,
+                    _ => return,
+                }
+            }
+        }
+    }
+
     /// Update the winner of a match, moving the bracket state forward.
     pub fn update_winner(&mut self, index: usize, winner: Winner) {
         self.update_winner_callback(index, winner, |_| {});
@@ -234,6 +263,12 @@ where
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Winner {
     Team(usize),
+    None,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum MatchWinner<T> {
+    Entrant(T),
     None,
 }
 
@@ -354,6 +389,20 @@ impl<T> EntrantSpot<T> {
         }
     }
 
+    pub fn unwrap_ref(&self) -> &T {
+        match self {
+            Self::Entrant(entrant) => entrant,
+            _ => panic!(
+                "called unwrap on a value of EntrantSpot::{}",
+                match self {
+                    Self::Empty => "Empty",
+                    Self::TBD => "TBD",
+                    _ => unreachable!(),
+                }
+            ),
+        }
+    }
+
     /// Unwraps `self` value, panicking if it is not [`Self::Entrant`].
     ///
     /// # Panics
@@ -398,6 +447,7 @@ fn predict_amount_of_matches(starting_amount: usize) -> usize {
     counter
 }
 
+/// An wrapper around an Entrant `T` with an associated score `S`.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct EntrantWithScore<T, S> {
     pub entrant: T,
@@ -419,14 +469,37 @@ where
     }
 }
 
-pub trait Entrant {
+/// An entrant that can be used in tournaments.
+pub trait Entrant: Clone {
     /// Sets the winner state of the entrant.
     fn set_winner(&mut self, winner: bool);
 }
 
-impl<T, S> Entrant for EntrantWithScore<T, S> {
+impl<T, S> Entrant for EntrantWithScore<T, S>
+where
+    T: Clone,
+    S: Clone,
+{
     fn set_winner(&mut self, winner: bool) {
         self.winner = winner;
+    }
+}
+
+impl<T> From<T> for EntrantSpot<T>
+where
+    T: Entrant,
+{
+    fn from(entrant: T) -> Self {
+        Self::Entrant(entrant)
+    }
+}
+
+impl<T> From<T> for MatchWinner<T>
+where
+    T: Entrant,
+{
+    fn from(entrant: T) -> Self {
+        Self::Entrant(entrant)
     }
 }
 
@@ -453,6 +526,85 @@ mod tests {
 
     #[test]
     fn test_single_elimination_update_match() {
+        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let mut tournament = SingleElimination::new(entrants);
+
+        tournament.update_match(0, |m| Some(m.entrants[0].unwrap().into()));
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ],
+        );
+
+        tournament.update_match(1, |m| Some(m.entrants[1].unwrap().into()));
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        // No change
+        tournament.update_match(1, |_| None);
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        // Undo second update_match operation.
+        tournament.update_match(1, |_| Some(MatchWinner::None));
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        // 7 is out-of-bounds and doesn't update anything.
+        tournament.update_match(7, |m| Some(m.entrants[0].unwrap().into()));
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_update_winner() {
         let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let mut tournament = SingleElimination::new(entrants);
 
