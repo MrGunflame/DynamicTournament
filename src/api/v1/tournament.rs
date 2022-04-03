@@ -1,7 +1,8 @@
+use gloo_storage::Storage;
 use reqwasm::http::Request;
 use serde::{Deserialize, Serialize};
 
-use super::BadStatusCodeError;
+use super::{auth::AuthCredentials, BadStatusCodeError};
 use crate::{
     api::tournament::Team,
     bracket_generator::{EntrantWithScore, Match},
@@ -35,10 +36,19 @@ impl Bracket {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let body = serde_json::to_string(&self.0).unwrap();
 
+        let auth_data: AuthCredentials = gloo_storage::LocalStorage::get("http_auth_data")?;
+
         let resp = Request::put(&format!(
             "{}/api/v1/tournament/{}/bracket",
             config.api_url, tournament_id
         ))
+        .header(
+            "Authorization",
+            &format!(
+                "Basic {}",
+                base64::encode(&format!("{}:{}", auth_data.username, auth_data.password))
+            ),
+        )
         .header("Content-Type", "application/json")
         .body(body)
         .send()

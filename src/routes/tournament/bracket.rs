@@ -35,9 +35,6 @@ impl Component for Bracket {
             None => SingleElimination::new(teams),
         };
 
-        gloo_console::log!("created");
-        gloo_console::log!(format!("{:?}", state));
-
         Self { state, popup: None }
     }
 
@@ -64,8 +61,6 @@ impl Component for Bracket {
                     None
                 });
 
-                gloo_console::log!(format!("{:?}", self.state));
-
                 let (config, _) = ctx
                     .link()
                     .context::<Config>(Callback::noop())
@@ -83,7 +78,6 @@ impl Component for Bracket {
                             vec![Msg::UpdateScoreUI { index, scores }]
                         }
                         Err(err) => {
-                            gloo_console::error!(format!("{:?}", err));
                             vec![]
                         }
                     }
@@ -109,8 +103,6 @@ impl Component for Bracket {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        gloo_console::log!("render");
-
         let rounds: Html = self
             .state
             .rounds_iter()
@@ -125,8 +117,6 @@ impl Component for Bracket {
                             EntrantSpot::Empty => MatchMember::Placeholder("BYE".to_owned()),
                             EntrantSpot::TBD => MatchMember::Placeholder("TBD".to_owned()),
                         });
-
-                        gloo_console::log!(format!("{}", index));
 
                         let teams2 = teams.clone();
                         let on_score_set =

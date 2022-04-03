@@ -1,6 +1,8 @@
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
+use super::r#match::MatchMember;
+
 pub struct BracketUpdate {
     // Score: [left, right]
     scores: [u64; 2],
@@ -48,24 +50,37 @@ impl Component for BracketUpdate {
 
             let value = self.scores[i];
 
+            let team = match ctx.props().teams[i].clone() {
+                MatchMember::Entrant(e) => e.entrant.name,
+                // should be unreachable
+                _ => "BYE".to_owned(),
+            };
+
             *inp = html! {
-                <input type="number" value={value.to_string()} oninput={on_score_update} />
+                <div class="popup-team">
+                    <span>{ team }</span>
+                    <br />
+                    <input type="number" value={value.to_string()} oninput={on_score_update} />
+                </div>
             };
         }
 
         let on_submit = link.callback(|_| Msg::Submit);
 
         html! {
-            <div>
-                { for inputs.into_iter() }
-                <button type="submit" title="No all entrant places occupied." onclick={on_submit} disabled=false>{ "Submit" }</button>
-            </div>
+            <>
+                <div class="popup-teams-list">
+                    { for inputs.into_iter() }
+                </div>
+                <button type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
+            </>
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
+    pub teams: [MatchMember; 2],
     pub on_submit: Callback<[u64; 2]>,
     pub scores: [u64; 2],
 }

@@ -4,6 +4,8 @@ use yew_router::components::Redirect;
 use super::Route;
 use crate::components::providers::auth::Auth;
 
+use gloo_storage::Storage;
+
 pub struct Logout;
 
 impl Component for Logout {
@@ -19,6 +21,8 @@ impl Component for Logout {
             .link()
             .context::<Auth>(Callback::noop())
             .expect("No AuthContext provided");
+
+        gloo_storage::LocalStorage::delete("http_auth_data");
 
         let mut inner = auth.inner.lock().unwrap();
         *inner = None;

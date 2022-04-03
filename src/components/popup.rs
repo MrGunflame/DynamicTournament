@@ -34,8 +34,10 @@ impl Component for Popup {
         html! {
             <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
                 <div class="popup">
-                    <button onclick={on_close} disabled=false>{ "X" }</button>
-                    { for ctx.props().children.iter() }
+                    <button class="popup-close" onclick={on_close} disabled=false>{ "X" }</button>
+                    <div class="popup-content">
+                        { for ctx.props().children.iter() }
+                    </div>
                 </div>
             </div>
         }

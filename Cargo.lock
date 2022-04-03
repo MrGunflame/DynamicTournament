@@ -1179,7 +1179,9 @@ dependencies = [
 name = "yew"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "gloo-console",
+ "gloo-storage",
  "reqwasm",
  "reqwest",
  "serde",

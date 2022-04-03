@@ -1,9 +1,11 @@
+use gloo_storage::Storage;
 use yew::callback::Callback;
 use yew::prelude::*;
 
 use super::team::Team;
 
 use crate::api::tournament as api;
+use crate::api::v1::auth::AuthCredentials;
 use crate::bracket_generator::EntrantWithScore;
 
 pub struct Match;
@@ -47,14 +49,27 @@ impl Component for Match {
             .collect();
 
         // All spots must be filled for the button to become active.
-        let score_set_button = if ctx.props().teams[0].is_entrant()
-            && ctx.props().teams[1].is_entrant()
-        {
-            let on_score_set = ctx.link().callback(|_| Msg::ScoreSet);
 
-            html! { <button onclick={on_score_set} disabled=false>{ "Set Score" }</button> }
-        } else {
-            html! { <button title="Some entrant spots are not occupied." disabled=true>{ "Set Score" }</button> }
+        let credentials: gloo_storage::Result<AuthCredentials> =
+            gloo_storage::LocalStorage::get("http_auth_data");
+
+        let score_set_button = match credentials {
+            Ok(_) => {
+                if ctx.props().teams[0].is_entrant() && ctx.props().teams[1].is_entrant() {
+                    let on_score_set = ctx.link().callback(|_| Msg::ScoreSet);
+
+                    html! { <button onclick={on_score_set} disabled=false>{ "Set Score" }</button> }
+                } else {
+                    html! { <button title="Some entrant spots are not occupied." disabled=true>{ "Set Score" }</button> }
+                }
+            }
+            Err(err) => {
+                gloo_console::warn!(format!("Failed to read authorization credentials: {}", err));
+
+                html! {
+                    <button title="You are not logged in (or an error occured)." disabled=true>{ "Set Score" }</button>
+                }
+            }
         };
 
         html! {

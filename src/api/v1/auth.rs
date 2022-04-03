@@ -1,7 +1,16 @@
 use reqwasm::http::Request;
 use serde::{Deserialize, Serialize};
 
+use super::BadStatusCodeError;
 use crate::components::config_provider::Config;
+
+use gloo_storage::{LocalStorage, Storage};
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct AuthCredentials {
+    pub username: String,
+    pub password: String,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LoginData {
@@ -19,6 +28,13 @@ impl LoginData {
 
         let resp = Request::post(&format!("{}/api/v1/auth/login", config.api_url))
             .body(body)
+            .header(
+                "Authorization",
+                &format!(
+                    "Basic {}",
+                    base64::encode(&format!("{}:{}", self.username, self.password)),
+                ),
+            )
             .header("Content-Type", "application/json")
             .send()
             .await?;
@@ -30,19 +46,8 @@ impl LoginData {
             .into());
         }
 
+        LocalStorage::set("http_auth_data", self)?;
+
         Ok(())
     }
 }
-
-#[derive(Clone, Debug)]
-struct BadStatusCodeError {
-    status: u16,
-}
-
-impl std::fmt::Display for BadStatusCodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bad status code: {}", self.status)
-    }
-}
-
-impl std::error::Error for BadStatusCodeError {}
