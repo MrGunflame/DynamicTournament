@@ -28,7 +28,7 @@ impl Component for Teams {
                     <tr>
                         <td>{ i }</td>
                         <td>{ team.name.clone() }</td>
-                        <td><Link<Route> classes="link-inline" to={Route::TeamDetails { id: i as u32} }>{"Details"}</Link<Route>></td>
+                        <td><Link<Route> classes="link-inline" to={Route::TeamDetails { id: ctx.props().teams.id, team_id: i as u32} }>{"Details"}</Link<Route>></td>
                     </tr>
                 }
             })

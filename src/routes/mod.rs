@@ -1,6 +1,7 @@
 pub mod login;
 pub mod logout;
 pub mod tournament;
+pub mod tournamentlist;
 
 use crate::components::config_provider::ConfigProvider;
 use crate::components::providers::AuthProvider;
@@ -30,8 +31,7 @@ impl Component for App {
                         <div class="navbar">
                             <ul>
                                 <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                                <li><Link<tournament::Route> to={tournament::Route::Bracket}>{ "Bracket" }</Link<tournament::Route>></li>
-                                <li><Link<tournament::Route> to={tournament::Route::Teams}>{ "Teams" }</Link<tournament::Route>></li>
+                                <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
                                 <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
                                 <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
                             </ul>
@@ -55,10 +55,14 @@ pub enum Route {
     #[not_found]
     #[at("/404")]
     NotFound,
-    #[at("/tournament/:s")]
-    Tournament,
-    #[at("/tournament/teams/:s")]
-    TournamentTeam,
+    #[at("/tournament")]
+    TournamentList,
+    #[at("/tournament/:id")]
+    TournamentR { id: u64 },
+    #[at("/tournament/:id/:s")]
+    Tournament { id: u64 },
+    #[at("/tournament/:id/teams/:s")]
+    TournamentTeam { id: u64 },
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -67,11 +71,17 @@ pub fn switch(route: &Route) -> Html {
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
         Route::NotFound => html! { "404" },
-        Route::Tournament => html! {
-            <tournament::Tournament />
+        Route::TournamentList => html! {
+            <tournamentlist::TournamentList />
         },
-        Route::TournamentTeam => html! {
-            <tournament::Tournament />
+        Route::TournamentR { id } => html! {
+            <tournament::Tournament id={*id} />
+        },
+        Route::Tournament { id } => html! {
+            <tournament::Tournament id={*id} />
+        },
+        Route::TournamentTeam { id } => html! {
+            <tournament::Tournament id={*id} />
         },
     }
 }
