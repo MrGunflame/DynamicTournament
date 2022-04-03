@@ -90,6 +90,7 @@ body {
 }
   
 .popup {
+  min-height: 40vh;
   left: 0;
   right: 0;
   position: absolute;
@@ -99,4 +100,24 @@ body {
   width: 40%;
   margin-left: auto;
   margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.popup-close {
+  float: right;
+}
+
+.popup-content {
+  height: 100%;
+  width: 100%;
+}
+
+.popup-teams-list {
+  display: flex;
+}
+
+.popup-team {
+  background-color: gray;
 }
