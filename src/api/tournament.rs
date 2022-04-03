@@ -5,6 +5,7 @@ use std::fmt::{self, Display, Formatter};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Tournament {
+    pub id: u64,
     pub bracket_type: BracketType,
     pub best_of: u64,
     pub teams: Vec<Team>,
