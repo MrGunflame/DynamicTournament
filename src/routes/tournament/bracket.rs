@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::api::tournament as api;
 use crate::api::v1::tournament as api2;
-use crate::bracket_generator::{EntrantSpot, EntrantWithScore, MatchWinner, SingleElimination};
+use crate::bracket_generator::{EntrantSpot, EntrantWithScore, MatchResult, SingleElimination};
 use crate::components::config_provider::Config;
 use crate::components::popup::Popup;
 use crate::components::r#match::{Match, MatchMember};
@@ -45,17 +45,32 @@ impl Component for Bracket {
                     m.entrants[0].unwrap_ref_mut().score = scores[0];
                     m.entrants[1].unwrap_ref_mut().score = scores[1];
 
-                    for m in m.entrants.iter_mut() {
-                        let m = m.unwrap_ref_mut();
+                    if m.entrants[0].unwrap_ref().score >= (ctx.props().tournament.best_of / 2) + 1
+                    {
+                        let winner = m.entrants[0].unwrap_ref_mut();
+                        winner.winner = true;
 
-                        // Team is the winner.
-                        if m.score >= (ctx.props().tournament.best_of / 2) + 1 {
-                            m.winner = true;
+                        let winner = m.entrants[0].unwrap_ref();
+                        let looser = m.entrants[0].unwrap_ref();
 
-                            return Some(MatchWinner::Entrant(EntrantWithScore::new(
-                                m.entrant.clone(),
-                            )));
-                        }
+                        return Some(MatchResult::Entrants {
+                            winner: EntrantWithScore::new(winner.entrant.clone()),
+                            looser: EntrantWithScore::new(looser.entrant.clone()),
+                        });
+                    }
+
+                    if m.entrants[1].unwrap_ref().score >= (ctx.props().tournament.best_of / 2) + 1
+                    {
+                        let winner = m.entrants[1].unwrap_ref_mut();
+                        winner.winner = true;
+
+                        let winner = m.entrants[1].unwrap_ref();
+                        let looser = m.entrants[0].unwrap_ref();
+
+                        return Some(MatchResult::Entrants {
+                            winner: EntrantWithScore::new(winner.entrant.clone()),
+                            looser: EntrantWithScore::new(looser.entrant.clone()),
+                        });
                     }
 
                     None

@@ -177,7 +177,7 @@ where
     /// If `index` is out-of-bounds, `F` will never execute.
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<T>) -> Option<MatchWinner<T>>,
+        F: FnOnce(&mut Match<T>) -> Option<MatchResult<T>>,
     {
         if index >= self.matches.len() {
             return;
@@ -190,10 +190,12 @@ where
         if let Some(winner) = winner {
             if let Some(next_match) = self.next_match_mut(index) {
                 match winner {
-                    MatchWinner::Entrant(entrant) => {
-                        next_match.entrants[index % 2] = EntrantSpot::Entrant(entrant)
+                    MatchResult::Entrants { winner, looser } => {
+                        next_match.entrants[index % 2] = EntrantSpot::Entrant(winner);
                     }
-                    MatchWinner::None => next_match.entrants[index % 2] = EntrantSpot::TBD,
+                    MatchResult::None => {
+                        next_match.entrants[index % 2] = EntrantSpot::TBD;
+                    }
                 }
             }
         }
@@ -234,8 +236,8 @@ where
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum MatchWinner<T> {
-    Entrant(T),
+pub enum MatchResult<T> {
+    Entrants { winner: T, looser: T },
     None,
 }
 
@@ -466,15 +468,6 @@ where
     }
 }
 
-impl<T> From<T> for MatchWinner<T>
-where
-    T: Entrant,
-{
-    fn from(entrant: T) -> Self {
-        Self::Entrant(entrant)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,7 +494,12 @@ mod tests {
         let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let mut tournament = SingleElimination::new(entrants);
 
-        tournament.update_match(0, |m| Some(m.entrants[0].unwrap().into()));
+        tournament.update_match(0, |m| {
+            Some(MatchResult::Entrants {
+                winner: m.entrants[0].unwrap(),
+                looser: m.entrants[1].unwrap(),
+            })
+        });
         assert_eq!(
             tournament.matches,
             vec![
@@ -515,7 +513,12 @@ mod tests {
             ],
         );
 
-        tournament.update_match(1, |m| Some(m.entrants[1].unwrap().into()));
+        tournament.update_match(1, |m| {
+            Some(MatchResult::Entrants {
+                winner: m.entrants[1].unwrap(),
+                looser: m.entrants[0].unwrap(),
+            })
+        });
         assert_eq!(
             tournament.matches,
             vec![
@@ -545,7 +548,7 @@ mod tests {
         );
 
         // Undo second update_match operation.
-        tournament.update_match(1, |_| Some(MatchWinner::None));
+        tournament.update_match(1, |_| Some(MatchResult::None));
         assert_eq!(
             tournament.matches,
             vec![
@@ -560,7 +563,12 @@ mod tests {
         );
 
         // 7 is out-of-bounds and doesn't update anything.
-        tournament.update_match(7, |m| Some(m.entrants[0].unwrap().into()));
+        tournament.update_match(7, |m| {
+            Some(MatchResult::Entrants {
+                winner: m.entrants[0].unwrap(),
+                looser: m.entrants[1].unwrap(),
+            })
+        });
         assert_eq!(
             tournament.matches,
             vec![
