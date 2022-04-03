@@ -10,3 +10,4 @@ These features are still work in progress:
 - [x] Auto-forward placeholder matches
 - [ ] A way to undo matches and revert the bracket state
 - [ ] DoubleElimination
+- [ ] Seeding
