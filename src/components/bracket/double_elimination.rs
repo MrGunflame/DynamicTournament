@@ -26,7 +26,7 @@ impl Component for DoubleEliminationBracket {
 
     fn create(ctx: &Context<Self>) -> Self {
         let state = match &ctx.props().bracket {
-            // Some(bracket) => DoubleElimination::resume(bracket.0.clone()),
+            Some(bracket) => DoubleElimination::resume(bracket.0.clone()),
             _ => {
                 let teams = ctx
                     .props()
@@ -170,16 +170,30 @@ impl Component for DoubleEliminationBracket {
 
         html! {
             <>
-                <div class="bracket-matches">
-                    {upper}
+            <div class="flex-col">
+                <div>
+                    <span>{ "Winners Bracket" }</span>
+                    <div class="bracket-matches">
+                        {upper}
+                    </div>
                 </div>
+
+                <div>
+                    <span>{ "Grand Finals" }</span>
+                    <div class="bracket-matches">
+                        {finals}
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <span>{ "Losers Bracket" }</span>
                 <div class="bracket-matches">
                     {lower}
                 </div>
-                <div class="bracket-matches">
-                    {finals}
-                </div>
-                {popup}
+            </div>
+
+            {popup}
             </>
         }
     }
@@ -188,7 +202,7 @@ impl Component for DoubleEliminationBracket {
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-    pub bracket: Option<Bracket>,
+    pub bracket: Option<Rc<Bracket>>,
 }
 
 impl PartialEq for Props {
