@@ -697,7 +697,8 @@ where
                             m.entrants[0] = winner;
                         }
                         _ => {
-                            let winner_index = index + (num_matches - match_index);
+                            let winner_index =
+                                index + (num_matches - match_index + match_index / 2);
 
                             let m = self.get_mut(winner_index).unwrap();
 
@@ -730,32 +731,29 @@ where
                             match_looser.entrants[index % 2] = looser;
                         }
                         _ => {
-                            // Find index for round of the completed match.
-                            let wanted_round_index = self.upper_round_index(index);
-
-                            let mut round_index = 0;
-                            let mut buffer = self.lower_bracket_index;
+                            // Find the index of the match in the second round of the lower
+                            // bracket with the same number of matches as in the current round.
+                            let mut buffer = self.initial_matches;
                             let mut num_matches = self.initial_matches / 2;
-
-                            while wanted_round_index > round_index {
-                                round_index += 1;
-
+                            let mut lower_buffer = 0;
+                            while index - self.upper_match_index(index) >= buffer {
                                 buffer += num_matches;
-
-                                if round_index % 2 == 0 {
-                                    num_matches /= 2;
-                                }
+                                lower_buffer += num_matches * 2;
+                                num_matches /= 2;
                             }
 
-                            let index_looser = buffer + self.upper_match_index(index);
+                            let index_loser = self.lower_bracket_index
+                                + lower_buffer
+                                + self.upper_match_index(index)
+                                - num_matches * 2;
 
                             let match_winner = self.get_mut(index_winner).unwrap();
                             match_winner.entrants[index % 2] = winner;
 
-                            let match_looser = self.get_mut(index_looser).unwrap();
+                            let match_loser = self.get_mut(index_loser).unwrap();
 
                             // The looser always takes the second spot.
-                            match_looser.entrants[1] = looser;
+                            match_loser.entrants[1] = looser;
                         }
                     };
                 }
