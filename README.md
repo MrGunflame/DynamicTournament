@@ -9,5 +9,6 @@ These features are still work in progress:
 - [x] A proper score system
 - [x] Auto-forward placeholder matches
 - [ ] A way to undo matches and revert the bracket state
-- [ ] DoubleElimination
+- [x] DoubleElimination
 - [ ] Seeding
+- [ ] Full refactor for v1.0
