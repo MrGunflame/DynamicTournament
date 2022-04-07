@@ -23,6 +23,7 @@ impl Component for BracketMatch {
             Message::UpdateScore => {
                 ctx.props().on_action.emit(Action::UpdateMatch);
             }
+            Message::ResetMatch => (),
         }
 
         false
@@ -48,23 +49,43 @@ impl Component for BracketMatch {
                 if ctx.props().entrants[0].is_entrant() && ctx.props().entrants[1].is_entrant() {
                     let onclick = ctx.link().callback(|_| Message::UpdateScore);
 
-                    html! { <button onclick={onclick} disabled=false>{"Update Score"}</button> }
+                    let on_reset = ctx.link().callback(|_| Message::ResetMatch);
+
+                    html! {
+                        <div class="match-action-buttons">
+                            <button onclick={onclick} disabled=false>
+                                <img src="/assets/pen-solid.svg" width="16px" height="16px" />
+                            </button>
+                            <button onclick={on_reset} disabled=false>
+                                <img src="/assets/arrow-rotate-left-solid.svg" width="16px" height="16px" />
+                            </button>
+                        </div>
+                    }
                 } else {
-                    html! { <button title="Some entrant spots are not occupied." disabled=true>{"Update Score"}</button> }
+                    html! {
+                        <div class="match-action-buttons">
+                            <button title="Some entrant spots are not occupied." disabled=true>
+                                <img src="/assets/pen-solid.svg" width="16px" height="16px" />
+                            </button>
+                            <button title="Some entrant spots are not occupied." disabled=true>
+                                <img src="/assets/arrow-rotate-left-solid.svg" width="16px" height="16px" />
+                            </button>
+                        </div>
+                    }
                 }
             }
             Err(err) => {
                 gloo_console::warn!(format!("Failed to read authorization credentials: {}", err));
 
-                html! {
-                    <button title="You are not logged in (or an error occured)." disabled=true>{"Update Score"}</button>
-                }
+                html! {}
             }
         };
 
         html! {
             <div class="match">
-                {entrants}
+                <div class="match-teams">
+                    {entrants}
+                </div>
                 {action_button}
             </div>
         }
@@ -79,4 +100,5 @@ pub struct Props {
 
 pub enum Message {
     UpdateScore,
+    ResetMatch,
 }

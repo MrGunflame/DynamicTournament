@@ -171,22 +171,24 @@ impl Component for DoubleEliminationBracket {
         html! {
             <>
             <div class="flex-col">
-                <div>
+                <div class="tourn-bracket">
                     <span>{ "Winners Bracket" }</span>
                     <div class="bracket-matches">
                         {upper}
                     </div>
                 </div>
 
-                <div>
-                    <span>{ "Grand Finals" }</span>
-                    <div class="bracket-matches">
-                        {finals}
+                <div class="bracket-flex-center tourn-bracket">
+                    <div>
+                        <span>{ "Grand Finals" }</span>
+                        <div class="bracket-matches">
+                            {finals}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div>
+            <div class="tourn-bracket">
                 <span>{ "Losers Bracket" }</span>
                 <div class="bracket-matches">
                     {lower}
