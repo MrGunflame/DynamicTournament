@@ -1,8 +1,6 @@
-mod bracket;
 mod teamdetails;
 mod teams;
 
-use bracket::Bracket;
 use teamdetails::TeamDetails;
 use teams::Teams;
 
@@ -12,6 +10,7 @@ use yew_router::prelude::*;
 
 use crate::api::tournament as api;
 use crate::api::v1::tournament as api2;
+use crate::components::bracket::Bracket;
 use crate::components::config_provider::Config;
 use crate::{render_data, Data, DataResult};
 
@@ -71,13 +70,17 @@ impl Component for Tournament {
             let bracket = bracket.clone();
             let switch = move |route: &Route| -> Html {
                 let rc = rc.clone();
+                let bracket = match bracket.clone() {
+                    Some(bracket) => Some(std::rc::Rc::new(bracket)),
+                    None => None,
+                };
 
                 match route {
                     Route::Index { id } => html! {
                         <span>{ format!("Tournament id {}", id) }</span>
                     },
                     Route::Bracket { id } => html! {
-                        <Bracket tournament={rc} bracket={bracket.clone()} />
+                        <Bracket tournament={rc} bracket={bracket} />
                     },
                     Route::Teams { id } => html! {
                         <Teams teams={rc} />
