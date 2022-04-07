@@ -651,6 +651,15 @@ where
                 i if i >= self.final_bracket_index => {}
                 // Update a match in the lower bracket.
                 i if i >= self.lower_bracket_index => {
+                    if i == self.final_bracket_index - 1 {
+                        let m = self.get_mut(self.final_bracket_index).unwrap();
+
+                        // The winner of the lower bracket takes the second spot.
+                        m.entrants[1] = winner;
+
+                        return;
+                    }
+
                     // We need to know the number of matches in the current round, and the
                     // index of the current round (see [`Self::lower_round_index`]).
                     let mut round_index = 0;
@@ -665,6 +674,9 @@ where
                             num_matches /= 2;
                         }
                     }
+
+                    // The index of the match within the current round.
+                    let match_index = index - buffer - self.lower_bracket_index;
 
                     match round_index {
                         i if i == self.final_bracket_index - 1 => {
@@ -685,11 +697,11 @@ where
                             m.entrants[0] = winner;
                         }
                         _ => {
-                            let winner_index = index + num_matches / 2;
+                            let winner_index = index + (num_matches - match_index);
 
                             let m = self.get_mut(winner_index).unwrap();
 
-                            m.entrants[index % 2] = winner;
+                            m.entrants[(index - 1) % 2] = winner;
                         }
                     }
                 }
@@ -698,6 +710,15 @@ where
                     let index_winner = self.initial_matches + index / 2;
 
                     match index {
+                        i if i == self.final_bracket_index / 2 => {
+                            let match_winner = self.get_mut(self.final_bracket_index).unwrap();
+
+                            // The winner from the upper bracket takes the first spot.
+                            match_winner.entrants[0] = winner;
+
+                            let match_looser = self.get_mut(self.final_bracket_index - 1).unwrap();
+                            match_looser.entrants[1] = looser;
+                        }
                         // Handle the first round differently.
                         i if i < self.initial_matches => {
                             let index_looser = self.lower_bracket_index + (i / 2);
@@ -971,7 +992,7 @@ impl<'a, T> Iterator for FinalBracketIndexIter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.index + self.start < self.slice.len() {
             let slice = &self.slice[self.start + self.index];
-            let index = self.index;
+            let index = self.start + self.index;
 
             self.index += 1;
 
