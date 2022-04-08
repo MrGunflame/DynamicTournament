@@ -6,7 +6,8 @@ use super::team::Team;
 
 use crate::api::tournament as api;
 use crate::api::v1::auth::AuthCredentials;
-use crate::bracket_generator::EntrantWithScore;
+
+use dynamic_tournament_generator::EntrantWithScore;
 
 pub struct Match;
 
@@ -99,10 +100,6 @@ impl MatchMember {
             Self::Entrant(_) => true,
             _ => false,
         }
-    }
-
-    pub fn is_placeholder(&self) -> bool {
-        !self.is_entrant()
     }
 }
 

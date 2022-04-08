@@ -1,7 +1,8 @@
 use yew::prelude::*;
 
 use crate::api::tournament::Team;
-use crate::bracket_generator::{EntrantSpot, EntrantWithScore};
+
+use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 pub struct BracketTeam;
 

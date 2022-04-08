@@ -3,7 +3,8 @@ use yew::prelude::*;
 
 use crate::api::tournament::Team;
 use crate::api::v1::auth::AuthCredentials;
-use crate::bracket_generator::{EntrantSpot, EntrantWithScore};
+
+use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 use super::BracketTeam;
 

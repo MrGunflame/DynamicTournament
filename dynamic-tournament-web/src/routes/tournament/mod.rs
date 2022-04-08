@@ -79,13 +79,13 @@ impl Component for Tournament {
                     Route::Index { id } => html! {
                         <span>{ format!("Tournament id {}", id) }</span>
                     },
-                    Route::Bracket { id } => html! {
+                    Route::Bracket { id: _ } => html! {
                         <Bracket tournament={rc} bracket={bracket} />
                     },
-                    Route::Teams { id } => html! {
+                    Route::Teams { id: _ } => html! {
                         <Teams teams={rc} />
                     },
-                    Route::TeamDetails { id, team_id } => html! {
+                    Route::TeamDetails { id: _, team_id } => html! {
                         <TeamDetails teams={rc} index={*team_id} />
                     },
                 }

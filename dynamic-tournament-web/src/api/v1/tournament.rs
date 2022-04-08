@@ -3,11 +3,9 @@ use reqwasm::http::Request;
 use serde::{Deserialize, Serialize};
 
 use super::{auth::AuthCredentials, BadStatusCodeError};
-use crate::{
-    api::tournament::Team,
-    bracket_generator::{EntrantWithScore, Match},
-    components::config_provider::Config,
-};
+use crate::{api::tournament::Team, components::config_provider::Config};
+
+use dynamic_tournament_generator::{EntrantWithScore, Match};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Bracket(pub Vec<Match<EntrantWithScore<Team, u64>>>);

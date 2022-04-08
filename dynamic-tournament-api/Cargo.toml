@@ -1,0 +1,9 @@
+[package]
+name = "dynamic-tournament-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+reqwasm = "0.5.0"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_repr = "0.1.7"

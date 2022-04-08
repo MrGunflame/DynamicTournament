@@ -1,5 +1,6 @@
 //! Bracket Generator
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A single elimination tournament.
@@ -242,7 +243,8 @@ pub enum MatchResult<T> {
 }
 
 /// A match consisting of at 2 parties.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Match<T> {
     pub entrants: [EntrantSpot<T>; 2],
 }
@@ -317,7 +319,8 @@ impl<'a, T> Iterator for RoundsIterIndex<'a, T> {
 }
 
 /// A spot for an Entrant in the bracket.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum EntrantSpot<T> {
     Entrant(T),
     Empty,
@@ -443,7 +446,8 @@ fn predict_amount_of_matches(starting_amount: usize) -> usize {
 }
 
 /// An wrapper around an Entrant `T` with an associated score `S`.
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EntrantWithScore<T, S> {
     pub entrant: T,
     pub score: S,
@@ -854,6 +858,10 @@ where
             slice: &self.matches,
             index: 0,
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Match<T>> {
+        self.matches.iter()
     }
 }
 

@@ -1,45 +1,45 @@
 use std::rc::Rc;
 
-use crate::api::tournament as api;
-use crate::api::v1::tournament as api2;
-use crate::bracket_generator::{
-    EntrantSpot, EntrantWithScore, Match, MatchResult, SingleElimination,
-};
+use yew::prelude::*;
+
+use crate::api::tournament::{Team, Tournament};
+use crate::api::v1::tournament::Bracket;
+
 use crate::components::config_provider::Config;
 use crate::components::popup::Popup;
-use crate::components::update_bracket::BracketUpdate;
-
 use crate::components::r#match::MatchMember;
-
-use crate::api::tournament::Team;
+use crate::components::update_bracket::BracketUpdate;
 
 use super::{Action, BracketMatch};
 
-use yew::prelude::*;
+use dynamic_tournament_generator::{
+    DoubleElimination, EntrantSpot, EntrantWithScore, Match, MatchResult,
+};
 
-pub struct SingleEliminationBracket {
-    state: SingleElimination<EntrantWithScore<api::Team, u64>>,
-    // Popup open for match with index.
+pub struct DoubleEliminationBracket {
+    state: DoubleElimination<EntrantWithScore<Team, u64>>,
     popup: Option<usize>,
 }
 
-impl Component for SingleEliminationBracket {
+impl Component for DoubleEliminationBracket {
     type Message = Message;
-    type Properties = BracketProperties;
+    type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let teams = ctx
-            .props()
-            .tournament
-            .teams
-            .iter()
-            .cloned()
-            .map(EntrantWithScore::new)
-            .collect();
-
         let state = match &ctx.props().bracket {
-            Some(bracket) => SingleElimination::resume(bracket.0.clone()),
-            None => SingleElimination::new(teams),
+            Some(bracket) => DoubleElimination::resume(bracket.0.clone()),
+            _ => {
+                let teams = ctx
+                    .props()
+                    .tournament
+                    .teams
+                    .iter()
+                    .cloned()
+                    .map(EntrantWithScore::new)
+                    .collect();
+
+                DoubleElimination::new(teams)
+            }
         };
 
         Self { state, popup: None }
@@ -47,8 +47,15 @@ impl Component for SingleEliminationBracket {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Action { index, action: _ } => {
-                self.popup = Some(index);
+            Message::Action { index, action } => match action {
+                Action::UpdateMatch => {
+                    self.popup = Some(index);
+
+                    true
+                }
+            },
+            Message::ClosePopup => {
+                self.popup = None;
 
                 true
             }
@@ -63,7 +70,7 @@ impl Component for SingleEliminationBracket {
                         winner.winner = true;
 
                         let winner = m.entrants[0].unwrap_ref();
-                        let looser = m.entrants[0].unwrap_ref();
+                        let looser = m.entrants[1].unwrap_ref();
 
                         return Some(MatchResult::Entrants {
                             winner: EntrantWithScore::new(winner.entrant.clone()),
@@ -96,14 +103,11 @@ impl Component for SingleEliminationBracket {
                 let tournament_id = ctx.props().tournament.id;
 
                 let bracket = self.state.iter().cloned().collect();
-                // Update server data.
                 ctx.link().send_future_batch(async move {
-                    let bracket = api2::Bracket(bracket);
+                    let bracket = Bracket(bracket);
 
                     match bracket.put(tournament_id, config).await {
-                        Ok(_) => {
-                            vec![Message::UpdateScoreUI]
-                        }
+                        Ok(_) => vec![Message::UpdateScoreUI],
                         Err(err) => {
                             gloo_console::error!(err.to_string());
                             vec![]
@@ -114,11 +118,6 @@ impl Component for SingleEliminationBracket {
                 false
             }
             Message::UpdateScoreUI => {
-                self.popup = None;
-
-                true
-            }
-            Message::ClosePopup => {
                 self.popup = None;
 
                 true
@@ -171,32 +170,74 @@ impl Component for SingleEliminationBracket {
             None => html! {},
         };
 
-        let bracket: Html = self
+        let upper: Html = self
             .state
-            .rounds_iter()
+            .upper_bracket_iter()
             .with_index()
             .map(|(round, starting_index)| render_round(ctx, round, starting_index))
             .collect();
 
+        let lower: Html = self
+            .state
+            .lower_bracket_iter()
+            .with_index()
+            .map(|(round, starting_index)| render_round(ctx, round, starting_index))
+            .collect();
+
+        let finals: Html = self
+            .state
+            .final_bracket_iter()
+            .with_index()
+            .map(|(m, index)| render_match(ctx, m, index))
+            .collect();
+
         html! {
             <>
-                <div class="bracket-matches">
-                    {bracket}
+            <div class="flex-col">
+                <div class="tourn-bracket">
+                    <span>{ "Winners Bracket" }</span>
+                    <div class="bracket-matches">
+                        {upper}
+                    </div>
                 </div>
-                {popup}
+
+                <div class="bracket-flex-center tourn-bracket">
+                    <div>
+                        <span>{ "Grand Finals" }</span>
+                        <div class="bracket-matches">
+                            {finals}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tourn-bracket">
+                <span>{ "Losers Bracket" }</span>
+                <div class="bracket-matches">
+                    {lower}
+                </div>
+            </div>
+
+            {popup}
             </>
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
-pub struct BracketProperties {
-    pub tournament: Rc<api::Tournament>,
-    pub bracket: Option<Rc<api2::Bracket>>,
+#[derive(Clone, Debug, Properties)]
+pub struct Props {
+    pub tournament: Rc<Tournament>,
+    pub bracket: Option<Rc<Bracket>>,
+}
+
+impl PartialEq for Props {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.tournament, &other.tournament) && self.bracket == other.bracket
+    }
 }
 
 fn render_round(
-    ctx: &Context<SingleEliminationBracket>,
+    ctx: &Context<DoubleEliminationBracket>,
     round: &[Match<EntrantWithScore<Team, u64>>],
     starting_index: usize,
 ) -> Html {
@@ -204,7 +245,7 @@ fn render_round(
         .iter()
         .enumerate()
         .map(|(index, m)| {
-            html! {render_match(ctx,m,starting_index+index)}
+            html! {render_match(ctx, m, starting_index + index)}
         })
         .collect();
 
@@ -216,7 +257,7 @@ fn render_round(
 }
 
 fn render_match(
-    ctx: &Context<SingleEliminationBracket>,
+    ctx: &Context<DoubleEliminationBracket>,
     m: &Match<EntrantWithScore<Team, u64>>,
     index: usize,
 ) -> Html {

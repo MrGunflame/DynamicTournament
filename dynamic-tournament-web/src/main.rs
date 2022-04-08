@@ -1,5 +1,4 @@
 mod api;
-mod bracket_generator;
 mod components;
 mod routes;
 

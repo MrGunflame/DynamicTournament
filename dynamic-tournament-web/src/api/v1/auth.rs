@@ -24,10 +24,7 @@ impl LoginData {
     }
 
     pub async fn post(&self, config: Config) -> Result<(), Box<dyn std::error::Error>> {
-        let body = serde_json::to_string(self).unwrap();
-
-        let resp = Request::post(&format!("{}/api/v1/auth/login", config.api_url))
-            .body(body)
+        let resp = Request::get(&format!("{}/api/v1/auth/login", config.api_url))
             .header(
                 "Authorization",
                 &format!(
