@@ -1,6 +1,6 @@
 pub mod tournament;
 
-use crate::tournament::Tournaments;
+use crate::tournament::TournamentClient;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -12,8 +12,8 @@ impl Client {
         Self { base_url }
     }
 
-    pub fn tournaments(&self) -> Tournaments<'_> {
-        Tournaments::new(self)
+    pub fn tournaments(&self) -> TournamentClient<'_> {
+        TournamentClient::new(self)
     }
 }
 
