@@ -5,7 +5,6 @@ use crate::api::tournament::Team;
 use crate::api::v1::auth::AuthCredentials;
 use crate::bracket_generator::{EntrantSpot, EntrantWithScore};
 
-use super::double_elimination::Action;
 use super::BracketTeam;
 
 pub struct BracketMatch;
@@ -101,4 +100,9 @@ pub struct Props {
 pub enum Message {
     UpdateScore,
     ResetMatch,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum Action {
+    UpdateMatch,
 }

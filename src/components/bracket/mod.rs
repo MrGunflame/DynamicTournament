@@ -4,7 +4,7 @@ pub mod single_elimination;
 pub mod team;
 
 pub use double_elimination::DoubleEliminationBracket;
-pub use r#match::BracketMatch;
+pub use r#match::{Action, BracketMatch};
 pub use single_elimination::SingleEliminationBracket;
 pub use team::BracketTeam;
 
