@@ -1,5 +1,18 @@
 # DynamicTournament
 
+## Building
+
+### Requirements (build only)
+
+- A stable rust toolchain
+- (Trunk)[https://crates.io/crates/trunk] (`cargo install trunk`)
+
+### Building
+
+- Clone the repo: `git clone https://github.com/MrGunflame/dynamic-tournament`
+- Build using trunk: `trunk build --release`
+
+All bundled files can be found in `dist/`.
 
 ## TODO
 
