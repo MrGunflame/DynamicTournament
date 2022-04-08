@@ -38,9 +38,8 @@ where
             // Mark matches with only a single team in as placeholder matches.
             // Only the second entrant can be `EntrantSpot::Empty`.
             // FIXME: Unnecessary double comparison here and above.
-            match teams[1] {
-                EntrantSpot::Empty => placeholder_matches.push(matches.len()),
-                _ => (),
+            if let EntrantSpot::Empty = teams[1] {
+                placeholder_matches.push(matches.len());
             }
 
             matches.push(Match::new(teams));
@@ -226,9 +225,7 @@ where
             start /= 2;
         }
 
-        let counter = index - buffer;
-
-        counter
+        index - buffer
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Match<T>> {
@@ -338,24 +335,15 @@ impl<T> EntrantSpot<T> {
     }
 
     pub fn is_entrant(&self) -> bool {
-        match self {
-            Self::Entrant(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Entrant(_))
     }
 
     pub fn is_empty(&self) -> bool {
-        match self {
-            Self::Empty => true,
-            _ => false,
-        }
+        matches!(self, Self::Empty)
     }
 
     pub fn is_tbd(&self) -> bool {
-        match self {
-            Self::TBD => true,
-            _ => false,
-        }
+        matches!(self, Self::TBD)
     }
 
     /// Takes out an the value, leaving [`Self::Empty`] in its place.
@@ -426,7 +414,7 @@ fn calculate_wanted_inital_entrants(amount_entants: usize) -> usize {
     // Calculate the next pow(2, n) number.
     let mut start = 1;
     while start < amount_entants {
-        start = start << 1;
+        start <<= 1;
     }
 
     start
@@ -438,7 +426,7 @@ fn predict_amount_of_matches(starting_amount: usize) -> usize {
 
     let mut counter = starting_amount / 2;
     while starting_amount > 1 {
-        starting_amount = starting_amount >> 1;
+        starting_amount >>= 1;
         counter += starting_amount / 2;
     }
 
@@ -521,7 +509,7 @@ where
                 // Lower bracket
                 counter += starting_amount / 2;
 
-                starting_amount = starting_amount >> 1;
+                starting_amount >>= 1;
             }
 
             counter
@@ -556,9 +544,8 @@ where
                 EntrantSpot::new(entrants.get(i + 1).cloned()),
             ];
 
-            match teams[1] {
-                EntrantSpot::Empty => placeholder_matches.push(matches.len()),
-                _ => (),
+            if let EntrantSpot::Empty = teams[1] {
+                placeholder_matches.push(matches.len());
             }
 
             matches.push(Match::new(teams));
@@ -621,6 +608,10 @@ where
 
     pub fn len(&self) -> usize {
         self.matches.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn get(&self, index: usize) -> Option<&Match<T>> {
@@ -786,9 +777,7 @@ where
             start /= 2;
         }
 
-        let counter = index - buffer;
-
-        counter
+        index - buffer
     }
 
     /// Returns the index of the round in with the match at `index` is located.

@@ -96,10 +96,7 @@ pub enum MatchMember {
 
 impl MatchMember {
     pub fn is_entrant(&self) -> bool {
-        match self {
-            Self::Entrant(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Entrant(_))
     }
 }
 

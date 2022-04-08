@@ -57,8 +57,7 @@ impl Component for SingleEliminationBracket {
                     m.entrants[0].unwrap_ref_mut().score = scores[0];
                     m.entrants[1].unwrap_ref_mut().score = scores[1];
 
-                    if m.entrants[0].unwrap_ref().score >= (ctx.props().tournament.best_of / 2) + 1
-                    {
+                    if m.entrants[0].unwrap_ref().score > (ctx.props().tournament.best_of / 2) {
                         let winner = m.entrants[0].unwrap_ref_mut();
                         winner.winner = true;
 
@@ -71,8 +70,7 @@ impl Component for SingleEliminationBracket {
                         });
                     }
 
-                    if m.entrants[1].unwrap_ref().score >= (ctx.props().tournament.best_of / 2) + 1
-                    {
+                    if m.entrants[1].unwrap_ref().score > (ctx.props().tournament.best_of / 2) {
                         let winner = m.entrants[1].unwrap_ref_mut();
                         winner.winner = true;
 

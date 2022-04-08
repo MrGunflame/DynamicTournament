@@ -70,10 +70,7 @@ impl Component for Tournament {
             let bracket = bracket.clone();
             let switch = move |route: &Route| -> Html {
                 let rc = rc.clone();
-                let bracket = match bracket.clone() {
-                    Some(bracket) => Some(std::rc::Rc::new(bracket)),
-                    None => None,
-                };
+                let bracket = bracket.clone().map(std::rc::Rc::new);
 
                 match route {
                     Route::Index { id } => html! {

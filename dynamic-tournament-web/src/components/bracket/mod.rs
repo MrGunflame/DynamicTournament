@@ -58,7 +58,7 @@ impl PartialEq for Properties {
             return false;
         }
 
-        if !self.bracket.is_some() && other.bracket.is_some() {
+        if self.bracket.is_none() && other.bracket.is_some() {
             return false;
         }
 

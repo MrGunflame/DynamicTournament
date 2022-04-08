@@ -60,10 +60,7 @@ impl Component for Login {
                     }
 
                     match fetch_data(logindata, config).await {
-                        Ok(_) => Message::ReqeustResolve(InnerAuth {
-                            username: username,
-                            password: password,
-                        }),
+                        Ok(_) => Message::ReqeustResolve(InnerAuth { username, password }),
                         Err(err) => Message::RequestReject(err.to_string()),
                     }
                 });
