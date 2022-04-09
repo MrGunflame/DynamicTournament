@@ -26,7 +26,7 @@ impl<'a> AuthClient<'a> {
         if resp.ok() {
             let mut inner = self.client.inner.write().unwrap();
 
-            inner.authorization = Some(auth);
+            inner.authorization.update(Some(auth));
 
             Ok(())
         } else {

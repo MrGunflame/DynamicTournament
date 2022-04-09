@@ -3,6 +3,9 @@ name = "dynamic-tournament-api"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+local-storage = ["dep:gloo-storage"]
+
 [dependencies]
 dynamic-tournament-generator = { version = "0.1.0", path = "../dynamic-tournament-generator", features = ["serde"] }
 
@@ -12,3 +15,5 @@ serde_repr = "0.1.7"
 serde_json = "1.0.79"
 base64 = "0.13.0"
 thiserror = "1.0.30"
+
+gloo-storage =  { version = "0.2.0", optional = true }

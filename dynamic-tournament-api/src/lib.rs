@@ -5,11 +5,14 @@ use crate::auth::AuthClient;
 use crate::tournament::TournamentClient;
 
 use reqwasm::http::{Headers, Method, Request};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use std::fmt::Write;
 use std::sync::{Arc, RwLock};
+
+#[cfg(feature = "local-storage")]
+use gloo_storage::{LocalStorage, Storage};
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -20,7 +23,7 @@ impl Client {
     pub fn new(base_url: String) -> Self {
         let inner = ClientInner {
             base_url,
-            authorization: None,
+            authorization: Authorization::new(),
         };
 
         Self {
@@ -39,17 +42,17 @@ impl Client {
     pub(crate) fn request(&self) -> RequestBuilder {
         let inner = self.inner.read().unwrap();
 
-        RequestBuilder::new(inner.base_url.clone(), inner.authorization.clone())
+        RequestBuilder::new(inner.base_url.clone(), &inner.authorization)
     }
 
     pub fn is_authenticated(&self) -> bool {
         let inner = self.inner.read().unwrap();
-        inner.authorization.is_some()
+        inner.authorization.header.is_some()
     }
 
     pub fn logout(&self) {
         let mut inner = self.inner.write().unwrap();
-        inner.authorization = None;
+        inner.authorization.delete();
     }
 }
 
@@ -64,7 +67,7 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + S
 #[derive(Debug)]
 pub(crate) struct ClientInner {
     base_url: String,
-    authorization: Option<String>,
+    authorization: Authorization,
 }
 
 pub struct RequestBuilder {
@@ -75,7 +78,7 @@ pub struct RequestBuilder {
 }
 
 impl RequestBuilder {
-    fn new(url: String, authorization: Option<String>) -> Self {
+    fn new(url: String, authorization: &Authorization) -> Self {
         let this = Self {
             url,
             method: Method::GET,
@@ -83,7 +86,7 @@ impl RequestBuilder {
             body: None,
         };
 
-        match authorization {
+        match &authorization.header {
             Some(auth) => this.header("Authorization", auth),
             None => this,
         }
@@ -148,4 +151,45 @@ impl RequestBuilder {
 pub enum Error {
     #[error("bad status code: {0}")]
     BadStatusCode(u16),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Authorization {
+    header: Option<String>,
+}
+
+impl Authorization {
+    pub fn new() -> Self {
+        let mut this = Self { header: None };
+
+        #[cfg(feature = "local-storage")]
+        if let Ok(new) = LocalStorage::get("dynamic-tournament-api-client") {
+            this = new;
+        }
+
+        this
+    }
+
+    pub fn update<T>(&mut self, header: Option<T>)
+    where
+        T: ToString,
+    {
+        self.header = header.and_then(|v| Some(v.to_string()));
+
+        #[cfg(feature = "local-storage")]
+        {
+            LocalStorage::set("dynamic-tournament-api-client", self)
+                .expect("Failed to update localStorage with authorization credentials");
+        }
+    }
+
+    pub fn delete(&mut self) {
+        self.update::<&str>(None);
+    }
+}
+
+impl Default for Authorization {
+    fn default() -> Self {
+        Self::new()
+    }
 }
