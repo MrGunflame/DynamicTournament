@@ -5,7 +5,7 @@
 ### Requirements (build only)
 
 - A stable rust toolchain
-- (Trunk)[https://crates.io/crates/trunk] (`cargo install trunk`)
+- [Trunk](https://crates.io/crates/trunk) (`cargo install trunk`)
 
 ### Building
 
