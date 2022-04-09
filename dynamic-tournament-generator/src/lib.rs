@@ -598,8 +598,10 @@ where
     }
 
     pub fn resume(matches: Vec<Match<T>>) -> Self {
+        let initial_matches = calculate_wanted_inital_entrants(matches.len() / 4);
+
         Self {
-            initial_matches: (matches.len() + 1) / 2,
+            initial_matches,
             lower_bracket_index: matches.len() / 2,
             final_bracket_index: matches.len() - 1,
             matches,
