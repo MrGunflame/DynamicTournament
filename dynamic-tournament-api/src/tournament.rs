@@ -2,7 +2,6 @@ use crate::{Client, Result};
 
 use dynamic_tournament_generator::{EntrantWithScore, Match};
 
-use reqwasm::http::Request;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -92,9 +91,9 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn list(&self) -> Result<Vec<TournamentId>> {
-        let url = format!("{}/tournament", self.client.base_url);
+        let req = self.client.request().url("/tournament");
 
-        let resp = Request::get(&url).send().await?.json().await?;
+        let resp = req.build().send().await?.json().await?;
 
         Ok(resp)
     }
@@ -105,9 +104,9 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn get(&self, id: TournamentId) -> Result<Tournament> {
-        let url = format!("{}/tournament/{}", self.client.base_url, id.0);
+        let req = self.client.request().url(format!("/tournament/{}", id.0));
 
-        let resp = Request::get(&url).send().await?.json().await?;
+        let resp = req.build().send().await?.json().await?;
 
         Ok(resp)
     }
@@ -117,12 +116,15 @@ impl<'a> TournamentClient<'a> {
     /// # Errors
     ///
     /// /// Returns an error if the request fails.
-    pub async fn create(&self, tournament: Tournament) -> Result<()> {
-        let url = format!("{}/tournament", self.client.base_url);
+    pub async fn create(&self, tournament: &Tournament) -> Result<()> {
+        let req = self
+            .client
+            .request()
+            .url("/tournament")
+            .post()
+            .body(tournament);
 
-        let body = serde_json::to_string(&tournament).unwrap();
-
-        Request::post(&url).body(body).send().await?;
+        req.build().send().await?;
         Ok(())
     }
 
@@ -159,12 +161,12 @@ impl<'a> BracketClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn get(&self) -> Result<Bracket> {
-        let url = format!(
-            "{}/tournament/{}/bracket",
-            self.client.base_url, self.tournament_id.0
-        );
+        let req = self
+            .client
+            .request()
+            .url(format!("/tournament/{}/bracket", self.tournament_id.0));
 
-        let resp = Request::get(&url).send().await?.json().await?;
+        let resp = req.build().send().await?.json().await?;
 
         Ok(resp)
     }
@@ -174,13 +176,15 @@ impl<'a> BracketClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn put(&self) -> Result<()> {
-        let url = format!(
-            "{}/tournament/{}/bracket",
-            self.client.base_url, self.tournament_id.0
-        );
+    pub async fn put(&self, bracket: &Bracket) -> Result<()> {
+        let req = self
+            .client
+            .request()
+            .url(format!("/tournament/{}/bracket", self.tournament_id.0))
+            .put()
+            .body(bracket);
 
-        Request::put(&url).send().await?;
+        req.build().send().await?;
         Ok(())
     }
 }
