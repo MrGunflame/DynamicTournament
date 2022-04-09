@@ -5,6 +5,10 @@ pub struct AuthClient<'a> {
 }
 
 impl<'a> AuthClient<'a> {
+    pub(crate) fn new(client: &'a Client) -> Self {
+        Self { client }
+    }
+
     pub async fn login(&self, username: &str, password: &str) -> Result<()> {
         let auth = format!(
             "Basic {}",
@@ -15,14 +19,18 @@ impl<'a> AuthClient<'a> {
             .client
             .request()
             .url("/v1/auth/login")
-            .header("Authorization", auth);
+            .header("Authorization", auth.clone());
 
         let resp = req.build().send().await?;
 
-        if !resp.ok() {
-            Err(Error::BadStatusCode(resp.status()).into())
-        } else {
+        if resp.ok() {
+            let mut inner = self.client.inner.write().unwrap();
+
+            inner.authorization = Some(auth);
+
             Ok(())
+        } else {
+            Err(Error::BadStatusCode(resp.status()).into())
         }
     }
 }

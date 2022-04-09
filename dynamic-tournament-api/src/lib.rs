@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod tournament;
 
+use crate::auth::AuthClient;
 use crate::tournament::TournamentClient;
 
 use reqwasm::http::{Headers, Method, Request};
@@ -31,10 +32,24 @@ impl Client {
         TournamentClient::new(self)
     }
 
+    pub fn auth(&self) -> AuthClient {
+        AuthClient::new(self)
+    }
+
     pub(crate) fn request(&self) -> RequestBuilder {
         let inner = self.inner.read().unwrap();
 
         RequestBuilder::new(inner.base_url.clone(), inner.authorization.clone())
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        let inner = self.inner.read().unwrap();
+        inner.authorization.is_some()
+    }
+
+    pub fn logout(&self) {
+        let mut inner = self.inner.write().unwrap();
+        inner.authorization = None;
     }
 }
 
