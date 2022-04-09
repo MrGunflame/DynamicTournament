@@ -38,6 +38,12 @@ impl Client {
     }
 }
 
+impl PartialEq for Client {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[derive(Debug)]
@@ -50,7 +56,7 @@ pub struct RequestBuilder {
     url: String,
     method: Method,
     headers: Vec<(&'static str, String)>,
-    body: String,
+    body: Option<String>,
 }
 
 impl RequestBuilder {
@@ -59,7 +65,7 @@ impl RequestBuilder {
             url,
             method: Method::GET,
             headers: Vec::new(),
-            body: String::new(),
+            body: None,
         };
 
         match authorization {
@@ -103,7 +109,7 @@ impl RequestBuilder {
     where
         T: Serialize,
     {
-        self.body = serde_json::to_string(&body).unwrap();
+        self.body = Some(serde_json::to_string(&body).unwrap());
         self.header("Content-Type", "application/json")
     }
 
@@ -113,10 +119,13 @@ impl RequestBuilder {
             headers.append(key, &val);
         }
 
-        Request::new(&self.url)
-            .method(self.method)
-            .headers(headers)
-            .body(self.body)
+        let mut req = Request::new(&self.url).method(self.method).headers(headers);
+
+        if let Some(body) = self.body {
+            req = req.body(body);
+        }
+
+        req
     }
 }
 
