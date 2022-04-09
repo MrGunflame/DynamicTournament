@@ -1,9 +1,11 @@
+pub mod auth;
 pub mod tournament;
 
 use crate::tournament::TournamentClient;
 
 use reqwasm::http::{Headers, Method, Request};
 use serde::Serialize;
+use thiserror::Error;
 
 use std::fmt::Write;
 use std::sync::{Arc, RwLock};
@@ -116,4 +118,10 @@ impl RequestBuilder {
             .headers(headers)
             .body(self.body)
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum Error {
+    #[error("bad status code: {0}")]
+    BadStatusCode(u16),
 }

@@ -91,7 +91,7 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn list(&self) -> Result<Vec<TournamentId>> {
-        let req = self.client.request().url("/tournament");
+        let req = self.client.request().url("/v1/tournament");
 
         let resp = req.build().send().await?.json().await?;
 
@@ -104,7 +104,10 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn get(&self, id: TournamentId) -> Result<Tournament> {
-        let req = self.client.request().url(format!("/tournament/{}", id.0));
+        let req = self
+            .client
+            .request()
+            .url(format!("/v1/tournament/{}", id.0));
 
         let resp = req.build().send().await?.json().await?;
 
@@ -120,7 +123,7 @@ impl<'a> TournamentClient<'a> {
         let req = self
             .client
             .request()
-            .url("/tournament")
+            .url("/v1/tournament")
             .post()
             .body(tournament);
 
@@ -164,7 +167,7 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/tournament/{}/bracket", self.tournament_id.0));
+            .url(format!("/v1/tournament/{}/bracket", self.tournament_id.0));
 
         let resp = req.build().send().await?.json().await?;
 
@@ -180,7 +183,7 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/tournament/{}/bracket", self.tournament_id.0))
+            .url(format!("/v1/tournament/{}/bracket", self.tournament_id.0))
             .put()
             .body(bracket);
 
