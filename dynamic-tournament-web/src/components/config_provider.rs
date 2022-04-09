@@ -18,11 +18,7 @@ impl Component for ConfigProvider {
 
         link.send_future(async move {
             async fn fetch_data() -> DataResult<Config> {
-                let data = Request::get("/static/config.json")
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
+                let data = Request::get("/config.json").send().await?.json().await?;
 
                 Ok(data)
             }
@@ -68,27 +64,3 @@ pub struct Config {
 pub enum Msg {
     UpdateConfig(Data<Config>),
 }
-
-// #[derive(Clone, Debug)]
-// pub struct Config {
-//     inner: Rc<InnerConfig>,
-// }
-
-// #[derive(Clone, Debug, Deserialize)]
-// pub struct InnerConfig {
-//     api_url: String,
-// }
-
-// impl PartialEq for Config {
-//     fn eq(&self, other: &Self) -> bool {
-//         Rc::ptr_eq(&self.inner, &other.inner)
-//     }
-// }
-
-// impl std::ops::Deref for Config {
-//     type Target = InnerConfig;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.inner
-//     }
-// }
