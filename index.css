@@ -160,3 +160,15 @@ body {
 .match-action-buttons > button:disabled {
   cursor: default;
 }
+
+.tr-link-table {
+  border-spacing: 0;
+}
+
+.tr-link {
+  cursor: pointer;
+}
+
+.tr-link:hover {
+  background-color: #1f1430;
+}
