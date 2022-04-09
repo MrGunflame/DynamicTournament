@@ -90,6 +90,7 @@ impl Component for Tournament {
 
             html! {
                 <>
+                    <h2>{ data.name.clone() }</h2>
                     <div class="navbar">
                         <ul>
                             <li><Link<Route> to={Route::Bracket{ id: ctx.props().id.0 }}>{ "Bracket" }</Link<Route>></li>

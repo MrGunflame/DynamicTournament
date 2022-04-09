@@ -42,7 +42,9 @@ impl Component for App {
                                     <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
                                 </ul>
                             </div>
-                            <Switch<Route> render={Switch::render(switch)} />
+                            <div class="main">
+                                <Switch<Route> render={Switch::render(switch)} />
+                            </div>
                         </BrowserRouter>
                     </ClientProvider>
                 </AuthProvider>
