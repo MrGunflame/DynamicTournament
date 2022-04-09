@@ -1,5 +1,6 @@
 pub mod login;
 pub mod logout;
+pub mod not_found;
 pub mod tournament;
 pub mod tournamentlist;
 
@@ -12,6 +13,8 @@ use yew_router::Routable;
 
 use login::Login;
 use logout::Logout;
+
+use not_found::NotFound;
 
 use dynamic_tournament_api::tournament::TournamentId;
 
@@ -74,7 +77,7 @@ pub fn switch(route: &Route) -> Html {
         Route::Index => html! { "this is index" },
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
-        Route::NotFound => html! { "404" },
+        Route::NotFound => html! { <NotFound /> },
         Route::TournamentList => html! {
             <tournamentlist::TournamentList />
         },
