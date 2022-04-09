@@ -1,9 +1,7 @@
-use gloo_storage::Storage;
 use yew::prelude::*;
 
-use crate::api::tournament::Team;
-use crate::api::v1::auth::AuthCredentials;
-
+use dynamic_tournament_api::tournament::Team;
+use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 use super::BracketTeam;
@@ -41,11 +39,13 @@ impl Component for BracketMatch {
             })
             .collect();
 
-        let credentails: gloo_storage::Result<AuthCredentials> =
-            gloo_storage::LocalStorage::get("http_auth_data");
+        let (client, _) = ctx
+            .link()
+            .context::<Client>(Callback::noop())
+            .expect("No ClientProvider given");
 
-        let action_button = match credentails {
-            Ok(_) => {
+        let action_button = match client.is_authenticated() {
+            true => {
                 if ctx.props().entrants[0].is_entrant() && ctx.props().entrants[1].is_entrant() {
                     let onclick = ctx.link().callback(|_| Message::UpdateScore);
 
@@ -74,9 +74,7 @@ impl Component for BracketMatch {
                     }
                 }
             }
-            Err(err) => {
-                gloo_console::warn!(format!("Failed to read authorization credentials: {}", err));
-
+            false => {
                 html! {}
             }
         };
@@ -92,10 +90,16 @@ impl Component for BracketMatch {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct Props {
     pub entrants: [EntrantSpot<EntrantWithScore<Team, u64>>; 2],
     pub on_action: Callback<Action>,
+}
+
+impl PartialEq for Props {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }
 
 pub enum Message {

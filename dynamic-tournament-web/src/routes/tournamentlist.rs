@@ -1,12 +1,13 @@
-use crate::components::config_provider::Config;
 use crate::routes::tournament::Route;
 use crate::{render_data, Data, DataResult};
-use reqwasm::http::Request;
 use yew::prelude::*;
 use yew_router::components::Link;
 
+use dynamic_tournament_api::tournament::TournamentId;
+use dynamic_tournament_api::Client;
+
 pub struct TournamentList {
-    data: Data<Vec<u64>>,
+    data: Data<Vec<TournamentId>>,
 }
 
 impl Component for TournamentList {
@@ -15,23 +16,21 @@ impl Component for TournamentList {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
-        let (config, _) = ctx
+        let (client, _) = ctx
             .link()
             .context(Callback::noop())
-            .expect("No ConfigProvider given");
+            .expect("No ClientProvider given");
 
         link.send_future(async move {
-            async fn fetch_data(config: Config) -> DataResult<Vec<u64>> {
-                let data = Request::get(&format!("{}/api/v1/tournament", config.api_url))
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
+            async fn fetch_data(client: Client) -> DataResult<Vec<TournamentId>> {
+                let client = client.tournaments();
+
+                let data = client.list().await?;
 
                 Ok(data)
             }
 
-            let data = Some(fetch_data(config).await);
+            let data = Some(fetch_data(client).await);
 
             Msg::Update(data)
         });
@@ -54,7 +53,7 @@ impl Component for TournamentList {
                 .iter()
                 .map(|id| {
                     html! {
-                        <Link<Route> classes="link-inline" to={Route::Index { id: *id } }>{ id }</Link<Route>>
+                        <Link<Route> classes="link-inline" to={Route::Index { id: id.0 } }>{ id.0 }</Link<Route>>
                     }
                 })
                 .collect();
@@ -69,5 +68,5 @@ impl Component for TournamentList {
 }
 
 pub enum Msg {
-    Update(Data<Vec<u64>>),
+    Update(Data<Vec<TournamentId>>),
 }

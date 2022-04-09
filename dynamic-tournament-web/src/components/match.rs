@@ -1,12 +1,10 @@
-use gloo_storage::Storage;
 use yew::callback::Callback;
 use yew::prelude::*;
 
 use super::team::Team;
 
-use crate::api::tournament as api;
-use crate::api::v1::auth::AuthCredentials;
-
+use dynamic_tournament_api::tournament as api;
+use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::EntrantWithScore;
 
 pub struct Match;
@@ -49,13 +47,15 @@ impl Component for Match {
             })
             .collect();
 
+        let (client, _) = ctx
+            .link()
+            .context::<Client>(Callback::noop())
+            .expect("No ClientProvider given");
+
         // All spots must be filled for the button to become active.
 
-        let credentials: gloo_storage::Result<AuthCredentials> =
-            gloo_storage::LocalStorage::get("http_auth_data");
-
-        let score_set_button = match credentials {
-            Ok(_) => {
+        let score_set_button = match client.is_authenticated() {
+            true => {
                 if ctx.props().teams[0].is_entrant() && ctx.props().teams[1].is_entrant() {
                     let on_score_set = ctx.link().callback(|_| Msg::ScoreSet);
 
@@ -64,9 +64,7 @@ impl Component for Match {
                     html! { <button title="Some entrant spots are not occupied." disabled=true>{ "Set Score" }</button> }
                 }
             }
-            Err(err) => {
-                gloo_console::warn!(format!("Failed to read authorization credentials: {}", err));
-
+            false => {
                 html! {
                     <button title="You are not logged in (or an error occured)." disabled=true>{ "Set Score" }</button>
                 }
@@ -88,7 +86,7 @@ pub struct MatchProperties {
     pub on_score_set: Callback<()>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum MatchMember {
     Entrant(EntrantWithScore<api::Team, u64>),
     Placeholder(String),
@@ -97,6 +95,12 @@ pub enum MatchMember {
 impl MatchMember {
     pub fn is_entrant(&self) -> bool {
         matches!(self, Self::Entrant(_))
+    }
+}
+
+impl PartialEq for MatchMember {
+    fn eq(&self, other: &Self) -> bool {
+        false
     }
 }
 

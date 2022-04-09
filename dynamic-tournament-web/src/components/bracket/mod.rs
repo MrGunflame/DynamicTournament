@@ -8,8 +8,7 @@ pub use r#match::{Action, BracketMatch};
 pub use single_elimination::SingleEliminationBracket;
 pub use team::BracketTeam;
 
-use crate::api::tournament::{BracketType, Tournament};
-use crate::api::v1::tournament as api;
+use dynamic_tournament_api::tournament::{Bracket as BracketState, BracketType, Tournament};
 
 use yew::prelude::*;
 
@@ -49,23 +48,16 @@ impl Component for Bracket {
 #[derive(Clone, Debug, Properties)]
 pub struct Properties {
     pub tournament: Rc<Tournament>,
-    pub bracket: Option<Rc<api::Bracket>>,
+    pub bracket: Option<Rc<BracketState>>,
 }
 
 impl PartialEq for Properties {
     fn eq(&self, other: &Self) -> bool {
-        if !Rc::ptr_eq(&self.tournament, &other.tournament) {
-            return false;
-        }
-
-        if self.bracket.is_none() && other.bracket.is_some() {
-            return false;
-        }
-
-        // FIXME: Use unwrap unchecked.
-        let this = self.bracket.as_ref().unwrap();
-        let other = other.bracket.as_ref().unwrap();
-
-        Rc::ptr_eq(this, other)
+        Rc::ptr_eq(&self.tournament, &other.tournament)
+            && self
+                .bracket
+                .as_ref()
+                .zip(other.bracket.as_ref())
+                .map_or(false, |(a, b)| Rc::ptr_eq(a, b))
     }
 }

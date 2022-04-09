@@ -1,5 +1,3 @@
-use crate::api::v1::auth::LoginData;
-use crate::components::config_provider::Config;
 use crate::components::providers::auth::{Auth, InnerAuth};
 use crate::routes::Route;
 
@@ -7,6 +5,8 @@ use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew::Callback;
 use yew_router::components::Redirect;
+
+use dynamic_tournament_api::Client;
 
 pub struct Login {
     username: String,
@@ -39,27 +39,28 @@ impl Component for Login {
                 true
             }
             Message::Submit => {
-                let (config, _) = ctx
+                let (client, _) = ctx
                     .link()
-                    .context::<Config>(Callback::noop())
-                    .expect("No ConfigProvider given");
+                    .context::<Client>(Callback::noop())
+                    .expect("No ClientProvider given");
 
                 let username = self.username.clone();
                 let password = self.password.clone();
 
-                let logindata = LoginData::new(username.clone(), password.clone());
-
                 ctx.link().send_future(async move {
                     async fn fetch_data(
-                        logindata: LoginData,
-                        config: Config,
-                    ) -> Result<(), Box<dyn std::error::Error>> {
-                        logindata.post(config).await?;
+                        client: Client,
+                        username: String,
+                        password: String,
+                    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                        let client = client.auth();
+
+                        client.login(&username, &password).await?;
 
                         Ok(())
                     }
 
-                    match fetch_data(logindata, config).await {
+                    match fetch_data(client, username.clone(), password.clone()).await {
                         Ok(_) => Message::ReqeustResolve(InnerAuth { username, password }),
                         Err(err) => Message::RequestReject(err.to_string()),
                     }

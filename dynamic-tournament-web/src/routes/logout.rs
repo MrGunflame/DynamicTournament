@@ -2,9 +2,8 @@ use yew::prelude::*;
 use yew_router::components::Redirect;
 
 use super::Route;
-use crate::components::providers::auth::Auth;
 
-use gloo_storage::Storage;
+use dynamic_tournament_api::Client;
 
 pub struct Logout;
 
@@ -17,15 +16,12 @@ impl Component for Logout {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let (auth, _) = ctx
+        let (client, _) = ctx
             .link()
-            .context::<Auth>(Callback::noop())
-            .expect("No AuthContext provided");
+            .context::<Client>(Callback::noop())
+            .expect("No ClientProvider given");
 
-        gloo_storage::LocalStorage::delete("http_auth_data");
-
-        let mut inner = auth.inner.lock().unwrap();
-        *inner = None;
+        client.logout();
 
         html! {
             <Redirect<Route> to={Route::Index} />

@@ -4,7 +4,7 @@ pub mod tournament;
 pub mod tournamentlist;
 
 use crate::components::config_provider::ConfigProvider;
-use crate::components::providers::AuthProvider;
+use crate::components::providers::{AuthProvider, ClientProvider};
 
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -12,6 +12,8 @@ use yew_router::Routable;
 
 use login::Login;
 use logout::Logout;
+
+use dynamic_tournament_api::tournament::TournamentId;
 
 pub struct App;
 
@@ -27,17 +29,19 @@ impl Component for App {
         html! {
             <ConfigProvider>
                 <AuthProvider>
-                    <BrowserRouter>
-                        <div class="navbar">
-                            <ul>
-                                <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                                <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
-                                <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
-                                <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
-                            </ul>
-                        </div>
-                        <Switch<Route> render={Switch::render(switch)} />
-                    </BrowserRouter>
+                    <ClientProvider>
+                        <BrowserRouter>
+                            <div class="navbar">
+                                <ul>
+                                    <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
+                                    <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
+                                    <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
+                                    <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
+                                </ul>
+                            </div>
+                            <Switch<Route> render={Switch::render(switch)} />
+                        </BrowserRouter>
+                    </ClientProvider>
                 </AuthProvider>
             </ConfigProvider>
         }
@@ -75,13 +79,13 @@ pub fn switch(route: &Route) -> Html {
             <tournamentlist::TournamentList />
         },
         Route::TournamentR { id } => html! {
-            <tournament::Tournament id={*id} />
+            <tournament::Tournament id={TournamentId(*id)} />
         },
         Route::Tournament { id } => html! {
-            <tournament::Tournament id={*id} />
+            <tournament::Tournament id={TournamentId(*id)} />
         },
         Route::TournamentTeam { id } => html! {
-            <tournament::Tournament id={*id} />
+            <tournament::Tournament id={TournamentId(*id)} />
         },
     }
 }

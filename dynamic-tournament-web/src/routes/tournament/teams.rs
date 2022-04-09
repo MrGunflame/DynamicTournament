@@ -3,7 +3,7 @@ use yew_router::prelude::*;
 
 use super::Route;
 
-use crate::api::tournament as api;
+use dynamic_tournament_api::tournament as api;
 
 use std::rc::Rc;
 
@@ -28,7 +28,7 @@ impl Component for Teams {
                     <tr>
                         <td>{ i }</td>
                         <td>{ team.name.clone() }</td>
-                        <td><Link<Route> classes="link-inline" to={Route::TeamDetails { id: ctx.props().teams.id, team_id: i as u32} }>{"Details"}</Link<Route>></td>
+                        <td><Link<Route> classes="link-inline" to={Route::TeamDetails { id: ctx.props().teams.id.0, team_id: i as u32} }>{"Details"}</Link<Route>></td>
                     </tr>
                 }
             })
@@ -48,7 +48,13 @@ impl Component for Teams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct TeamsProps {
     pub teams: Rc<api::Tournament>,
+}
+
+impl PartialEq for TeamsProps {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.teams, &other.teams)
+    }
 }

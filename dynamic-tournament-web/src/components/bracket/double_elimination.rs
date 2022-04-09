@@ -2,13 +2,12 @@ use std::rc::Rc;
 
 use yew::prelude::*;
 
-use crate::api::tournament::{Team, Tournament};
-use crate::api::v1::tournament::Bracket;
-
-use crate::components::config_provider::Config;
 use crate::components::popup::Popup;
 use crate::components::r#match::MatchMember;
 use crate::components::update_bracket::BracketUpdate;
+
+use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
+use dynamic_tournament_api::Client;
 
 use super::{Action, BracketMatch};
 
@@ -93,18 +92,18 @@ impl Component for DoubleEliminationBracket {
                     None
                 });
 
-                let (config, _) = ctx
+                let (client, _) = ctx
                     .link()
-                    .context::<Config>(Callback::noop())
-                    .expect("No ConfigProvider given");
+                    .context::<Client>(Callback::noop())
+                    .expect("No ClientProvider given");
 
-                let tournament_id = ctx.props().tournament.id;
-
-                let bracket = self.state.iter().cloned().collect();
+                let id = ctx.props().tournament.id;
+                let bracket = Bracket(self.state.iter().cloned().collect());
                 ctx.link().send_future_batch(async move {
-                    let bracket = Bracket(bracket);
+                    let client = client.tournaments();
+                    let client = client.bracket(id);
 
-                    match bracket.put(tournament_id, config).await {
+                    match client.put(&bracket).await {
                         Ok(_) => vec![Message::UpdateScoreUI],
                         Err(err) => {
                             gloo_console::error!(err.to_string());
@@ -230,7 +229,12 @@ pub struct Props {
 
 impl PartialEq for Props {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament) && self.bracket == other.bracket
+        Rc::ptr_eq(&self.tournament, &other.tournament)
+            && self
+                .bracket
+                .as_ref()
+                .zip(other.bracket.as_ref())
+                .map_or(false, |(a, b)| Rc::ptr_eq(a, b))
     }
 }
 

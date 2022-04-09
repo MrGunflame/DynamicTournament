@@ -1,7 +1,6 @@
 use yew::prelude::*;
 
-use crate::api::tournament::Team;
-
+use dynamic_tournament_api::tournament::Team;
 use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 pub struct BracketTeam;
@@ -38,7 +37,13 @@ impl Component for BracketTeam {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct Props {
     pub entrant: EntrantSpot<EntrantWithScore<Team, u64>>,
+}
+
+impl PartialEq for Props {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }

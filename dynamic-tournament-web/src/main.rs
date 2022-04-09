@@ -1,4 +1,3 @@
-mod api;
 mod components;
 mod routes;
 
@@ -13,7 +12,10 @@ fn main() {
     yew::start_app::<routes::App>();
 }
 
-pub fn render_data<T, F>(data: &Option<Result<T, Box<dyn std::error::Error>>>, f: F) -> Html
+pub fn render_data<T, F>(
+    data: &Option<Result<T, Box<dyn std::error::Error + Send + Sync>>>,
+    f: F,
+) -> Html
 where
     F: FnOnce(&T) -> Html,
 {
@@ -30,5 +32,5 @@ where
     }
 }
 
-pub type Data<T> = Option<Result<T, Box<dyn std::error::Error + 'static>>>;
-pub type DataResult<T> = Result<T, Box<dyn std::error::Error + 'static>>;
+pub type Data<T> = Option<Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>>;
+pub type DataResult<T> = Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>;

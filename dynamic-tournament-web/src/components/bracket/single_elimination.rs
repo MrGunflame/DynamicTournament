@@ -1,14 +1,11 @@
 use std::rc::Rc;
 
-use crate::api::tournament as api;
-use crate::api::v1::tournament as api2;
-use crate::components::config_provider::Config;
 use crate::components::popup::Popup;
 use crate::components::r#match::MatchMember;
 use crate::components::update_bracket::BracketUpdate;
 
-use crate::api::tournament::Team;
-
+use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
+use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::{
     EntrantSpot, EntrantWithScore, Match, MatchResult, SingleElimination,
 };
@@ -18,7 +15,7 @@ use super::{Action, BracketMatch};
 use yew::prelude::*;
 
 pub struct SingleEliminationBracket {
-    state: SingleElimination<EntrantWithScore<api::Team, u64>>,
+    state: SingleElimination<EntrantWithScore<Team, u64>>,
     // Popup open for match with index.
     popup: Option<usize>,
 }
@@ -86,22 +83,20 @@ impl Component for SingleEliminationBracket {
                     None
                 });
 
-                let (config, _) = ctx
+                let (client, _) = ctx
                     .link()
-                    .context::<Config>(Callback::noop())
-                    .expect("No ConfigProvider given");
+                    .context::<Client>(Callback::noop())
+                    .expect("No ClientProvider given");
 
-                let tournament_id = ctx.props().tournament.id;
-
-                let bracket = self.state.iter().cloned().collect();
+                let id = ctx.props().tournament.id;
+                let bracket = Bracket(self.state.iter().cloned().collect());
                 // Update server data.
                 ctx.link().send_future_batch(async move {
-                    let bracket = api2::Bracket(bracket);
+                    let client = client.tournaments();
+                    let client = client.bracket(id);
 
-                    match bracket.put(tournament_id, config).await {
-                        Ok(_) => {
-                            vec![Message::UpdateScoreUI]
-                        }
+                    match client.put(&bracket).await {
+                        Ok(_) => vec![Message::UpdateScoreUI],
                         Err(err) => {
                             gloo_console::error!(err.to_string());
                             vec![]
@@ -187,10 +182,21 @@ impl Component for SingleEliminationBracket {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct BracketProperties {
-    pub tournament: Rc<api::Tournament>,
-    pub bracket: Option<Rc<api2::Bracket>>,
+    pub tournament: Rc<Tournament>,
+    pub bracket: Option<Rc<Bracket>>,
+}
+
+impl PartialEq for BracketProperties {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.tournament, &other.tournament)
+            && self
+                .bracket
+                .as_ref()
+                .zip(other.bracket.as_ref())
+                .map_or(false, |(a, b)| Rc::ptr_eq(a, b))
+    }
 }
 
 fn render_round(

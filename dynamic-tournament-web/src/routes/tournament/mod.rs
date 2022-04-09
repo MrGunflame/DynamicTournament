@@ -4,18 +4,20 @@ mod teams;
 use teamdetails::TeamDetails;
 use teams::Teams;
 
-use reqwasm::http::Request;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::api::tournament as api;
-use crate::api::v1::tournament as api2;
 use crate::components::bracket::Bracket;
-use crate::components::config_provider::Config;
 use crate::{render_data, Data, DataResult};
 
+use dynamic_tournament_api::tournament as api;
+use dynamic_tournament_api::tournament::TournamentId;
+use dynamic_tournament_api::Client;
+
+use std::rc::Rc;
+
 pub struct Tournament {
-    data: Data<(api::Tournament, Option<api2::Bracket>)>,
+    data: Data<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)>,
 }
 
 impl Component for Tournament {
@@ -24,29 +26,27 @@ impl Component for Tournament {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
-        let (config, _) = ctx.link().context::<Config>(Callback::noop()).unwrap();
+        let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
 
         let id = ctx.props().id;
         link.send_future(async move {
             async fn fetch_data(
-                config: Config,
-                id: u64,
-            ) -> DataResult<(api::Tournament, Option<api2::Bracket>)> {
-                let data = Request::get(&format!("{}/api/v1/tournament/{}", config.api_url, id))
-                    .send()
-                    .await?
-                    .json()
-                    .await?;
+                client: Client,
+                id: TournamentId,
+            ) -> DataResult<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)> {
+                let client = client.tournaments();
 
-                let bracket = match api2::Bracket::get(id, config).await {
-                    Ok(bracket) => Some(bracket),
+                let data = client.get(id).await?;
+
+                let bracket = match client.bracket(id).get().await {
+                    Ok(bracket) => Some(Rc::new(bracket)),
                     Err(_) => None,
                 };
 
-                Ok((data, bracket))
+                Ok((Rc::new(data), bracket))
             }
 
-            let data = Some(fetch_data(config, id).await);
+            let data = Some(fetch_data(client, id).await);
 
             Msg::Update(data)
         });
@@ -65,25 +65,25 @@ impl Component for Tournament {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         render_data(&self.data, |(data, bracket)| {
-            let rc = std::rc::Rc::new(data.clone());
-
+            let tournament = data.clone();
             let bracket = bracket.clone();
+
             let switch = move |route: &Route| -> Html {
-                let rc = rc.clone();
-                let bracket = bracket.clone().map(std::rc::Rc::new);
+                let tournament = tournament.clone();
+                let bracket = bracket.clone();
 
                 match route {
                     Route::Index { id } => html! {
                         <span>{ format!("Tournament id {}", id) }</span>
                     },
                     Route::Bracket { id: _ } => html! {
-                        <Bracket tournament={rc} bracket={bracket} />
+                        <Bracket tournament={tournament} bracket={bracket} />
                     },
                     Route::Teams { id: _ } => html! {
-                        <Teams teams={rc} />
+                        <Teams teams={tournament} />
                     },
                     Route::TeamDetails { id: _, team_id } => html! {
-                        <TeamDetails teams={rc} index={*team_id} />
+                        <TeamDetails teams={tournament} index={*team_id} />
                     },
                 }
             };
@@ -92,8 +92,8 @@ impl Component for Tournament {
                 <>
                     <div class="navbar">
                         <ul>
-                            <li><Link<Route> to={Route::Bracket{ id: ctx.props().id }}>{ "Bracket" }</Link<Route>></li>
-                            <li><Link<Route> to={Route::Teams{ id: ctx.props().id }}>{ "Teams" }</Link<Route>></li>
+                            <li><Link<Route> to={Route::Bracket{ id: ctx.props().id.0 }}>{ "Bracket" }</Link<Route>></li>
+                            <li><Link<Route> to={Route::Teams{ id: ctx.props().id.0 }}>{ "Teams" }</Link<Route>></li>
                         </ul>
                     </div>
                     <Switch<Route> render={Switch::render(switch)} />
@@ -105,11 +105,11 @@ impl Component for Tournament {
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
-    pub id: u64,
+    pub id: TournamentId,
 }
 
 pub enum Msg {
-    Update(Data<(api::Tournament, Option<api2::Bracket>)>),
+    Update(Data<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)>),
 }
 
 #[derive(Clone, Routable, PartialEq)]

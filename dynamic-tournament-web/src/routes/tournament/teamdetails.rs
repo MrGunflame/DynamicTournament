@@ -1,6 +1,6 @@
 use yew::prelude::*;
 
-use crate::api::tournament as api;
+use dynamic_tournament_api::tournament as api;
 
 use std::rc::Rc;
 
@@ -54,8 +54,14 @@ impl Component for TeamDetails {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct TeamDetailsProps {
     pub teams: Rc<api::Tournament>,
     pub index: u32,
+}
+
+impl PartialEq for TeamDetailsProps {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index && Rc::ptr_eq(&self.teams, &other.teams)
+    }
 }
