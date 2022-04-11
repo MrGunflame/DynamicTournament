@@ -510,7 +510,7 @@ where
 
 impl<T> DoubleElimination<T>
 where
-    T: Entrant,
+    T: Entrant + std::fmt::Debug,
 {
     pub fn new(entrants: Vec<T>) -> Self {
         let num_matches = {
@@ -597,6 +597,8 @@ where
             initial_matches: calculate_wanted_inital_entrants(entrants.len()) / 2,
         };
 
+        let mut lower_bracket_placeholder_matches = Vec::new();
+
         for index in placeholder_matches {
             let entrant = this.get_mut(index).unwrap().entrants[0].unwrap_ref_mut();
             entrant.set_winner(true);
@@ -614,6 +616,20 @@ where
             if let Some(loser) = loser {
                 let m = this.get_mut(loser).unwrap();
                 m.entrants[index % 2] = EntrantSpot::Empty;
+
+                lower_bracket_placeholder_matches.push(loser);
+            }
+        }
+
+        for index in lower_bracket_placeholder_matches {
+            let m = this.get(index).unwrap();
+            if m.entrants[0].is_empty() && m.entrants[1].is_empty() {
+                this.update_match(index, |_| {
+                    Some(MatchResult::Raw {
+                        winner: EntrantSpot::Empty,
+                        loser: EntrantSpot::Empty,
+                    })
+                });
             }
         }
 
@@ -774,7 +790,7 @@ where
                             let match_loser = self.get_mut(index_loser).unwrap();
 
                             // The looser always takes the second spot.
-                            match_loser.entrants[1] = looser;
+                            match_loser.entrants[1] = looser.clone();
                         }
                     };
                 }
@@ -1216,10 +1232,11 @@ mod tests {
                 Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
                 Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // L2
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
