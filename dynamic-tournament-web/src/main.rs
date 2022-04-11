@@ -2,6 +2,9 @@ mod components;
 mod routes;
 
 use yew::prelude::*;
+use yew::start_app_in_element;
+
+use routes::App;
 
 extern crate wee_alloc;
 
@@ -9,7 +12,19 @@ extern crate wee_alloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn main() {
-    yew::start_app::<routes::App>();
+    let document = web_sys::window()
+        .expect("No window")
+        .document()
+        .expect("No Document");
+
+    let element = match MOUNTPOINT {
+        Mountpoint::Body => document.body().expect("No document body found").into(),
+        Mountpoint::Element(id) => document
+            .get_element_by_id(id)
+            .expect("No element with the given id found"),
+    };
+
+    start_app_in_element::<App>(element);
 }
 
 pub fn render_data<T, F>(
@@ -34,3 +49,11 @@ where
 
 pub type Data<T> = Option<Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>>;
 pub type DataResult<T> = Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>;
+
+const MOUNTPOINT: Mountpoint = Mountpoint::Body;
+
+#[derive(Copy, Clone, Debug)]
+pub enum Mountpoint {
+    Body,
+    Element(&'static str),
+}
