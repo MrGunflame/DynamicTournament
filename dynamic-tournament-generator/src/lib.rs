@@ -510,7 +510,7 @@ where
 
 impl<T> DoubleElimination<T>
 where
-    T: Entrant + std::fmt::Debug,
+    T: Entrant,
 {
     pub fn new(entrants: Vec<T>) -> Self {
         let num_matches = {
@@ -606,7 +606,12 @@ where
             let mut entrant = entrant.clone();
             entrant.set_winner(false);
 
-            let (winner, loser) = this.next_matches_index(index);
+            let NextMatches {
+                winner_index: winner,
+                winner_position: _,
+                loser_index: loser,
+                loser_position: _,
+            } = this.next_matches_index(index);
 
             if let Some(winner) = winner {
                 let m = this.get_mut(winner).unwrap();
@@ -868,18 +873,28 @@ where
     /// Returns the index of the winner and loser match following the match `index`.
     /// The first value in the tuple contains the winner index, the second value contains
     /// the loser index. A `None` value indicates no next match.
-    pub fn next_matches_index(&self, index: usize) -> (Option<usize>, Option<usize>) {
+    pub fn next_matches_index(&self, index: usize) -> NextMatches {
         match index {
             // Final match:
             // No followup matches for winner or loser.
-            i if i >= self.final_bracket_index => (None, None),
+            i if i >= self.final_bracket_index => NextMatches {
+                winner_index: None,
+                winner_position: 0,
+                loser_index: None,
+                loser_position: 0,
+            },
             // Lower bracket:
             // The winner continues in the lower bracket. The loser has no followup match.
             i if i >= self.lower_bracket_index => {
                 if i == self.final_bracket_index {
                     let winner = self.final_bracket_index;
 
-                    return (Some(winner), None);
+                    return NextMatches {
+                        winner_index: Some(winner),
+                        winner_position: 1,
+                        loser_index: None,
+                        loser_position: 0,
+                    };
                 }
 
                 let mut round_index = 0;
@@ -896,19 +911,25 @@ where
 
                 let winner = index - buffer - self.lower_bracket_index;
 
-                let winner = match round_index {
-                    i if i == self.final_bracket_index - 1 => self.final_bracket_index,
-                    i if i % 2 == 0 => index + num_matches,
-                    _ => index + (num_matches - winner + winner / 2),
+                let (winner, position) = match round_index {
+                    i if i == self.final_bracket_index - 1 => (self.final_bracket_index, 1),
+                    i if i % 2 == 0 => (index + num_matches, 0),
+                    _ => (index + (num_matches - winner + winner / 2), (index - 1) % 2),
                 };
 
-                (Some(winner), None)
+                NextMatches {
+                    winner_index: Some(winner),
+                    winner_position: position,
+                    loser_index: None,
+                    loser_position: 0,
+                }
             }
             // Upper bracket:
             // The winner moves into the next round in the upper bracket. The loser moves
             // into the same round in the lower bracket.
             _ => {
                 let (winner, loser);
+                let (winner_position, loser_position);
 
                 match index {
                     // The final match in the upper bracket. Move the winner into the final
@@ -916,12 +937,18 @@ where
                     i if i == self.final_bracket_index / 2 => {
                         winner = self.final_bracket_index;
                         loser = self.final_bracket_index - 1;
+
+                        winner_position = 0;
+                        loser_position = 1;
                     }
                     // The first round of matches. All matches in the lower bracket need to
                     // be filled.
                     i if i < self.initial_matches => {
                         winner = self.initial_matches + index / 2;
                         loser = self.lower_bracket_index + (i / 2);
+
+                        winner_position = index % 2;
+                        loser_position = index % 2;
                     }
                     _ => {
                         winner = self.initial_matches + index / 2;
@@ -940,10 +967,18 @@ where
                         loser =
                             self.lower_bracket_index + lower_buffer + self.upper_match_index(index)
                                 - num_matches * 2;
+
+                        winner_position = index % 2;
+                        loser_position = 1;
                     }
                 }
 
-                (Some(winner), Some(loser))
+                NextMatches {
+                    winner_index: Some(winner),
+                    winner_position,
+                    loser_index: Some(loser),
+                    loser_position,
+                }
             }
         }
     }
@@ -1000,10 +1035,7 @@ impl<'a, T> LowerBracketIter<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for LowerBracketIter<'a, T>
-where
-    T: std::fmt::Debug,
-{
+impl<'a, T> Iterator for LowerBracketIter<'a, T> {
     type Item = &'a [Match<T>];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1120,6 +1152,62 @@ impl<'a, T> Iterator for FinalBracketIndexIter<'a, T> {
         } else {
             None
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NextMatches {
+    winner_index: Option<usize>,
+    winner_position: usize,
+    loser_index: Option<usize>,
+    loser_position: usize,
+}
+
+impl NextMatches {
+    pub fn winner_index(&self) -> Option<usize> {
+        self.winner_index
+    }
+
+    pub fn winner_position(&self) -> Option<usize> {
+        self.winner_index?;
+        Some(self.winner_position)
+    }
+
+    pub fn loser_index(&self) -> Option<usize> {
+        self.loser_index
+    }
+
+    pub fn loser_position(&self) -> Option<usize> {
+        self.loser_index?;
+        Some(self.loser_position)
+    }
+
+    pub fn winner_mut<'a, T>(
+        &self,
+        tournament: &'a mut DoubleElimination<T>,
+    ) -> Option<&'a mut EntrantSpot<T>>
+    where
+        T: Entrant,
+    {
+        let index = self.winner_index?;
+
+        let m = tournament.get_mut(index)?;
+
+        Some(&mut m.entrants[self.winner_position])
+    }
+
+    pub fn loser_mut<'a, T>(
+        &self,
+        tournament: &'a mut DoubleElimination<T>,
+    ) -> Option<&'a mut EntrantSpot<T>>
+    where
+        T: Entrant,
+    {
+        let index = self.loser_index?;
+
+        let m = tournament.get_mut(index)?;
+
+        Some(&mut m.entrants[self.loser_position])
     }
 }
 
@@ -1260,69 +1348,89 @@ mod tests {
         // UPPER BRACKET
         //
 
-        let (winner, loser) = tournament.next_matches_index(0);
-        assert_eq!(winner, Some(4));
-        assert_eq!(loser, Some(7));
+        let next_matches = tournament.next_matches_index(0);
+        assert_eq!(next_matches.winner_index, Some(4));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, Some(7));
+        assert_eq!(next_matches.loser_position, 0);
 
-        let (winner, loser) = tournament.next_matches_index(1);
-        assert_eq!(winner, Some(4));
-        assert_eq!(loser, Some(7));
+        let next_matches = tournament.next_matches_index(1);
+        assert_eq!(next_matches.winner_index, Some(4));
+        assert_eq!(next_matches.winner_position, 1);
+        assert_eq!(next_matches.loser_index, Some(7));
+        assert_eq!(next_matches.loser_position, 1);
 
-        let (winner, loser) = tournament.next_matches_index(2);
-        assert_eq!(winner, Some(5));
-        assert_eq!(loser, Some(8));
+        let next_matches = tournament.next_matches_index(2);
+        assert_eq!(next_matches.winner_index, Some(5));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, Some(8));
+        assert_eq!(next_matches.loser_position, 0);
 
-        let (winner, loser) = tournament.next_matches_index(3);
-        assert_eq!(winner, Some(5));
-        assert_eq!(loser, Some(8));
+        let next_matches = tournament.next_matches_index(3);
+        assert_eq!(next_matches.winner_index, Some(5));
+        assert_eq!(next_matches.winner_position, 1);
+        assert_eq!(next_matches.loser_index, Some(8));
+        assert_eq!(next_matches.loser_position, 1);
 
-        let (winner, loser) = tournament.next_matches_index(4);
-        assert_eq!(winner, Some(6));
-        assert_eq!(loser, Some(9));
+        let next_matches = tournament.next_matches_index(4);
+        assert_eq!(next_matches.winner_index, Some(6));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, Some(9));
+        assert_eq!(next_matches.loser_position, 1);
 
-        let (winner, loser) = tournament.next_matches_index(5);
-        assert_eq!(winner, Some(6));
-        assert_eq!(loser, Some(10));
+        let next_matches = tournament.next_matches_index(5);
+        assert_eq!(next_matches.winner_index, Some(6));
+        assert_eq!(next_matches.winner_position, 1);
+        assert_eq!(next_matches.loser_index, Some(10));
+        assert_eq!(next_matches.loser_position, 1);
 
-        let (winner, loser) = tournament.next_matches_index(6);
-        assert_eq!(winner, Some(13));
-        assert_eq!(loser, Some(12));
+        let next_matches = tournament.next_matches_index(6);
+        assert_eq!(next_matches.winner_index, Some(13));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, Some(12));
+        assert_eq!(next_matches.loser_position, 1);
 
         //
         // LOWER BRACKET
         //
 
-        let (winner, loser) = tournament.next_matches_index(7);
-        assert_eq!(winner, Some(9));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(7);
+        assert_eq!(next_matches.winner_index, Some(9));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, None);
 
-        let (winner, loser) = tournament.next_matches_index(8);
-        assert_eq!(winner, Some(10));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(8);
+        assert_eq!(next_matches.winner_index, Some(10));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, None);
 
-        let (winner, loser) = tournament.next_matches_index(9);
-        assert_eq!(winner, Some(11));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(9);
+        assert_eq!(next_matches.winner_index, Some(11));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, None);
 
-        let (winner, loser) = tournament.next_matches_index(10);
-        assert_eq!(winner, Some(11));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(10);
+        assert_eq!(next_matches.winner_index, Some(11));
+        assert_eq!(next_matches.winner_position, 1);
+        assert_eq!(next_matches.loser_index, None);
 
-        let (winner, loser) = tournament.next_matches_index(11);
-        assert_eq!(winner, Some(12));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(11);
+        assert_eq!(next_matches.winner_index, Some(12));
+        assert_eq!(next_matches.winner_position, 0);
+        assert_eq!(next_matches.loser_index, None);
 
-        let (winner, loser) = tournament.next_matches_index(12);
-        assert_eq!(winner, Some(13));
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(12);
+        assert_eq!(next_matches.winner_index, Some(13));
+        assert_eq!(next_matches.winner_position, 1);
+        assert_eq!(next_matches.loser_index, None);
 
         //
         // FINAL BRACKET
         //
 
-        let (winner, loser) = tournament.next_matches_index(13);
-        assert_eq!(winner, None);
-        assert_eq!(loser, None);
+        let next_matches = tournament.next_matches_index(13);
+        assert_eq!(next_matches.winner_index, None);
+        assert_eq!(next_matches.loser_index, None);
     }
 
     #[test]
