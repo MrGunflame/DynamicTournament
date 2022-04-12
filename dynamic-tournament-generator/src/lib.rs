@@ -19,7 +19,10 @@ where
     /// Creates a new `SingleElimination` tournament.
     // FIXME: Replace Vec<T> with a better suited type.
     pub fn new(entrants: Vec<T>) -> Self {
-        let num_matches = predict_amount_of_matches(entrants.len());
+        let num_matches = match entrants.len() {
+            1 => 1,
+            _ => predict_amount_of_matches(entrants.len()),
+        };
         let mut matches = Vec::with_capacity(num_matches);
 
         // Placeholder matches are matches with only a single entrant. This is required to make
@@ -79,7 +82,10 @@ where
 
         let mut this = Self {
             matches,
-            initial_matches: calculate_wanted_inital_entrants(entrants.len()) / 2,
+            initial_matches: match entrants.len() {
+                1 | 2 => 1,
+                _ => calculate_wanted_inital_entrants(entrants.len()) / 2,
+            },
         };
 
         // Move all placeholder matches to the second round.
@@ -513,40 +519,41 @@ where
     T: Entrant,
 {
     pub fn new(entrants: Vec<T>) -> Self {
-        let num_matches = {
-            let mut starting_amount = calculate_wanted_inital_entrants(entrants.len());
+        let num_matches = match entrants.len() {
+            1 | 2 => 1,
+            _ => {
+                let mut starting_amount = calculate_wanted_inital_entrants(entrants.len());
 
-            let mut counter = 0;
-            while starting_amount > 1 {
-                // Upper bracket
-                counter += starting_amount / 2;
+                let mut counter = 0;
+                while starting_amount > 1 {
+                    // Upper bracket
+                    counter += starting_amount / 2;
 
-                // Lower bracket
-                counter += starting_amount / 2;
+                    // Lower bracket
+                    counter += starting_amount / 2;
 
-                starting_amount >>= 1;
+                    starting_amount >>= 1;
+                }
+
+                counter
             }
-
-            counter
         };
 
-        let lower_bracket_index = {
-            let mut counter = 0;
-            let mut num = calculate_wanted_inital_entrants(entrants.len()) / 2;
-            while num >= 1 {
-                counter += num;
-                num /= 2;
-            }
+        let lower_bracket_index = match entrants.len() {
+            1 | 2 => 0,
+            _ => {
+                let mut counter = 0;
+                let mut num = calculate_wanted_inital_entrants(entrants.len()) / 2;
+                while num >= 1 {
+                    counter += num;
+                    num /= 2;
+                }
 
-            counter
+                counter
+            }
         };
 
         let final_bracket_index = num_matches - 1;
-
-        #[cfg(debug_assertions)]
-        if entrants.len() == 8 {
-            assert_eq!(num_matches, 14);
-        }
 
         let mut matches = Vec::with_capacity(num_matches);
 
@@ -594,7 +601,10 @@ where
             matches,
             lower_bracket_index,
             final_bracket_index,
-            initial_matches: calculate_wanted_inital_entrants(entrants.len()) / 2,
+            initial_matches: match entrants.len() {
+                1 | 2 => 1,
+                _ => calculate_wanted_inital_entrants(entrants.len()) / 2,
+            },
         };
 
         let mut lower_bracket_placeholder_matches = Vec::new();
@@ -1268,6 +1278,52 @@ mod tests {
 
     #[test]
     fn test_double_elimination() {
+        let entrants = vec![0];
+        let tournament = DoubleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
+        );
+
+        assert_eq!(tournament.lower_bracket_index, 0);
+        assert_eq!(tournament.final_bracket_index, 0);
+        assert_eq!(tournament.initial_matches, 1);
+
+        let entrants = vec![0, 1];
+        let tournament = DoubleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([
+                EntrantSpot::Entrant(0),
+                EntrantSpot::Entrant(1)
+            ])]
+        );
+
+        assert_eq!(tournament.lower_bracket_index, 0);
+        assert_eq!(tournament.final_bracket_index, 0);
+        assert_eq!(tournament.initial_matches, 1);
+
+        let entrants = vec![0, 1, 2];
+        let tournament = DoubleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(2)]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        assert_eq!(tournament.lower_bracket_index, 3);
+        assert_eq!(tournament.final_bracket_index, 5);
+        assert_eq!(tournament.initial_matches, 2);
+
         // Test with a pow(2, n) number of teams.
         let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let tournament = DoubleElimination::new(entrants);
@@ -2127,6 +2183,16 @@ mod tests {
 
     #[test]
     fn test_single_elimination_rounds_iter() {
+        let entrants = vec![0];
+        let tournament = SingleElimination::new(entrants);
+
+        let mut iter = tournament.rounds_iter();
+        assert_eq!(
+            iter.next().unwrap(),
+            [Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
+        );
+        assert_eq!(iter.next(), None);
+
         let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let tournament = SingleElimination::new(entrants);
 
@@ -2156,6 +2222,43 @@ mod tests {
 
     #[test]
     fn test_single_elimination() {
+        let entrants = vec![0];
+        let tournament = SingleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
+        );
+
+        assert_eq!(tournament.initial_matches, 1);
+
+        let entrants = vec![0, 1];
+        let tournament = SingleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([
+                EntrantSpot::Entrant(0),
+                EntrantSpot::Entrant(1)
+            ])]
+        );
+
+        assert_eq!(tournament.initial_matches, 1);
+
+        let entrants = vec![0, 1, 2];
+        let tournament = SingleElimination::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(2)]),
+            ]
+        );
+
+        assert_eq!(tournament.initial_matches, 2);
+
         // Test with a pow(2, n) number of teams.
         let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
         let tournament = SingleElimination::new(entrants);
