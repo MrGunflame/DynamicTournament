@@ -34,7 +34,11 @@ impl Component for Popup {
         html! {
             <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
                 <div class="popup">
-                    <button class="popup-close" onclick={on_close} disabled=false>{ "X" }</button>
+                    <div class="popup-close-wrapper">
+                        <button class="popup-close" onclick={on_close} title="Close Popup" disabled=false>
+                            <img src="/assets/xmark-solid.svg" width="32px" height="32px" alt="x" />
+                        </button>
+                    </div>
                     <div class="popup-content">
                         { for ctx.props().children.iter() }
                     </div>

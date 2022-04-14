@@ -68,12 +68,12 @@ impl Component for BracketUpdate {
         let on_submit = link.callback(|_| Msg::Submit);
 
         html! {
-            <>
+            <div>
                 <div class="popup-teams-list">
                     { for inputs.into_iter() }
                 </div>
                 <button type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
-            </>
+            </div>
         }
     }
 }
