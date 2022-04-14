@@ -12,12 +12,15 @@ use std::fmt::{self, Display, Formatter};
 // //////////////////////
 
 /// A unique identifier for a [`Tournament`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub struct TournamentId(pub u64);
 
 /// Full data about a tournament.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tournament {
+    #[cfg_attr(feature = "server", serde(skip_deserializing))]
     pub id: TournamentId,
     pub name: String,
     pub bracket_type: BracketType,
@@ -31,6 +34,38 @@ pub struct Tournament {
 pub enum BracketType {
     SingleElimination = 0,
     DoubleElimination = 1,
+}
+
+impl Display for BracketType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let string = match self {
+            Self::SingleElimination => "Single Elimination",
+            Self::DoubleElimination => "Double Elimination",
+        };
+
+        write!(f, "{}", string)
+    }
+}
+
+impl TryFrom<u8> for BracketType {
+    type Error = ();
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::SingleElimination),
+            1 => Ok(Self::DoubleElimination),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<BracketType> for u8 {
+    fn from(t: BracketType) -> Self {
+        match t {
+            BracketType::SingleElimination => 0,
+            BracketType::DoubleElimination => 1,
+        }
+    }
 }
 
 /// A single team playing in a [`Tournament`].
@@ -57,6 +92,33 @@ pub enum Role {
     Teamfighter = 2,
     Duelist = 3,
     Support = 4,
+}
+
+impl TryFrom<u8> for Role {
+    type Error = ();
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::Roamer),
+            2 => Ok(Self::Teamfighter),
+            3 => Ok(Self::Duelist),
+            4 => Ok(Self::Support),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<Role> for u8 {
+    fn from(role: Role) -> Self {
+        match role {
+            Role::Unknown => 0,
+            Role::Roamer => 1,
+            Role::Teamfighter => 2,
+            Role::Duelist => 3,
+            Role::Support => 4,
+        }
+    }
 }
 
 impl Display for Role {

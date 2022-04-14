@@ -184,7 +184,7 @@ impl Authorization {
     }
 
     pub fn delete(&mut self) {
-        self.update::<&str>(None);
+        self.header = None;
     }
 }
 
