@@ -3,11 +3,11 @@ use std::rc::Rc;
 use yew::prelude::*;
 
 use crate::components::popup::Popup;
+use crate::components::providers::{ClientProvider, Provider};
 use crate::components::r#match::MatchMember;
 use crate::components::update_bracket::BracketUpdate;
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
-use dynamic_tournament_api::Client;
 
 use super::{Action, BracketMatch};
 
@@ -92,10 +92,7 @@ impl Component for DoubleEliminationBracket {
                     None
                 });
 
-                let (client, _) = ctx
-                    .link()
-                    .context::<Client>(Callback::noop())
-                    .expect("No ClientProvider given");
+                let client = ClientProvider::take(ctx);
 
                 let id = ctx.props().tournament.id;
                 let bracket = Bracket(self.state.iter().cloned().collect());

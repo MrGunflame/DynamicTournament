@@ -1,10 +1,10 @@
 use yew::prelude::*;
 
 use dynamic_tournament_api::tournament::Team;
-use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 use super::BracketTeam;
+use crate::components::providers::{ClientProvider, Provider};
 
 pub struct BracketMatch;
 
@@ -39,10 +39,7 @@ impl Component for BracketMatch {
             })
             .collect();
 
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("No ClientProvider given");
+        let client = ClientProvider::take(ctx);
 
         let action_button = match client.is_authenticated() {
             true => {

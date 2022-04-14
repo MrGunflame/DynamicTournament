@@ -7,6 +7,8 @@ use dynamic_tournament_api::tournament as api;
 use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::EntrantWithScore;
 
+use crate::components::providers::{ClientProvider, Provider};
+
 pub struct Match;
 
 impl Component for Match {
@@ -47,10 +49,7 @@ impl Component for Match {
             })
             .collect();
 
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("No ClientProvider given");
+        let client = ClientProvider::take(ctx);
 
         // All spots must be filled for the button to become active.
 

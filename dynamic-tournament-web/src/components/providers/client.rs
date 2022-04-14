@@ -1,6 +1,7 @@
 use yew::context::ContextProvider;
 use yew::prelude::*;
 
+use super::Provider;
 use crate::components::config_provider::Config;
 
 use dynamic_tournament_api::Client;
@@ -30,6 +31,20 @@ impl Component for ClientProvider {
                 { for ctx.props().children.iter() }
             </ContextProvider<Client>>
         }
+    }
+}
+
+impl<C> Provider<Client, C> for ClientProvider
+where
+    C: Component,
+{
+    fn take(ctx: &Context<C>) -> Client {
+        let (client, _) = ctx
+            .link()
+            .context(Callback::noop())
+            .expect("No ClientProvider given");
+
+        client
     }
 }
 

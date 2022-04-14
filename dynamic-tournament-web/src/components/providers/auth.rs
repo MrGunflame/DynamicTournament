@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use super::Provider;
+
 pub struct AuthProvider {
     context: Auth,
 }
@@ -28,6 +30,20 @@ impl Component for AuthProvider {
                 { for ctx.props().children.iter() }
             </ContextProvider<Auth>>
         }
+    }
+}
+
+impl<C> Provider<Auth, C> for AuthProvider
+where
+    C: Component,
+{
+    fn take(ctx: &Context<C>) -> Auth {
+        let (auth, _) = ctx
+            .link()
+            .context(Callback::noop())
+            .expect("No AuthProvider given");
+
+        auth
     }
 }
 
