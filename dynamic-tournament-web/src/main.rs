@@ -1,4 +1,5 @@
 mod components;
+mod logger;
 mod routes;
 
 use yew::prelude::*;
@@ -12,6 +13,11 @@ extern crate wee_alloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 fn main() {
+    // SAFETY: Called from a single threaded context. No race conditions can occur.
+    unsafe {
+        logger::init();
+    }
+
     let document = web_sys::window()
         .expect("No window")
         .document()

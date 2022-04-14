@@ -13,7 +13,9 @@ reqwasm = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 yew-router = "0.16.0"
 gloo-console = "0.2.1"
+gloo-timers = "0.2.3"
 web-sys = { version = "0.3.56", features = ["Document", "Element", "Node", "Window", "HtmlCollection", "HtmlInputElement"] }
+log = { version = "0.4.16", default-features = false, features = ["release_max_level_warn"] }
 
 [profile.release]
 debug-assertions = false

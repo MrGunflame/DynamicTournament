@@ -98,7 +98,7 @@ impl Component for SingleEliminationBracket {
                     match client.put(&bracket).await {
                         Ok(_) => vec![Message::UpdateScoreUI],
                         Err(err) => {
-                            gloo_console::error!(err.to_string());
+                            log::error!("{}", err);
                             vec![]
                         }
                     }
