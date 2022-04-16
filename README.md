@@ -25,3 +25,4 @@ These features are still work in progress:
 - [x] DoubleElimination
 - [ ] Seeding
 - [ ] Full refactor for v1.0
+- [ ] Live bracket updates with WebSockets
