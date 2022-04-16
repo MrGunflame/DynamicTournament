@@ -9,7 +9,7 @@ use crate::components::update_bracket::BracketUpdate;
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
 
-use super::{Action, BracketMatch};
+use super::{find_match_winner, Action, BracketMatch};
 
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantSpot, EntrantWithScore, Match, MatchResult,
@@ -63,33 +63,26 @@ impl Component for DoubleEliminationBracket {
                     m.entrants[0].unwrap_ref_mut().score = scores[0];
                     m.entrants[1].unwrap_ref_mut().score = scores[1];
 
-                    if m.entrants[0].unwrap_ref().score > (ctx.props().tournament.best_of / 2) {
-                        let winner = m.entrants[0].unwrap_ref_mut();
-                        winner.winner = true;
+                    match find_match_winner(ctx.props().tournament.best_of, m) {
+                        Some(index) => {
+                            let winner = m.entrants[index].unwrap_ref_mut();
+                            winner.winner = true;
 
-                        let winner = m.entrants[0].unwrap_ref();
-                        let looser = m.entrants[1].unwrap_ref();
+                            let winner = m.entrants[index].unwrap_ref();
+                            let looser = m.entrants[match index {
+                                0 => 1,
+                                1 => 0,
+                                _ => unreachable!(),
+                            }]
+                            .unwrap_ref();
 
-                        return Some(MatchResult::Entrants {
-                            winner: EntrantWithScore::new(winner.entrant.clone()),
-                            looser: EntrantWithScore::new(looser.entrant.clone()),
-                        });
+                            Some(MatchResult::Entrants {
+                                winner: EntrantWithScore::new(winner.entrant.clone()),
+                                looser: EntrantWithScore::new(looser.entrant.clone()),
+                            })
+                        }
+                        _ => None,
                     }
-
-                    if m.entrants[1].unwrap_ref().score > (ctx.props().tournament.best_of / 2) {
-                        let winner = m.entrants[1].unwrap_ref_mut();
-                        winner.winner = true;
-
-                        let winner = m.entrants[1].unwrap_ref();
-                        let looser = m.entrants[0].unwrap_ref();
-
-                        return Some(MatchResult::Entrants {
-                            winner: EntrantWithScore::new(winner.entrant.clone()),
-                            looser: EntrantWithScore::new(looser.entrant.clone()),
-                        });
-                    }
-
-                    None
                 });
 
                 let client = ClientProvider::take(ctx);

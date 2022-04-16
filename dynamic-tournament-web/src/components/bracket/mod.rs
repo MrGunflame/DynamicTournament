@@ -4,6 +4,7 @@ pub mod single_elimination;
 pub mod team;
 
 pub use double_elimination::DoubleEliminationBracket;
+use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore, Match};
 pub use r#match::{Action, BracketMatch};
 pub use single_elimination::SingleEliminationBracket;
 pub use team::BracketTeam;
@@ -60,4 +61,24 @@ impl PartialEq for Properties {
                 .zip(other.bracket.as_ref())
                 .map_or(false, |(a, b)| Rc::ptr_eq(a, b))
     }
+}
+
+pub fn find_match_winner<T>(best_of: u64, m: &Match<EntrantWithScore<T, u64>>) -> Option<usize> {
+    let required_score = match best_of % 2 {
+        0 => best_of / 2,
+        _ => best_of / 2 + 1,
+    };
+
+    for (i, e) in m.entrants.iter().enumerate() {
+        match e {
+            EntrantSpot::Entrant(e) => {
+                if e.score >= required_score {
+                    return Some(i);
+                }
+            }
+            _ => (),
+        }
+    }
+
+    None
 }
