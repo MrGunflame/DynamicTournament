@@ -3,6 +3,8 @@ use yew::prelude::*;
 
 use super::r#match::MatchMember;
 
+use std::mem::{self, MaybeUninit};
+
 pub struct BracketUpdate {
     // Score: [left, right]
     scores: [u64; 2],
@@ -65,14 +67,53 @@ impl Component for BracketUpdate {
             };
         }
 
+        // SAFETY: `MaybeUninit` does not require any initialization.
+        let mut teams: [MaybeUninit<Html>; 2] = unsafe { MaybeUninit::uninit().assume_init() };
+
+        for (i, inp) in teams.iter_mut().enumerate() {
+            let on_score_update = {
+                let link = link.clone();
+                Callback::from(move |event: InputEvent| {
+                    let input: HtmlInputElement = event.target_unchecked_into();
+                    let value = input.value_as_number() as u64;
+
+                    link.send_message(Msg::UpdateScore(i, value))
+                })
+            };
+
+            let value = self.scores[i];
+
+            let team = match ctx.props().teams[i].clone() {
+                MatchMember::Entrant(e) => e.entrant.name,
+                // should be unreachable
+                _ => "BYE".to_owned(),
+            };
+
+            inp.write(html! {
+                <tr>
+                    <td>{ team }</td>
+                    <td>
+                        <input class="input-u64" type="number" min="0" value={value.to_string()} oninput={on_score_update}/>
+                    </td>
+                </tr>
+            });
+        }
+
+        // SAFETY: All items in `teams` are initialized.
+        let teams: [Html; 2] = unsafe { mem::transmute(teams) };
+
         let on_submit = link.callback(|_| Msg::Submit);
 
         html! {
-            <div>
-                <div class="popup-teams-list">
-                    { for inputs.into_iter() }
-                </div>
-                <button type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
+            <div class="flex-col2">
+                <table class="table-striped">
+                    <tr>
+                        <th>{ "Team" }</th>
+                        <th>{ "Score" }</th>
+                    </tr>
+                    { for teams.into_iter() }
+                </table>
+                <button class="button" type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
             </div>
         }
     }

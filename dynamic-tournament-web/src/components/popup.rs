@@ -35,8 +35,8 @@ impl Component for Popup {
             <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
                 <div class="popup">
                     <div class="popup-close-wrapper">
-                        <button class="popup-close" onclick={on_close} title="Close Popup" disabled=false>
-                            <img src="/assets/xmark-solid.svg" width="32px" height="32px" alt="x" />
+                        <button class="popup-close" onclick={on_close} title="Close" disabled=false>
+                            <i class="fa-xmark fa-solid fa-2xl"></i>
                         </button>
                     </div>
                     <div class="popup-content">

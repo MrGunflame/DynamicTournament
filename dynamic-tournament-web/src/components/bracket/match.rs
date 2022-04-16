@@ -51,10 +51,10 @@ impl Component for BracketMatch {
                     html! {
                         <div class="match-action-buttons">
                             <button onclick={onclick} disabled=false>
-                                <img src="/assets/pen-solid.svg" width="16px" height="16px" />
+                                <i class="fa-solid fa-pen fa-xl"></i>
                             </button>
                             <button onclick={on_reset} disabled=false>
-                                <img src="/assets/arrow-rotate-left-solid.svg" width="16px" height="16px" />
+                                <i class="fa-solid fa-rotate-left fa-xl"></i>
                             </button>
                         </div>
                     }
@@ -62,10 +62,10 @@ impl Component for BracketMatch {
                     html! {
                         <div class="match-action-buttons">
                             <button title="Some entrant spots are not occupied." disabled=true>
-                                <img src="/assets/pen-solid.svg" width="16px" height="16px" />
+                                <i class="fa-solid fa-pen fa-xl"></i>
                             </button>
                             <button title="Some entrant spots are not occupied." disabled=true>
-                                <img src="/assets/arrow-rotate-left-solid.svg" width="16px" height="16px" />
+                                <i class="fa-solid fa-rotate-left fa-xl"></i>
                             </button>
                         </div>
                     }

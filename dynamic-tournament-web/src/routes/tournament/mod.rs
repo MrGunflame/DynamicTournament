@@ -68,35 +68,54 @@ impl Component for Tournament {
             let tournament = data.clone();
             let bracket = bracket.clone();
 
+            let id = ctx.props().id.0;
+
             let switch = move |route: &Route| -> Html {
                 let tournament = tournament.clone();
                 let bracket = bracket.clone();
 
-                match route {
+                let mut routes = Vec::with_capacity(2);
+                for (r, n) in &[
+                    (Route::Bracket { id }, "Bracket"),
+                    (Route::Teams { id }, "Teams"),
+                ] {
+                    let classes = if r == route { "active" } else { "" };
+
+                    routes.push(html! {
+                        <li><Link<Route> classes={classes} to={r.clone()}>{ n }</Link<Route>></li>
+                    });
+                }
+
+                let content = match route {
                     Route::Index { id } => html! {
                         <span>{ format!("Tournament id {}", id) }</span>
                     },
                     Route::Bracket { id: _ } => html! {
-                        <Bracket tournament={tournament} bracket={bracket} />
+                        <Bracket tournament={tournament.clone()} bracket={bracket} />
                     },
                     Route::Teams { id: _ } => html! {
-                        <Teams teams={tournament} />
+                        <Teams teams={tournament.clone()} />
                     },
                     Route::TeamDetails { id: _, team_id } => html! {
-                        <TeamDetails teams={tournament} index={*team_id} />
+                        <TeamDetails teams={tournament.clone()} index={*team_id} />
                     },
+                };
+
+                html! {
+                    <>
+                        <h2>{ tournament.name.clone() }</h2>
+                        <div class="navbar">
+                            <ul>
+                                {routes}
+                            </ul>
+                        </div>
+                        {content}
+                    </>
                 }
             };
 
             html! {
                 <>
-                    <h2>{ data.name.clone() }</h2>
-                    <div class="navbar">
-                        <ul>
-                            <li><Link<Route> to={Route::Bracket{ id: ctx.props().id.0 }}>{ "Bracket" }</Link<Route>></li>
-                            <li><Link<Route> to={Route::Teams{ id: ctx.props().id.0 }}>{ "Teams" }</Link<Route>></li>
-                        </ul>
-                    </div>
                     <Switch<Route> render={Switch::render(switch)} />
                 </>
             }
