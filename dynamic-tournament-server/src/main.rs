@@ -22,6 +22,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let config = read_config("config.toml");
     logger::init(config.loglevel);
 
+    log::info!("Using config: {:?}", config);
+
     let users = read_users("users.json");
 
     let store = MySqlPool::connect(&config.database.connect_string()).await?;
@@ -39,7 +41,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         sqlx::query(t).execute(&state.store).await?;
     }
 
-    http::bind(state).await.unwrap();
+    http::bind(config.bind, state).await.unwrap();
 
     Ok(())
 }
@@ -254,6 +256,8 @@ impl State {
 }
 
 use std::io::Read;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 pub fn read_config<P>(path: P) -> Config
 where
@@ -264,7 +268,45 @@ where
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
 
-    let config = toml::from_slice(&buf).unwrap();
+    let mut config: Config = toml::from_slice(&buf).unwrap();
+
+    if let Ok(val) = std::env::var("DYNT_LOGLEVEL") {
+        let val = LevelFilter::from_str(&val).unwrap();
+
+        config.loglevel = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_BIND") {
+        let val = SocketAddr::from_str(&val).unwrap();
+
+        config.bind = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_DRIVER") {
+        config.database.driver = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_HOST") {
+        config.database.host = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_PORT") {
+        let val = u16::from_str(&val).unwrap();
+
+        config.database.port = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_USER") {
+        config.database.user = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_PASSWORD") {
+        config.database.password = val;
+    }
+
+    if let Ok(val) = std::env::var("DYNT_DB_DATABASE") {
+        config.database.database = val;
+    }
 
     config
 }
@@ -285,6 +327,7 @@ where
 pub struct Config {
     pub database: Database,
     pub loglevel: LevelFilter,
+    pub bind: SocketAddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 loglevel = "warn"
+bind = "0.0.0.0:3000"
 
 [database]
 driver = "mysql"

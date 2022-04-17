@@ -2,17 +2,16 @@ mod v1;
 
 use crate::{Error, State};
 
+use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::str::FromStr;
-use std::{convert::Infallible, net::SocketAddr};
 
 use hyper::header::HeaderValue;
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Request, Response, StatusCode};
 
-pub async fn bind(state: State) -> Result<(), hyper::Error> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
+pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
     let make_svc = make_service_fn(move |_conn| {
         let state = state.clone();
         async move {
@@ -25,9 +24,15 @@ pub async fn bind(state: State) -> Result<(), hyper::Error> {
         }
     });
 
-    let server = Server::bind(&addr).serve(make_svc);
+    let server = Server::bind(&addr)
+        .serve(make_svc)
+        .with_graceful_shutdown(shutdown_signal());
 
     server.await
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c().await.unwrap()
 }
 
 async fn service_root(req: Request<Body>, state: State) -> Result<Response<Body>, Infallible> {
