@@ -1,0 +1,9 @@
+loglevel = "warn"
+
+[database]
+driver = "mysql"
+host = "10.0.0.2"
+port = 3306
+user = "user"
+password = "1234"
+database = "dynamictournament"
