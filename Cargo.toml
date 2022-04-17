@@ -1,2 +1,7 @@
 [workspace]
-members = ["dynamic-tournament-api", "dynamic-tournament-generator", "dynamic-tournament-web"]
+members = [
+    "dynamic-tournament-api",
+    "dynamic-tournament-generator",
+    "dynamic-tournament-web",
+    "dynamic-tournament-server",
+]
