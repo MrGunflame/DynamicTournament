@@ -27,6 +27,8 @@ All bundled files can be found in `dist/`.
 
 The final binary will be `target/release/dynamic-tournament-server`.
 
+For more information see the server crate: https://github.com/MrGunflame/DynamicTournament/tree/master/dynamic-tournament-server
+
 ## TODO
 
 These features are still work in progress:
