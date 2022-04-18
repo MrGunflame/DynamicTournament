@@ -2,6 +2,8 @@ use yew::prelude::*;
 
 use web_sys::MouseEvent;
 
+use crate::components::button::Button;
+
 pub struct MovableBoxed {
     translate: Coordinates,
     last_move: Coordinates,
@@ -118,13 +120,15 @@ impl Component for MovableBoxed {
         let lock_button = if is_locked {
             html! {
                 <button class="button" onclick={on_lock} title="Unlock">
-                    <i class="fa-solid fa-lock-open"></i>
+                    <i aria-hidden="true" class="fa-solid fa-lock-open"></i>
+                    <span class="sr-only">{ "Unlock" }</span>
                 </button>
             }
         } else {
             html! {
                 <button class="button" onclick={on_lock} title="Lock">
-                    <i class="fa-solid fa-lock"></i>
+                    <i aria-hidden="true" class="fa-solid fa-lock"></i>
+                    <span class="sr-only">{ "Lock" }</span>
                 </button>
             }
         };
@@ -132,14 +136,17 @@ impl Component for MovableBoxed {
         html! {
             <div class="movable-boxed" onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
                 <div class="movable-boxed-buttons">
-                    <button class="button" onclick={on_reposition} title="Reposition">
-                        <i class="fa-solid fa-arrows-to-dot"></i>
-                    </button>
+                    <Button onclick={on_reposition} title="Reposition">
+                        <i aria-hidden="true" class="fa-solid fa-arrows-to-dot"></i>
+                        <span class="sr-only">{ "Reposition" }</span>
+                    </Button>
                     <button class="button" onclick={on_zoom_in} title="Zoom In">
-                        <i class="fa-solid fa-plus"></i>
+                        <i aria-hidden="true" class="fa-solid fa-plus"></i>
+                        <span class="sr-only">{ "Zoom In" }</span>
                     </button>
                     <button class="button" onclick={on_zoom_out} title="Zoom Out">
-                        <i class="fa-solid fa-minus"></i>
+                        <i aria-hidden="true" class="fa-solid fa-minus"></i>
+                        <span class="sr-only">{ "Zoom Out" }</span>
                     </button>
                     {lock_button}
                 </div>

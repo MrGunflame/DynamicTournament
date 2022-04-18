@@ -4,6 +4,7 @@ use dynamic_tournament_api::tournament::Team;
 use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 use super::BracketTeam;
+use crate::components::button::Button;
 use crate::components::providers::{ClientProvider, Provider};
 
 pub struct BracketMatch;
@@ -50,23 +51,27 @@ impl Component for BracketMatch {
 
                     html! {
                         <div class="match-action-buttons">
-                            <button onclick={onclick} disabled=false>
-                                <i class="fa-solid fa-pen fa-xl"></i>
-                            </button>
-                            <button onclick={on_reset} disabled=false>
-                                <i class="fa-solid fa-rotate-left fa-xl"></i>
-                            </button>
+                            <Button classes="" {onclick} title="Edit">
+                                <i aria-hidden="true" class="fa-solid fa-pen fa-xl"></i>
+                                <span class="sr-only">{ "Edit" }</span>
+                            </Button>
+                            <Button classes="" onclick={on_reset} title="Reset">
+                                <i aria-hidden="true" class="fa-solid fa-rotate-left fa-xl"></i>
+                                <span class="sr-only">{ "Reset" }</span>
+                            </Button>
                         </div>
                     }
                 } else {
                     html! {
                         <div class="match-action-buttons">
-                            <button title="Some entrant spots are not occupied." disabled=true>
-                                <i class="fa-solid fa-pen fa-xl"></i>
-                            </button>
-                            <button title="Some entrant spots are not occupied." disabled=true>
-                                <i class="fa-solid fa-rotate-left fa-xl"></i>
-                            </button>
+                            <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
+                                <i aria-hidden="true" class="fa-solid fa-pen fa-xl"></i>
+                                <span class="sr-only">{ "Edit (Some entrant spots are not occupied.)" }</span>
+                            </Button>
+                            <Button classes="" title="Reset (Some entrant spots are not occupied.)" disabled=true>
+                                <i aria-hidden="true" class="fa-solid fa-rotate-left fa-xl"></i>
+                                <span class="sr-only">{ "Reset (Some entrant spots are not occupied.)" }</span>
+                            </Button>
                         </div>
                     }
                 }

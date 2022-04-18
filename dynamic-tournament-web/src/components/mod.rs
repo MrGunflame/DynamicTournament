@@ -1,4 +1,5 @@
 pub mod bracket;
+pub mod button;
 pub mod config_provider;
 pub mod error;
 pub mod loader;
