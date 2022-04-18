@@ -13,9 +13,8 @@ impl Component for Button {
     }
 
     fn update(&mut self, ctx: &Context<Self>, _msg: Self::Message) -> bool {
-        match &ctx.props().onclick {
-            Some(cb) => cb.emit(()),
-            None => (),
+        if let Some(cb) = &ctx.props().onclick {
+            cb.emit(());
         }
 
         false

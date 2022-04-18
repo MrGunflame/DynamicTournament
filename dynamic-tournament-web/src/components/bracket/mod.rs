@@ -70,13 +70,10 @@ pub fn find_match_winner<T>(best_of: u64, m: &Match<EntrantWithScore<T, u64>>) -
     };
 
     for (i, e) in m.entrants.iter().enumerate() {
-        match e {
-            EntrantSpot::Entrant(e) => {
-                if e.score >= required_score {
-                    return Some(i);
-                }
+        if let EntrantSpot::Entrant(e) = e {
+            if e.score >= required_score {
+                return Some(i);
             }
-            _ => (),
         }
     }
 

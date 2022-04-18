@@ -107,7 +107,7 @@ impl Component for Tournament {
                 html! {
                     <>
                         <Link<crate::routes::Route> classes="link-inline link-back" to={crate::routes::Route::TournamentList}>
-                            <i class="fa-solid fa-angle-left"></i>
+                            <i aria-hidden="true" class="fa-solid fa-angle-left"></i>
                             { "Back to Tournaments" }
                         </Link<crate::routes::Route>>
                         <h2 class="tournament-name">{ tournament.name.clone() }</h2>

@@ -43,7 +43,7 @@ pub struct Props {
 }
 
 impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
