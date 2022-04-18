@@ -21,3 +21,4 @@ log = { version = "0.4.16", default-features = false, features = ["release_max_l
 debug-assertions = false
 opt-level = "z"
 lto = "fat"
+panic = "abort"
