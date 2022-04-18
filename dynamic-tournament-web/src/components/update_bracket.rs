@@ -1,9 +1,10 @@
+use dynamic_tournament_api::tournament::Team;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
-use super::r#match::MatchMember;
-
 use std::mem::{self, MaybeUninit};
+
+use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
 
 pub struct BracketUpdate {
     // Score: [left, right]
@@ -53,7 +54,7 @@ impl Component for BracketUpdate {
             let value = self.scores[i];
 
             let team = match ctx.props().teams[i].clone() {
-                MatchMember::Entrant(e) => e.entrant.name,
+                EntrantSpot::Entrant(e) => e.entrant.name,
                 // should be unreachable
                 _ => "BYE".to_owned(),
             };
@@ -84,7 +85,7 @@ impl Component for BracketUpdate {
             let value = self.scores[i];
 
             let team = match ctx.props().teams[i].clone() {
-                MatchMember::Entrant(e) => e.entrant.name,
+                EntrantSpot::Entrant(e) => e.entrant.name,
                 // should be unreachable
                 _ => "BYE".to_owned(),
             };
@@ -119,11 +120,17 @@ impl Component for BracketUpdate {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct Props {
-    pub teams: [MatchMember; 2],
+    pub teams: [EntrantSpot<EntrantWithScore<Team, u64>>; 2],
     pub on_submit: Callback<[u64; 2]>,
     pub scores: [u64; 2],
+}
+
+impl PartialEq for Props {
+    fn eq(&self, other: &Self) -> bool {
+        self.on_submit == other.on_submit && self.scores == other.scores
+    }
 }
 
 pub enum Msg {

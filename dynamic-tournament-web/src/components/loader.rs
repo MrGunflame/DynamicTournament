@@ -10,10 +10,6 @@ impl Component for Loader {
         Self
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, _msg: Self::Message) -> bool {
-        false
-    }
-
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <span>{"Loading.."}</span>

@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
-use crate::components::r#match::MatchMember;
 use crate::components::update_bracket::BracketUpdate;
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
@@ -117,18 +116,7 @@ impl Component for SingleEliminationBracket {
 
                 let m = self.state.get(index).unwrap();
 
-                let teams = [
-                    match m.entrants[0] {
-                        EntrantSpot::Entrant(ref e) => MatchMember::Entrant(e.clone()),
-                        EntrantSpot::TBD => MatchMember::Placeholder("TBD".to_owned()),
-                        EntrantSpot::Empty => MatchMember::Placeholder("BYE".to_owned()),
-                    },
-                    match m.entrants[1] {
-                        EntrantSpot::Entrant(ref e) => MatchMember::Entrant(e.clone()),
-                        EntrantSpot::TBD => MatchMember::Placeholder("TBD".to_owned()),
-                        EntrantSpot::Empty => MatchMember::Placeholder("BYE".to_owned()),
-                    },
-                ];
+                let teams = m.entrants.clone();
 
                 let scores = [
                     match m.entrants[0] {
@@ -147,7 +135,7 @@ impl Component for SingleEliminationBracket {
 
                 html! {
                     <Popup on_close={on_close}>
-                        <BracketUpdate teams={teams} scores={scores} on_submit={on_submit} />
+                        <BracketUpdate {teams} scores={scores} on_submit={on_submit} />
                     </Popup>
                 }
             }
