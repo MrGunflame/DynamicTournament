@@ -4,7 +4,6 @@ use yew::prelude::*;
 use super::team::Team;
 
 use dynamic_tournament_api::tournament as api;
-use dynamic_tournament_api::Client;
 use dynamic_tournament_generator::EntrantWithScore;
 
 use crate::components::providers::{ClientProvider, Provider};

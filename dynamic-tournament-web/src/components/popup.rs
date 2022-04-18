@@ -1,14 +1,21 @@
-use web_sys::KeyboardEvent;
+use web_sys::{Element, KeyboardEvent};
+use yew::create_portal;
 use yew::prelude::*;
 
-pub struct Popup;
+pub struct Popup {
+    host: Element,
+}
 
 impl Component for Popup {
     type Message = Message;
     type Properties = Props;
 
     fn create(_ctx: &Context<Self>) -> Self {
-        Self
+        let document = web_sys::window().unwrap().document().unwrap();
+
+        let host = document.get_element_by_id("popup-host").unwrap();
+
+        Self { host }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -31,20 +38,23 @@ impl Component for Popup {
                 _ => None,
             });
 
-        html! {
-            <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
-                <div class="popup">
-                    <div class="popup-close-wrapper">
-                        <button class="popup-close" onclick={on_close} title="Close" disabled=false>
-                            <i class="fa-xmark fa-solid fa-2xl"></i>
-                        </button>
-                    </div>
-                    <div class="popup-content">
-                        { for ctx.props().children.iter() }
+        create_portal(
+            html! {
+                <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
+                    <div class="popup">
+                        <div class="popup-close-wrapper">
+                            <button class="popup-close" onclick={on_close} title="Close" disabled=false>
+                                <i class="fa-xmark fa-solid fa-2xl"></i>
+                            </button>
+                        </div>
+                        <div class="popup-content">
+                            { for ctx.props().children.iter() }
+                        </div>
                     </div>
                 </div>
-            </div>
-        }
+            },
+            self.host.clone(),
+        )
     }
 }
 

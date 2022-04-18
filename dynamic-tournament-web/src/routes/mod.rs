@@ -45,6 +45,7 @@ impl Component for App {
                             <div class="main">
                                 <Switch<Route> render={Switch::render(switch)} />
                             </div>
+                            <div id="popup-host"></div>
                         </BrowserRouter>
                     </ClientProvider>
                 </AuthProvider>

@@ -1,5 +1,5 @@
 use gloo_console::{debug, error, info, trace, warn};
-use log::{set_logger_racy, Level, Log, Metadata, Record};
+use log::{set_logger_racy, set_max_level, Level, LevelFilter, Log, Metadata, Record};
 
 /// Initializes the logger.
 ///
@@ -10,6 +10,7 @@ use log::{set_logger_racy, Level, Log, Metadata, Record};
 #[inline]
 pub unsafe fn init() {
     let _ = set_logger_racy(&Logger);
+    set_max_level(LevelFilter::Trace);
 }
 
 #[derive(Copy, Clone, Debug)]

@@ -8,6 +8,7 @@ use yew::prelude::*;
 use yew_router::prelude::*;
 
 use crate::components::bracket::Bracket;
+use crate::components::movable_boxed::MovableBoxed;
 use crate::{render_data, Data, DataResult};
 
 use dynamic_tournament_api::tournament as api;
@@ -91,7 +92,9 @@ impl Component for Tournament {
                         <span>{ format!("Tournament id {}", id) }</span>
                     },
                     Route::Bracket { id: _ } => html! {
-                        <Bracket tournament={tournament.clone()} bracket={bracket} />
+                        <MovableBoxed>
+                            <Bracket tournament={tournament.clone()} bracket={bracket} />
+                        </MovableBoxed>
                     },
                     Route::Teams { id: _ } => html! {
                         <Teams teams={tournament.clone()} />
