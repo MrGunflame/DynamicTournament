@@ -2,7 +2,7 @@ mod http;
 mod logger;
 mod websocket;
 
-use dynamic_tournament_api::tournament::Bracket;
+use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
 use log::LevelFilter;
 use serde::Deserialize;
 use serde::Serialize;
@@ -16,6 +16,10 @@ use dynamic_tournament_api::tournament::{Tournament, TournamentId};
 
 use futures::TryStreamExt;
 use sqlx::Row;
+
+use std::io::Read;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -119,17 +123,36 @@ impl State {
         self.is_allowed(&data)
     }
 
-    pub async fn list_tournaments(&self) -> Result<Vec<u64>, Error> {
-        let mut rows = sqlx::query("SELECT id FROM tournaments").fetch(&self.store);
+    pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
+        let mut rows = sqlx::query("SELECT id, name, bracket_type, best_of FROM tournaments")
+            .fetch(&self.store);
 
-        let mut ids = Vec::new();
+        let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let id = row.try_get("id")?;
+            let name = row.try_get("name")?;
+            let bracket_type: u8 = row.try_get("bracket_type")?;
+            let best_of = row.try_get("best_of")?;
 
-            ids.push(id);
+            let row = sqlx::query(
+                "SELECT COUNT(*) AS teams FROM tournaments_teams WHERE tournament_id = ?",
+            )
+            .bind(id)
+            .fetch_one(&self.store)
+            .await?;
+
+            let teams: i64 = row.try_get("teams")?;
+
+            tournaments.push(TournamentOverview {
+                id: TournamentId(id),
+                name,
+                bracket_type: bracket_type.try_into().unwrap(),
+                best_of,
+                teams: teams as u64,
+            });
         }
 
-        Ok(ids)
+        Ok(tournaments)
     }
 
     pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
@@ -254,10 +277,6 @@ impl State {
         Ok(Some(bracket))
     }
 }
-
-use std::io::Read;
-use std::net::SocketAddr;
-use std::str::FromStr;
 
 pub fn read_config<P>(path: P) -> Config
 where
