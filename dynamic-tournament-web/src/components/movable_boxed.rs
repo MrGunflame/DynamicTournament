@@ -34,13 +34,15 @@ impl Component for MovableBoxed {
                 self.translate = coords;
             }
             Message::Move(coords) => {
-                if let Some(x) = self.translate.x.checked_sub(self.last_move.x - coords.x) {
-                    self.translate.x = x;
-                }
+                self.translate.x = self
+                    .translate
+                    .x
+                    .saturating_sub(self.last_move.x.saturating_sub(coords.x));
 
-                if let Some(y) = self.translate.y.checked_sub(self.last_move.y - coords.y) {
-                    self.translate.y = y;
-                }
+                self.translate.y = self
+                    .translate
+                    .y
+                    .saturating_sub(self.last_move.y.saturating_sub(coords.y));
 
                 self.last_move.x = coords.x;
                 self.last_move.y = coords.y;
@@ -50,8 +52,8 @@ impl Component for MovableBoxed {
                 self.is_mouse_down = true;
             }
             Message::MouseUp => self.is_mouse_down = false,
-            Message::ZoomIn(amount) => self.scale += amount,
-            Message::ZoomOut(amount) => self.scale -= amount,
+            Message::ZoomIn(amount) => self.scale = self.scale.saturating_add(amount),
+            Message::ZoomOut(amount) => self.scale = self.scale.saturating_sub(amount),
             Message::ToggleLock => self.is_locked = !self.is_locked,
         }
 
