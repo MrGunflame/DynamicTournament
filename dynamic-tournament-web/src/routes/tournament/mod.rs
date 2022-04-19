@@ -1,3 +1,4 @@
+mod overview;
 mod teamdetails;
 mod teams;
 
@@ -16,6 +17,8 @@ use dynamic_tournament_api::tournament::TournamentId;
 use dynamic_tournament_api::Client;
 
 use std::rc::Rc;
+
+use overview::Overview;
 
 pub struct Tournament {
     data: Data<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)>,
@@ -77,6 +80,7 @@ impl Component for Tournament {
 
                 let mut routes = Vec::with_capacity(2);
                 for (r, n) in &[
+                    (Route::Index { id }, "Overview"),
                     (Route::Bracket { id }, "Bracket"),
                     (Route::Teams { id }, "Teams"),
                 ] {
@@ -88,8 +92,8 @@ impl Component for Tournament {
                 }
 
                 let content = match route {
-                    Route::Index { id } => html! {
-                        <span>{ format!("Tournament id {}", id) }</span>
+                    Route::Index { id: _ } => html! {
+                        <Overview tournament={tournament.clone()} />
                     },
                     Route::Bracket { id: _ } => html! {
                         <MovableBoxed>

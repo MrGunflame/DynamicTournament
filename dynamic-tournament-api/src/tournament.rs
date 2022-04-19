@@ -17,6 +17,21 @@ use std::fmt::{self, Display, Formatter};
 )]
 pub struct TournamentId(pub u64);
 
+impl Display for TournamentId {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TournamentOverview {
+    pub id: TournamentId,
+    pub name: String,
+    pub bracket_type: BracketType,
+    pub best_of: u64,
+    pub teams: u64,
+}
+
 /// Full data about a tournament.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tournament {
@@ -152,7 +167,7 @@ impl<'a> TournamentClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
-    pub async fn list(&self) -> Result<Vec<TournamentId>> {
+    pub async fn list(&self) -> Result<Vec<TournamentOverview>> {
         let req = self.client.request().url("/v1/tournament");
 
         let resp = req.build().send().await?.json().await?;

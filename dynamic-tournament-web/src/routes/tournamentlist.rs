@@ -2,13 +2,13 @@ use crate::routes::tournament::Route;
 use crate::{render_data, Data, DataResult};
 use yew::prelude::*;
 
-use dynamic_tournament_api::tournament::TournamentId;
+use dynamic_tournament_api::tournament::{TournamentId, TournamentOverview};
 use dynamic_tournament_api::Client;
 use yew_router::history::History;
 use yew_router::prelude::RouterScopeExt;
 
 pub struct TournamentList {
-    data: Data<Vec<TournamentId>>,
+    data: Data<Vec<TournamentOverview>>,
 }
 
 impl Component for TournamentList {
@@ -23,7 +23,7 @@ impl Component for TournamentList {
             .expect("No ClientProvider given");
 
         link.send_future(async move {
-            async fn fetch_data(client: Client) -> DataResult<Vec<TournamentId>> {
+            async fn fetch_data(client: Client) -> DataResult<Vec<TournamentOverview>> {
                 let client = client.tournaments();
 
                 let data = client.list().await?;
@@ -60,17 +60,21 @@ impl Component for TournamentList {
         render_data(&self.data, |data| {
             let tournaments: Html = data
                 .iter()
-                .map(|id| {
-                    let id = *id;
+                .map(|tournament| {
+                    let id = tournament.id;
+                    let name = tournament.name.clone();
+                    let bracket_type = tournament.bracket_type.to_string();
+                    let teams = tournament.teams;
+
                     let on_click = ctx.link().callback(move |_| Msg::ClickTournament { id });
 
                     html! {
                         <tr class="tr-link" onclick={on_click}>
-                            <td>{id.0}</td>
+                            <td>{ name }</td>
+                            <td>{ bracket_type }</td>
                             <td>{ "WIP" }</td>
-                            <td>{ "WIP" }</td>
+                            <td>{ teams }</td>
                         </tr>
-
                     }
                 })
                 .collect();
@@ -81,6 +85,7 @@ impl Component for TournamentList {
                         <th>{ "Name" }</th>
                         <th>{ "Type" }</th>
                         <th>{ "Date" }</th>
+                        <th>{ "Teams" }</th>
                     </tr>
                     {tournaments}
                 </table>
@@ -90,6 +95,6 @@ impl Component for TournamentList {
 }
 
 pub enum Msg {
-    Update(Data<Vec<TournamentId>>),
+    Update(Data<Vec<TournamentOverview>>),
     ClickTournament { id: TournamentId },
 }
