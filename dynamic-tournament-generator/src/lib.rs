@@ -1,7 +1,20 @@
 //! Bracket Generator
 
+use thiserror::Error;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+use std::result;
+
+/// An `Result<T>` using [`Error`] as an error type.
+pub type Result<T> = result::Result<T, Error>;
+
+#[derive(Clone, Debug, Error)]
+pub enum Error {
+    #[error("invalid number of matches: expected {expected}, found {found}")]
+    InvalidNumberOfMatches { expected: usize, found: usize },
+}
 
 /// A single elimination tournament.
 #[derive(Clone, Debug)]
@@ -11,10 +24,9 @@ pub struct SingleElimination<T> {
     initial_matches: usize,
 }
 
-// FIMXE: Remove T: Clone trait bound
 impl<T> SingleElimination<T>
 where
-    T: Entrant + Clone,
+    T: Entrant,
 {
     /// Creates a new `SingleElimination` tournament.
     // FIXME: Replace Vec<T> with a better suited type.
@@ -106,10 +118,31 @@ where
         this
     }
 
-    /// Resume the bracket from an existing Vec of matches.
+    /// Resumes the bracket from an existing `Vec` of matches.
     ///
-    /// Note: This assumes the given Vec contains valid data. No checks are performed.
-    pub fn resume(matches: Vec<Match<T>>) -> Self {
+    /// # Errors
+    ///
+    /// Returns an error if `matches` has an incorrect length.
+    pub fn resume(matches: Vec<Match<T>>) -> Result<Self> {
+        let expected = match matches.len() {
+            1 => 1,
+            n => predict_amount_of_matches(n),
+        };
+        let found = matches.len();
+
+        if found == expected {
+            Ok(Self::resume_unchecked(matches))
+        } else {
+            Err(Error::InvalidNumberOfMatches { expected, found })
+        }
+    }
+
+    /// Resumes the bracket from an existing `Vec` of matches.
+    ///
+    /// **Note:** This function assumes that the given input `Vec` has the correct length. It this
+    /// not the case weird behavoir including incorrect match updates or infinite loops might
+    /// occur.
+    pub fn resume_unchecked(matches: Vec<Match<T>>) -> Self {
         Self {
             initial_matches: (matches.len() + 1) / 2,
             matches,
@@ -140,7 +173,7 @@ where
     ///
     /// # Safety
     ///
-    /// Calling this method on an index that is out of bounds causes unidentified behavoir.
+    /// Calling this method on an index that is out of bounds causes undefined behavoir.
     pub unsafe fn get_unchecked(&self, index: usize) -> &Match<T> {
         self.matches.get_unchecked(index)
     }
@@ -519,40 +552,14 @@ where
     T: Entrant,
 {
     pub fn new(entrants: Vec<T>) -> Self {
+        // Note: The lower and final bracket have the same number of matches together as the
+        // upper bracket.
         let num_matches = match entrants.len() {
             1 | 2 => 1,
-            _ => {
-                let mut starting_amount = calculate_wanted_inital_entrants(entrants.len());
-
-                let mut counter = 0;
-                while starting_amount > 1 {
-                    // Upper bracket
-                    counter += starting_amount / 2;
-
-                    // Lower bracket
-                    counter += starting_amount / 2;
-
-                    starting_amount >>= 1;
-                }
-
-                counter
-            }
+            _ => predict_amount_of_matches(entrants.len()) * 2,
         };
 
-        let lower_bracket_index = match entrants.len() {
-            1 | 2 => 0,
-            _ => {
-                let mut counter = 0;
-                let mut num = calculate_wanted_inital_entrants(entrants.len()) / 2;
-                while num >= 1 {
-                    counter += num;
-                    num /= 2;
-                }
-
-                counter
-            }
-        };
-
+        let lower_bracket_index = num_matches / 2;
         let final_bracket_index = num_matches - 1;
 
         let mut matches = Vec::with_capacity(num_matches);
@@ -651,8 +658,35 @@ where
         this
     }
 
-    pub fn resume(matches: Vec<Match<T>>) -> Self {
-        let initial_matches = calculate_wanted_inital_entrants(matches.len() / 4);
+    /// Resumes the bracket from an existing `Vec` of matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `matches` has an incorrect length.
+    pub fn resume(matches: Vec<Match<T>>) -> Result<Self> {
+        let expected = match matches.len() {
+            1 => 1,
+            n => predict_amount_of_matches(n / 2) * 2,
+        };
+        let found = matches.len();
+
+        if found == expected {
+            Ok(Self::resume_unchecked(matches))
+        } else {
+            Err(Error::InvalidNumberOfMatches { expected, found })
+        }
+    }
+
+    /// Resumes the bracket from an existing `Vec` of matches.
+    ///
+    /// **Note:** This function assumes that the given input `Vec` has the correct length. It this
+    /// not the case weird behavoir including incorrect match updates or infinite loops might
+    /// occur.
+    pub fn resume_unchecked(matches: Vec<Match<T>>) -> Self {
+        let initial_matches = match matches.len() {
+            1 => 1,
+            n => div_ceil(n / 2, 2),
+        };
 
         Self {
             initial_matches,
@@ -662,10 +696,12 @@ where
         }
     }
 
+    /// Returns the number of matches in the tournament.
     pub fn len(&self) -> usize {
         self.matches.len()
     }
 
+    /// Returns `true` if the tournament has no matches.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1255,6 +1291,11 @@ impl NextMatches {
     }
 }
 
+/// Calculates `lhs / rhs` rounding the result upwards to the next value.
+fn div_ceil(lhs: usize, rhs: usize) -> usize {
+    (lhs + rhs - 1) / rhs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1262,6 +1303,13 @@ mod tests {
     // Implement Entrant for i32 for testing only.
     impl Entrant for i32 {
         fn set_winner(&mut self, _winner: bool) {}
+    }
+
+    #[test]
+    fn test_div_ceil() {
+        assert_eq!(div_ceil(1, 1), 1);
+        assert_eq!(div_ceil(2, 1), 2);
+        assert_eq!(div_ceil(3, 2), 2);
     }
 
     #[test]
@@ -1427,6 +1475,37 @@ mod tests {
 
         assert_eq!(tournament.lower_bracket_index, 15);
         assert_eq!(tournament.final_bracket_index, 29);
+    }
+
+    #[test]
+    fn test_double_elimination_resume() {
+        let matches = vec![Match::new([
+            EntrantSpot::Entrant(0),
+            EntrantSpot::Entrant(1),
+        ])];
+
+        let tournament = DoubleElimination::resume(matches.clone()).unwrap();
+
+        assert_eq!(tournament.matches, matches);
+        assert_eq!(tournament.initial_matches, 1);
+        assert_eq!(tournament.lower_bracket_index, 0);
+        assert_eq!(tournament.final_bracket_index, 0);
+
+        let matches = vec![
+            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ];
+
+        let tournament = DoubleElimination::resume(matches.clone()).unwrap();
+
+        assert_eq!(tournament.matches, matches);
+        assert_eq!(tournament.initial_matches, 2);
+        assert_eq!(tournament.lower_bracket_index, 3);
+        assert_eq!(tournament.final_bracket_index, 5);
     }
 
     #[test]
@@ -2293,6 +2372,52 @@ mod tests {
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
         );
+    }
+
+    #[test]
+    fn test_single_elimination_resume() {
+        let matches = vec![Match::new([
+            EntrantSpot::Entrant(0),
+            EntrantSpot::Entrant(1),
+        ])];
+
+        let tournament = SingleElimination::resume(matches.clone()).unwrap();
+
+        assert_eq!(tournament.matches, matches);
+        assert_eq!(tournament.initial_matches, 1);
+
+        let matches = vec![
+            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ];
+
+        let tournament = SingleElimination::resume(matches.clone()).unwrap();
+
+        assert_eq!(tournament.matches, matches);
+        assert_eq!(tournament.initial_matches, 2);
+
+        let matches = vec![
+            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+            Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
+            Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ];
+
+        let tournament = SingleElimination::resume(matches.clone()).unwrap();
+
+        assert_eq!(tournament.matches, matches);
+        assert_eq!(tournament.initial_matches, 4);
+
+        let matches = vec![
+            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
+            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
+        ];
+
+        SingleElimination::resume(matches).unwrap_err();
     }
 
     #[test]
