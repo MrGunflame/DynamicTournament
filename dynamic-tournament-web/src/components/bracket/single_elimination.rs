@@ -34,7 +34,7 @@ impl Component for SingleEliminationBracket {
             .collect();
 
         let state = match &ctx.props().bracket {
-            Some(bracket) => SingleElimination::resume(bracket.0.clone()),
+            Some(bracket) => SingleElimination::resume(bracket.0.clone()).unwrap(),
             None => SingleElimination::new(teams),
         };
 
