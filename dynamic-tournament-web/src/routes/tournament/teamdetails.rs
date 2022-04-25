@@ -39,7 +39,7 @@ impl Component for TeamDetails {
 
         html! {
             <div>
-                <h2>{team.name}</h2>
+                <h2 class="title-label h-center">{team.name}</h2>
                 <table class="table-center">
                     <tbody>
                         <tr>

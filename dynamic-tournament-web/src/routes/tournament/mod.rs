@@ -10,7 +10,7 @@ use yew_router::prelude::*;
 
 use crate::components::bracket::Bracket;
 use crate::components::movable_boxed::MovableBoxed;
-use crate::{render_data, Data, DataResult};
+use crate::{render_data, Data, DataResult, Title};
 
 use dynamic_tournament_api::tournament as api;
 use dynamic_tournament_api::tournament::TournamentId;
@@ -62,6 +62,7 @@ impl Component for Tournament {
         match msg {
             Msg::Update(data) => {
                 self.data = data;
+
                 true
             }
         }
@@ -69,6 +70,8 @@ impl Component for Tournament {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         render_data(&self.data, |(data, bracket)| {
+            Title::set(&data.name);
+
             let tournament = data.clone();
             let bracket = bracket.clone();
 
