@@ -1,5 +1,5 @@
 use crate::routes::tournament::Route;
-use crate::{render_data, Data, DataResult};
+use crate::{render_data, Data, DataResult, Title};
 use yew::prelude::*;
 
 use dynamic_tournament_api::tournament::{TournamentId, TournamentOverview};
@@ -16,6 +16,8 @@ impl Component for TournamentList {
     type Properties = ();
 
     fn create(ctx: &Context<Self>) -> Self {
+        Title::set("Tournaments");
+
         let link = ctx.link();
         let (client, _) = ctx
             .link()
@@ -91,6 +93,10 @@ impl Component for TournamentList {
                 </table>
             }
         })
+    }
+
+    fn destroy(&mut self, _ctx: &Context<Self>) {
+        Title::clear();
     }
 }
 
