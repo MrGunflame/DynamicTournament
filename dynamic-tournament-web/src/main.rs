@@ -1,4 +1,5 @@
 mod components;
+mod consts;
 mod logger;
 mod routes;
 
@@ -6,6 +7,8 @@ use yew::prelude::*;
 use yew::start_app_in_element;
 
 use routes::App;
+
+use consts::{MOUNTPOINT, TITLE_BASE};
 
 extern crate wee_alloc;
 
@@ -56,10 +59,23 @@ where
 pub type Data<T> = Option<Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>>;
 pub type DataResult<T> = Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>;
 
-const MOUNTPOINT: Mountpoint = Mountpoint::Body;
-
 #[derive(Copy, Clone, Debug)]
 pub enum Mountpoint {
     Body,
     Element(&'static str),
+}
+
+pub struct Title;
+
+impl Title {
+    pub fn set(title: &str) {
+        let document = web_sys::window().unwrap().document().unwrap();
+
+        document.set_title(&format!("{} - {}", title, TITLE_BASE))
+    }
+
+    pub fn clear() {
+        let document = web_sys::window().unwrap().document().unwrap();
+        document.set_title(TITLE_BASE);
+    }
 }
