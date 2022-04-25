@@ -244,6 +244,7 @@ td {
   font-size: 0.88em;
   padding: calc(1em /2);
   color: white;
+  margin: 2px;
 }
 
 .table-striped {
@@ -331,4 +332,17 @@ td {
 
 .h-center {
   text-align: center;
+}
+
+.bracket-fullscreen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+  width: 100vw;
+  z-index: 50;
+  border: none;
+  overflow: hidden;
 }

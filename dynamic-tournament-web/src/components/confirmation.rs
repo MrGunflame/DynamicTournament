@@ -29,10 +29,10 @@ impl Component for Confirmation {
 
         html! {
             <Popup on_close={on_close}>
-                <span>{ "Really?" }</span>
+                <span>{ "Are you sure to reset this match? This will also reset matches depending on the result of this match." }</span>
                 <div>
-                    <button onclick={on_confirm}>{ "Yes" }</button>
-                    <button onclick={on_cancel}>{ "Cancel" }</button>
+                    <button class="button" onclick={on_confirm}>{ "Yes" }</button>
+                    <button class="button" onclick={on_cancel}>{ "Cancel" }</button>
                 </div>
             </Popup>
         }

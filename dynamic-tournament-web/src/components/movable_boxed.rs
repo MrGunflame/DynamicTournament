@@ -135,8 +135,13 @@ impl Component for MovableBoxed {
             }
         };
 
+        let classes = match ctx.props().classes {
+            Some(classes) => format!("movable-boxed {}", classes),
+            None => "movable-boxed".to_owned(),
+        };
+
         html! {
-            <div class="movable-boxed" onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
+            <div class={classes} onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
                 <div class="movable-boxed-buttons">
                     <Button onclick={on_reposition} title="Reposition">
                         <i aria-hidden="true" class="fa-solid fa-compress"></i>
@@ -163,6 +168,7 @@ impl Component for MovableBoxed {
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Properties {
     pub children: Children,
+    pub classes: Option<&'static str>,
 }
 
 #[derive(Clone, Debug)]

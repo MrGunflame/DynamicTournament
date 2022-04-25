@@ -81,7 +81,7 @@ impl Component for Tournament {
                 let tournament = tournament.clone();
                 let bracket = bracket.clone();
 
-                let mut routes = Vec::with_capacity(2);
+                let mut routes = Vec::with_capacity(4);
                 for (r, n) in &[
                     (Route::Index { id }, "Overview"),
                     (Route::Bracket { id }, "Bracket"),
@@ -93,6 +93,10 @@ impl Component for Tournament {
                         <li><Link<Route> classes={classes} to={r.clone()}>{ n }</Link<Route>></li>
                     });
                 }
+
+                routes.push(html! {
+                    <li><Link<crate::routes::Route> to={crate::routes::Route::Embed { id: tournament.id.0 }}>{ "Embed Mode" }</Link<crate::routes::Route>></li>
+                });
 
                 let content = match route {
                     Route::Index { id: _ } => html! {
