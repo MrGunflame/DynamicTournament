@@ -1,20 +1,22 @@
 pub mod double_elimination;
-pub mod r#match;
 pub mod single_elimination;
-pub mod team;
 
-pub use double_elimination::DoubleEliminationBracket;
-use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore, Match};
-pub use r#match::{Action, BracketMatch};
-pub use single_elimination::SingleEliminationBracket;
-pub use team::BracketTeam;
+mod r#match;
+mod team;
+
+use double_elimination::DoubleEliminationBracket;
+use r#match::{Action, BracketMatch};
+use single_elimination::SingleEliminationBracket;
+use team::BracketTeam;
 
 use dynamic_tournament_api::tournament::{Bracket as BracketState, BracketType, Tournament};
-
-use yew::prelude::*;
+use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore, Match};
 
 use std::rc::Rc;
 
+use yew::prelude::*;
+
+#[derive(Debug)]
 pub enum Bracket {
     SingleElimination,
     DoubleElimination,

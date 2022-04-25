@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
@@ -13,10 +14,11 @@ use super::{find_match_winner, Action, BracketMatch};
 
 use yew::prelude::*;
 
+/// A bracket for a [`SingleElimination`] tournament.
 pub struct SingleEliminationBracket {
     state: SingleElimination<EntrantWithScore<Team, u64>>,
     // Popup open for match with index.
-    popup: Option<usize>,
+    popup: Option<PopupState>,
 }
 
 impl Component for SingleEliminationBracket {
@@ -24,7 +26,7 @@ impl Component for SingleEliminationBracket {
     type Properties = BracketProperties;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let teams = ctx
+        let teams: Vec<EntrantWithScore<Team, u64>> = ctx
             .props()
             .tournament
             .teams
@@ -43,11 +45,16 @@ impl Component for SingleEliminationBracket {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Action { index, action: _ } => {
-                self.popup = Some(index);
-
-                true
-            }
+            Message::Action { index, action } => match action {
+                Action::UpdateMatch => {
+                    self.popup = Some(PopupState::UpdateScores(index));
+                    true
+                }
+                Action::ResetMatch => {
+                    self.popup = Some(PopupState::ResetMatch(index));
+                    true
+                }
+            },
             Message::UpdateScore { index, scores } => {
                 self.state.update_match(index, |m| {
                     m.entrants[0].unwrap_ref_mut().score = scores[0];
@@ -105,12 +112,47 @@ impl Component for SingleEliminationBracket {
 
                 true
             }
+            Message::ResetMatch(index) => {
+                self.state.update_match(index, |m| {
+                    for entrant in &mut m.entrants {
+                        if let EntrantSpot::Entrant(entrant) = entrant {
+                            entrant.score = 0;
+                            entrant.winner = false;
+                        }
+                    }
+
+                    None
+                });
+
+                if let Some(winner) = self.state.next_match_mut(index) {
+                    winner.entrants[index % 2] = EntrantSpot::TBD;
+                }
+
+                let client = ClientProvider::take(ctx);
+
+                let id = ctx.props().tournament.id;
+                let bracket = Bracket(self.state.iter().cloned().collect());
+                ctx.link().send_future_batch(async move {
+                    let client = client.tournaments();
+                    let client = client.bracket(id);
+
+                    match client.put(&bracket).await {
+                        Ok(_) => vec![Message::UpdateScoreUI],
+                        Err(err) => {
+                            log::error!("{}", err);
+                            vec![]
+                        }
+                    }
+                });
+
+                false
+            }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let popup = match self.popup {
-            Some(index) => {
+            Some(PopupState::UpdateScores(index)) => {
                 // on_close handler for the popup.
                 let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
@@ -137,6 +179,15 @@ impl Component for SingleEliminationBracket {
                     <Popup on_close={on_close}>
                         <BracketUpdate {teams} scores={scores} on_submit={on_submit} />
                     </Popup>
+                }
+            }
+            Some(PopupState::ResetMatch(index)) => {
+                let on_close = ctx.link().callback(|_| Message::ClosePopup);
+
+                let on_confirm = ctx.link().callback(move |_| Message::ResetMatch(index));
+
+                html! {
+                    <Confirmation {on_close} {on_confirm} />
                 }
             }
             None => html! {},
@@ -216,4 +267,11 @@ pub enum Message {
     ClosePopup,
     UpdateScore { index: usize, scores: [u64; 2] },
     UpdateScoreUI,
+    ResetMatch(usize),
+}
+
+/// The popup can either be the update-scores dialog or the reset match confirmation.
+pub enum PopupState {
+    UpdateScores(usize),
+    ResetMatch(usize),
 }

@@ -18,13 +18,12 @@ impl Component for BracketMatch {
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            Message::UpdateScore => {
-                ctx.props().on_action.emit(Action::UpdateMatch);
-            }
-            Message::ResetMatch => (),
-        }
+        let action = match msg {
+            Message::UpdateScore => Action::UpdateMatch,
+            Message::ResetMatch => Action::ResetMatch,
+        };
 
+        ctx.props().on_action.emit(action);
         false
     }
 
@@ -112,4 +111,5 @@ pub enum Message {
 #[derive(Copy, Clone, Debug)]
 pub enum Action {
     UpdateMatch,
+    ResetMatch,
 }

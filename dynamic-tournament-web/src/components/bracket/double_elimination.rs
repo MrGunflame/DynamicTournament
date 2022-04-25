@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use yew::prelude::*;
 
+use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
@@ -14,9 +15,10 @@ use dynamic_tournament_generator::{
     DoubleElimination, EntrantSpot, EntrantWithScore, Match, MatchResult,
 };
 
+/// A bracket for a [`DoubleElimination`] tournament.
 pub struct DoubleEliminationBracket {
     state: DoubleElimination<EntrantWithScore<Team, u64>>,
-    popup: Option<usize>,
+    popup: Option<PopupState>,
 }
 
 impl Component for DoubleEliminationBracket {
@@ -47,7 +49,12 @@ impl Component for DoubleEliminationBracket {
         match msg {
             Message::Action { index, action } => match action {
                 Action::UpdateMatch => {
-                    self.popup = Some(index);
+                    self.popup = Some(PopupState::UpdateScores(index));
+
+                    true
+                }
+                Action::ResetMatch => {
+                    self.popup = Some(PopupState::ResetMatch(index));
 
                     true
                 }
@@ -108,12 +115,52 @@ impl Component for DoubleEliminationBracket {
 
                 true
             }
+            Message::ResetMatch(index) => {
+                self.state.update_match(index, |m| {
+                    for entrant in &mut m.entrants {
+                        if let EntrantSpot::Entrant(entrant) = entrant {
+                            entrant.score = 0;
+                            entrant.winner = false;
+                        }
+                    }
+
+                    None
+                });
+
+                let next_matches = self.state.next_matches_index(index);
+                if let Some(winner) = next_matches.winner_mut(&mut self.state) {
+                    *winner = EntrantSpot::TBD;
+                }
+
+                if let Some(loser) = next_matches.loser_mut(&mut self.state) {
+                    *loser = EntrantSpot::TBD;
+                }
+
+                let client = ClientProvider::take(ctx);
+
+                let id = ctx.props().tournament.id;
+                let bracket = Bracket(self.state.iter().cloned().collect());
+                ctx.link().send_future_batch(async move {
+                    let client = client.tournaments();
+                    let client = client.bracket(id);
+
+                    match client.put(&bracket).await {
+                        Ok(_) => vec![Message::UpdateScoreUI],
+                        Err(err) => {
+                            log::error!("{}", err);
+                            vec![]
+                        }
+                    }
+                });
+
+                false
+            }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let popup = match self.popup {
-            Some(index) => {
+            Some(PopupState::UpdateScores(index)) => {
                 // on_close handler for the popup.
                 let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
@@ -140,6 +187,15 @@ impl Component for DoubleEliminationBracket {
                     <Popup on_close={on_close}>
                         <BracketUpdate {teams} scores={scores} on_submit={on_submit} />
                     </Popup>
+                }
+            }
+            Some(PopupState::ResetMatch(index)) => {
+                let on_close = ctx.link().callback(|_| Message::ClosePopup);
+
+                let on_confirm = ctx.link().callback(move |_| Message::ResetMatch(index));
+
+                html! {
+                    <Confirmation {on_close} {on_confirm} />
                 }
             }
             None => html! {},
@@ -170,7 +226,7 @@ impl Component for DoubleEliminationBracket {
             <>
             <div class="flex-col">
                 <div class="tourn-bracket">
-                    <span>{ "Winners Bracket" }</span>
+                    <span class="title-label">{ "Winners Bracket" }</span>
                     <div class="bracket-matches">
                         {upper}
                     </div>
@@ -178,7 +234,7 @@ impl Component for DoubleEliminationBracket {
 
                 <div class="bracket-flex-center tourn-bracket">
                     <div>
-                        <span>{ "Grand Finals" }</span>
+                        <span class="title-label">{ "Grand Finals" }</span>
                         <div class="bracket-matches">
                             {finals}
                         </div>
@@ -187,7 +243,7 @@ impl Component for DoubleEliminationBracket {
             </div>
 
             <div class="tourn-bracket">
-                <span>{ "Losers Bracket" }</span>
+                <span class="title-label">{ "Losers Bracket" }</span>
                 <div class="bracket-matches">
                     {lower}
                 </div>
@@ -255,4 +311,11 @@ pub enum Message {
     ClosePopup,
     UpdateScore { index: usize, scores: [u64; 2] },
     UpdateScoreUI,
+    ResetMatch(usize),
+}
+
+/// The popup can either be the update-scores dialog or the reset match confirmation.
+pub enum PopupState {
+    UpdateScores(usize),
+    ResetMatch(usize),
 }
