@@ -34,18 +34,30 @@ impl Component for App {
                 <AuthProvider>
                     <ClientProvider>
                         <BrowserRouter>
-                            <div class="navbar">
-                                <ul>
-                                    <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                                    <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
-                                    <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
-                                    <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
-                                </ul>
+                            <div class="main-wrapper">
+                                <div>
+                                    <div class="navbar">
+                                        <ul>
+                                            <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
+                                            <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
+                                            <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
+                                            <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
+                                        </ul>
+                                    </div>
+                                    <div class="main">
+                                        <Switch<Route> render={Switch::render(switch)} />
+                                    </div>
+                                    <div id="popup-host"></div>
+                                </div>
+                                <div class="footer">
+                                    <p>
+                                        { "This viewer is still in an early stage, please report issues on " }
+                                        <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
+                                        { " or to MagiiTech#0534 on Discord." }
+                                    </p>
+                                    <a href="/privacy.html">{ "Privacy Policy" }</a>
+                                </div>
                             </div>
-                            <div class="main">
-                                <Switch<Route> render={Switch::render(switch)} />
-                            </div>
-                            <div id="popup-host"></div>
                         </BrowserRouter>
                     </ClientProvider>
                 </AuthProvider>
