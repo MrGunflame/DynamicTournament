@@ -139,7 +139,7 @@ impl Component for MovableBoxed {
             <div class="movable-boxed" onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
                 <div class="movable-boxed-buttons">
                     <Button onclick={on_reposition} title="Reposition">
-                        <i aria-hidden="true" class="fa-solid fa-arrows-to-dot"></i>
+                        <i aria-hidden="true" class="fa-solid fa-compress"></i>
                         <span class="sr-only">{ "Reposition" }</span>
                     </Button>
                     <button class="button" onclick={on_zoom_in} title="Zoom In">
