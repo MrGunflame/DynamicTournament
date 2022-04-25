@@ -174,6 +174,7 @@ where
     /// # Safety
     ///
     /// Calling this method on an index that is out of bounds causes undefined behavoir.
+    #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &Match<T> {
         self.matches.get_unchecked(index)
     }
@@ -183,6 +184,7 @@ where
     /// # Safety
     ///
     /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
+    #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Match<T> {
         self.matches.get_unchecked_mut(index)
     }
@@ -303,6 +305,38 @@ impl<T> Match<T> {
     pub(crate) fn is_placeholder(&self) -> bool {
         matches!(self.entrants[0], EntrantSpot::Empty)
             || matches!(self.entrants[1], EntrantSpot::Empty)
+    }
+
+    /// Returns a reference to the entrant at `index`.
+    #[inline]
+    pub fn get(&self, index: usize) -> Option<&EntrantSpot<T>> {
+        self.entrants.get(index)
+    }
+
+    /// Returns a mutable reference to the entrant at `index`.
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut EntrantSpot<T>> {
+        self.entrants.get_mut(index)
+    }
+
+    /// Returns a reference to the entrant at `index` without checking bounds.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    #[inline]
+    pub unsafe fn get_unchecked(&self, index: usize) -> &EntrantSpot<T> {
+        self.entrants.get_unchecked(index)
+    }
+
+    /// Returns a mutable reference to the entrant at `index` without checking bounds.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntrantSpot<T> {
+        self.entrants.get_unchecked_mut(index)
     }
 }
 
@@ -512,6 +546,8 @@ where
 
 /// An entrant that can be used in tournaments.
 pub trait Entrant: Clone {
+    fn reset(&mut self);
+
     /// Sets the winner state of the entrant.
     fn set_winner(&mut self, winner: bool);
 }
@@ -519,8 +555,13 @@ pub trait Entrant: Clone {
 impl<T, S> Entrant for EntrantWithScore<T, S>
 where
     T: Clone,
-    S: Clone,
+    S: Clone + Default,
 {
+    fn reset(&mut self) {
+        self.score = S::default();
+        self.winner = false;
+    }
+
     fn set_winner(&mut self, winner: bool) {
         self.winner = winner;
     }
@@ -712,6 +753,26 @@ where
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut Match<T>> {
         self.matches.get_mut(index)
+    }
+
+    /// Returns a reference to the match at `index` without checking bounds.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    #[inline]
+    pub unsafe fn get_unchecked(&self, index: usize) -> &Match<T> {
+        self.matches.get_unchecked(index)
+    }
+
+    /// Returns a mutable reference to the match at `index` without checking bounds.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Match<T> {
+        self.matches.get_unchecked_mut(index)
     }
 
     pub fn update_match<F>(&mut self, index: usize, f: F)
@@ -1302,6 +1363,8 @@ mod tests {
 
     // Implement Entrant for i32 for testing only.
     impl Entrant for i32 {
+        fn reset(&mut self) {}
+
         fn set_winner(&mut self, _winner: bool) {}
     }
 
