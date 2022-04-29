@@ -1,11 +1,189 @@
 //! Bracket Generator
+mod single_elimination;
+mod utils;
+
+pub use single_elimination::SingleElimination;
+use utils::SmallOption;
 
 use thiserror::Error;
+
+use std::mem::MaybeUninit;
+use std::ops::{Deref, DerefMut};
+use std::ops::{Index, IndexMut};
+use std::result;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use std::result;
+#[derive(Clone, Debug)]
+#[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct Entrants<T> {
+    entrants: Vec<T>,
+}
+
+impl<T> FromIterator<T> for Entrants<T> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let entrants = iter.into_iter().collect();
+
+        Self { entrants }
+    }
+}
+
+impl<T> Deref for Entrants<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.entrants
+    }
+}
+
+impl<T> DerefMut for Entrants<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.entrants
+    }
+}
+
+impl<T, U> PartialEq<U> for Entrants<T>
+where
+    T: PartialEq,
+    U: AsRef<[T]>,
+{
+    fn eq(&self, other: &U) -> bool {
+        self.entrants == other.as_ref()
+    }
+}
+
+#[derive(Clone, Debug)]
+#[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct Matches<T> {
+    matches: Vec<Match<T>>,
+}
+
+impl<T> Matches<T> {
+    pub fn new() -> Self {
+        Self {
+            matches: Vec::new(),
+        }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            matches: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub unsafe fn from_raw_parts(ptr: *mut Match<T>, length: usize, capacity: usize) -> Self {
+        Self {
+            matches: Vec::from_raw_parts(ptr, length, capacity),
+        }
+    }
+}
+
+impl<T> Deref for Matches<T> {
+    type Target = Vec<Match<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.matches
+    }
+}
+
+impl<T> DerefMut for Matches<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.matches
+    }
+}
+
+impl<T, U> PartialEq<U> for Matches<T>
+where
+    T: PartialEq,
+    U: AsRef<[Match<T>]>,
+{
+    fn eq(&self, other: &U) -> bool {
+        self.matches == other.as_ref()
+    }
+}
+
+impl<T> From<Vec<Match<T>>> for Matches<T> {
+    fn from(matches: Vec<Match<T>>) -> Self {
+        Self { matches }
+    }
+}
+
+/// Some data that is stored within the bracket of the tournament. This is usually a score or
+/// something similar. See [`EntrantWithScore`] for an example.
+pub trait EntrantData: Default {
+    /// Sets the winner state of the data to `winner`.
+    fn set_winner(&mut self, winner: bool);
+    /// Resets the data. This should cause the `Self` become the same value as `Self::default()`.
+    fn reset(&mut self);
+}
+
+/// An entrant in a match.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entrant<D> {
+    pub index: usize,
+    pub data: D,
+}
+
+impl<D> Entrant<D> {
+    pub fn new(index: usize) -> Self
+    where
+        D: Default,
+    {
+        Self {
+            index,
+            data: D::default(),
+        }
+    }
+
+    pub fn new_with_data(index: usize, data: D) -> Self {
+        Self { index, data }
+    }
+}
+
+#[derive(Debug)]
+pub struct EntrantRef<'a, T, D> {
+    index: usize,
+    entrant: &'a T,
+    data: &'a mut D,
+}
+
+impl<'a, T, D> EntrantRef<'a, T, D> {
+    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a mut D) -> Self {
+        Self {
+            index,
+            entrant,
+            data,
+        }
+    }
+}
+
+impl<'a, T, D> AsRef<T> for EntrantRef<'a, T, D> {
+    fn as_ref(&self) -> &T {
+        &self.entrant
+    }
+}
+
+impl<'a, T, D> Deref for EntrantRef<'a, T, D> {
+    type Target = D;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<'a, T, D> DerefMut for EntrantRef<'a, T, D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
 
 /// An `Result<T>` using [`Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
@@ -14,280 +192,61 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
     #[error("invalid number of matches: expected {expected}, found {found}")]
     InvalidNumberOfMatches { expected: usize, found: usize },
+    #[error(
+        "invalid entrant: match refers to entrant at {index} but only {length} entrants are given"
+    )]
+    InvalidEntrant { index: usize, length: usize },
 }
 
-/// A single elimination tournament.
-#[derive(Clone, Debug)]
-pub struct SingleElimination<T> {
-    matches: Vec<Match<T>>,
-    /// The number of initial matches (round 0).
-    initial_matches: usize,
+/// The result of a [`Match`].
+#[derive(Clone, Debug, Default)]
+pub struct MatchResult<D> {
+    pub(crate) winner: Option<(EntrantSpot<usize>, D)>,
+    pub(crate) loser: Option<(EntrantSpot<usize>, D)>,
 }
 
-impl<T> SingleElimination<T>
-where
-    T: Entrant,
-{
-    /// Creates a new `SingleElimination` tournament.
-    // FIXME: Replace Vec<T> with a better suited type.
-    pub fn new(entrants: Vec<T>) -> Self {
-        let num_matches = match entrants.len() {
-            1 => 1,
-            _ => predict_amount_of_matches(entrants.len()),
-        };
-        let mut matches = Vec::with_capacity(num_matches);
-
-        // Placeholder matches are matches with only a single entrant. This is required to make
-        // the bracket even. Entrants of placeholder matches will advance the next round
-        // immediatly.
-        // FIXME: Can pre allocate this.
-        let mut placeholder_matches = Vec::new();
-
-        let mut i = 0;
-        while i < entrants.len() {
-            let teams = [
-                EntrantSpot::new(entrants.get(i).cloned()),
-                EntrantSpot::new(entrants.get(i + 1).cloned()),
-            ];
-
-            // Mark matches with only a single team in as placeholder matches.
-            // Only the second entrant can be `EntrantSpot::Empty`.
-            // FIXME: Unnecessary double comparison here and above.
-            if let EntrantSpot::Empty = teams[1] {
-                placeholder_matches.push(matches.len());
-            }
-
-            matches.push(Match::new(teams));
-
-            // Go to next row of 2 entrants.
-            i += 2;
-        }
-
-        // i / 2 is the amount of matches currently (first round).
-        i /= 2;
-
-        // If entrants.len() is a at least pow(2, n) - 2 we will have completely empty
-        // matches in the first round. To fix that, we will move teams from full matches
-        // until every match has at least 1 team.
-        let mut i2 = 0;
-        while i < calculate_wanted_inital_entrants(entrants.len()) / 2 {
-            let m = matches.get_mut(i2).unwrap();
-            let entrant = m.entrants[1].take();
-
-            matches.push(Match::new([entrant, EntrantSpot::Empty]));
-
-            // All new matches and matches where a team was removed are now placeholder
-            // matches.
-            placeholder_matches.push(i2);
-            placeholder_matches.push(i);
-
-            i2 += 1;
-            i += 1;
-        }
-
-        // Fill `matches` will TBD matches.
-        while i < matches.capacity() {
-            matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
-
-            i += 1;
-        }
-
-        let mut this = Self {
-            matches,
-            initial_matches: match entrants.len() {
-                1 | 2 => 1,
-                _ => calculate_wanted_inital_entrants(entrants.len()) / 2,
-            },
-        };
-
-        // Move all placeholder matches to the second round.
-        for index in placeholder_matches {
-            let entrant = this.get_mut(index).unwrap().entrants[0].unwrap_ref_mut();
-            entrant.set_winner(true);
-
-            let mut entrant = entrant.clone();
-            entrant.set_winner(false);
-
-            if let Some(m) = this.next_match_mut(index) {
-                m.entrants[index % 2] = EntrantSpot::Entrant(entrant);
-            }
-        }
-
-        debug_assert_eq!(this.matches.len(), num_matches);
-
-        this
-    }
-
-    /// Resumes the bracket from an existing `Vec` of matches.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `matches` has an incorrect length.
-    pub fn resume(matches: Vec<Match<T>>) -> Result<Self> {
-        let expected = match matches.len() {
-            1 => 1,
-            n => predict_amount_of_matches(n),
-        };
-        let found = matches.len();
-
-        if found == expected {
-            Ok(Self::resume_unchecked(matches))
-        } else {
-            Err(Error::InvalidNumberOfMatches { expected, found })
-        }
-    }
-
-    /// Resumes the bracket from an existing `Vec` of matches.
-    ///
-    /// **Note:** This function assumes that the given input `Vec` has the correct length. It this
-    /// not the case weird behavoir including incorrect match updates or infinite loops might
-    /// occur.
-    pub fn resume_unchecked(matches: Vec<Match<T>>) -> Self {
+impl<D> MatchResult<D> {
+    pub fn new() -> Self {
         Self {
-            initial_matches: (matches.len() + 1) / 2,
-            matches,
+            winner: None,
+            loser: None,
         }
     }
 
-    /// Returns the match with the given index.
-    pub fn get(&self, index: usize) -> Option<&Match<T>> {
-        if index < self.matches.len() {
-            // SAFETY: index is within the bounds
-            unsafe { Some(self.get_unchecked(index)) }
-        } else {
-            None
-        }
+    pub fn winner<'a, T>(
+        &mut self,
+        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+        data: D,
+    ) -> &mut Self {
+        self.winner = Some((entrant.as_ref().map(|e| e.index), data));
+        self
     }
 
-    /// Returns a mutable reference to the match with the given index.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Match<T>> {
-        if index < self.matches.len() {
-            // SAFETY: index is within the bounds
-            unsafe { Some(self.get_unchecked_mut(index)) }
-        } else {
-            None
-        }
-    }
-
-    /// Returns the match with the given index.
-    ///
-    /// # Safety
-    ///
-    /// Calling this method on an index that is out of bounds causes undefined behavoir.
-    #[inline]
-    pub unsafe fn get_unchecked(&self, index: usize) -> &Match<T> {
-        self.matches.get_unchecked(index)
-    }
-
-    /// Returns the [`Match`] at `index` without checking the bounds.
-    ///
-    /// # Safety
-    ///
-    /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
-    #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Match<T> {
-        self.matches.get_unchecked_mut(index)
-    }
-
-    /// Returns the next match that the winner of the match with the given index will play.
-    /// Returns `None` if there is no next game.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the given index is out of bounds.
-    pub fn next_match_mut(&mut self, index: usize) -> Option<&mut Match<T>> {
-        if index != self.matches.len() - 1 {
-            Some(self.get_mut(self.initial_matches + index / 2).unwrap())
-        } else {
-            None
-        }
-    }
-
-    /// Returns an iterator over all rounds.
-    pub fn rounds_iter(&self) -> RoundsIter<'_, T> {
-        RoundsIter {
-            slice: &self.matches,
-            index: 0,
-            next_round: self.initial_matches,
-        }
-    }
-
-    /// Gets the match with the given `index`, then calls `F` on it.
-    /// The return value indicates the winner of a match, a value of `None` means that
-    /// no winner has been determined yet (no additional operation is performed).
-    /// If `index` is out-of-bounds, `F` will never execute.
-    pub fn update_match<F>(&mut self, index: usize, f: F)
+    pub fn winner_default<'a, T>(
+        &mut self,
+        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+    ) -> &mut Self
     where
-        F: FnOnce(&mut Match<T>) -> Option<MatchResult<T>>,
+        D: Default,
     {
-        if index >= self.matches.len() {
-            return;
-        }
-
-        let m = self.get_mut(index).unwrap();
-
-        let winner = f(m);
-
-        if let Some(winner) = winner {
-            if let Some(next_match) = self.next_match_mut(index) {
-                match winner {
-                    MatchResult::Entrants { winner, looser: _ } => {
-                        next_match.entrants[index % 2] = EntrantSpot::Entrant(winner);
-                    }
-                    MatchResult::Raw { winner, loser: _ } => {
-                        next_match.entrants[index % 2] = winner;
-                    }
-                    MatchResult::None => {
-                        next_match.entrants[index % 2] = EntrantSpot::TBD;
-                    }
-                }
-            }
-        }
+        self.winner(entrant, D::default())
     }
 
-    /// Returns the index of the round the match is located in based on the
-    /// match index.
-    pub fn round_index(&self, index: usize) -> usize {
-        let mut counter = 0;
-        let mut buffer = 0;
-        let mut start = self.initial_matches;
-        while index >= buffer + start {
-            counter += 1;
-            buffer += start;
-            start /= 2;
-        }
-
-        counter
+    pub fn loser<'a, T>(
+        &mut self,
+        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+        data: D,
+    ) -> &mut Self {
+        self.loser = Some((entrant.as_ref().map(|e| e.index), data));
+        self
     }
 
-    /// Returns the index of the match within its round based on the match index.
-    pub fn match_index(&self, index: usize) -> usize {
-        let mut buffer = 0;
-        let mut start = self.initial_matches;
-        while index >= buffer + start {
-            buffer += start;
-            start /= 2;
-        }
-
-        index - buffer
+    pub fn loser_default<'a, T>(&mut self, entrant: &EntrantSpot<EntrantRef<'a, T, D>>) -> &mut Self
+    where
+        D: Default,
+    {
+        self.loser(entrant, D::default())
     }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Match<T>> {
-        self.matches.iter()
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum MatchResult<T> {
-    Entrants {
-        winner: T,
-        looser: T,
-    },
-    Raw {
-        winner: EntrantSpot<T>,
-        loser: EntrantSpot<T>,
-    },
-    None,
 }
 
 /// A match consisting of at 2 parties.
@@ -300,11 +259,6 @@ pub struct Match<T> {
 impl<T> Match<T> {
     pub fn new(entrants: [EntrantSpot<T>; 2]) -> Self {
         Self { entrants }
-    }
-
-    pub(crate) fn is_placeholder(&self) -> bool {
-        matches!(self.entrants[0], EntrantSpot::Empty)
-            || matches!(self.entrants[1], EntrantSpot::Empty)
     }
 
     /// Returns a reference to the entrant at `index`.
@@ -337,6 +291,59 @@ impl<T> Match<T> {
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntrantSpot<T> {
         self.entrants.get_unchecked_mut(index)
+    }
+}
+
+impl<T> Index<usize> for Match<T> {
+    type Output = EntrantSpot<T>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.entrants[index]
+    }
+}
+
+impl<T> IndexMut<usize> for Match<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.entrants[index]
+    }
+}
+
+impl<D> Match<Entrant<D>> {
+    /// Converts this `Match<Entrant<D>>` into a `Match<EntrantRef<'a, T, D>>` with the referenced
+    /// entrant `T` from `entrants`.
+    pub(crate) fn into_ref<'a, T>(
+        &'a mut self,
+        entrants: &'a Entrants<T>,
+    ) -> Match<EntrantRef<'a, T, D>> {
+        let mut array: [MaybeUninit<EntrantSpot<EntrantRef<'_, T, D>>>; 2] =
+            unsafe { MaybeUninit::uninit().assume_init() };
+
+        for (elem, entrant) in array.iter_mut().zip(self.entrants.iter_mut()) {
+            match entrant {
+                EntrantSpot::Entrant(ref mut e) => {
+                    let entrant = unsafe { entrants.get_unchecked(e.index) };
+
+                    elem.write(EntrantSpot::Entrant(EntrantRef::new(
+                        e.index,
+                        entrant,
+                        &mut e.data,
+                    )));
+                }
+                EntrantSpot::Empty => {
+                    elem.write(EntrantSpot::Empty);
+                }
+                EntrantSpot::TBD => {
+                    elem.write(EntrantSpot::TBD);
+                }
+            }
+        }
+
+        // panic!();
+
+        Match {
+            // SAFETY: Every element in `array` has been initialized.
+            entrants: unsafe { std::mem::transmute(array) },
+        }
     }
 }
 
@@ -495,67 +502,69 @@ impl<T> EntrantSpot<T> {
             ),
         }
     }
-}
 
-/// Calculates the amount of entrants in the first round.
-fn calculate_wanted_inital_entrants(amount_entants: usize) -> usize {
-    // Calculate the next pow(2, n) number.
-    let mut start = 1;
-    while start < amount_entants {
-        start <<= 1;
+    pub fn as_ref(&self) -> EntrantSpot<&T> {
+        match *self {
+            Self::Entrant(ref entrant) => EntrantSpot::Entrant(entrant),
+            Self::Empty => EntrantSpot::Empty,
+            Self::TBD => EntrantSpot::TBD,
+        }
     }
 
-    start
-}
-
-/// Predict the amount of matches for the whole tournament.
-fn predict_amount_of_matches(starting_amount: usize) -> usize {
-    let mut starting_amount = calculate_wanted_inital_entrants(starting_amount);
-
-    let mut counter = starting_amount / 2;
-    while starting_amount > 1 {
-        starting_amount >>= 1;
-        counter += starting_amount / 2;
+    pub fn as_mut(&mut self) -> EntrantSpot<&mut T> {
+        match *self {
+            Self::Entrant(ref mut entrant) => EntrantSpot::Entrant(entrant),
+            Self::Empty => EntrantSpot::Empty,
+            Self::TBD => EntrantSpot::TBD,
+        }
     }
 
-    counter
+    /// Maps `EntrantSpot<T>` to `EntrantSpot<U>` by applying `f` on it.
+    pub fn map<U, F>(self, f: F) -> EntrantSpot<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::Entrant(entrant) => EntrantSpot::Entrant(f(entrant)),
+            Self::Empty => EntrantSpot::Empty,
+            Self::TBD => EntrantSpot::TBD,
+        }
+    }
 }
 
-/// An wrapper around an Entrant `T` with an associated score `S`.
+/// A score `S` and a winner state.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct EntrantWithScore<T, S> {
-    pub entrant: T,
+pub struct EntrantScore<S> {
     pub score: S,
     pub winner: bool,
 }
 
-impl<T, S> EntrantWithScore<T, S>
+impl<S> EntrantScore<S>
 where
     S: Default,
 {
     /// Creates a new `EntrantWithScore` with a score of 0.
-    pub fn new(entrant: T) -> Self {
-        EntrantWithScore {
-            entrant,
+    pub fn new() -> Self {
+        EntrantScore {
             score: S::default(),
             winner: false,
         }
     }
 }
 
-/// An entrant that can be used in tournaments.
-pub trait Entrant: Clone {
-    fn reset(&mut self);
-
-    /// Sets the winner state of the entrant.
-    fn set_winner(&mut self, winner: bool);
+impl<S> Default for EntrantScore<S>
+where
+    S: Default,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-impl<T, S> Entrant for EntrantWithScore<T, S>
+impl<S> EntrantData for EntrantScore<S>
 where
-    T: Clone,
-    S: Clone + Default,
+    S: Default,
 {
     fn reset(&mut self) {
         self.score = S::default();
@@ -569,589 +578,10 @@ where
 
 impl<T> From<T> for EntrantSpot<T>
 where
-    T: Entrant,
+    T: EntrantData,
 {
     fn from(entrant: T) -> Self {
         Self::Entrant(entrant)
-    }
-}
-
-/// A double elimination tournament.
-#[derive(Clone, Debug)]
-pub struct DoubleElimination<T>
-where
-    T: Entrant,
-{
-    matches: Vec<Match<T>>,
-    lower_bracket_index: usize,
-    final_bracket_index: usize,
-    initial_matches: usize,
-}
-
-impl<T> DoubleElimination<T>
-where
-    T: Entrant,
-{
-    pub fn new(entrants: Vec<T>) -> Self {
-        // Note: The lower and final bracket have the same number of matches together as the
-        // upper bracket.
-        let num_matches = match entrants.len() {
-            1 | 2 => 1,
-            _ => predict_amount_of_matches(entrants.len()) * 2,
-        };
-
-        let lower_bracket_index = num_matches / 2;
-        let final_bracket_index = num_matches - 1;
-
-        let mut matches = Vec::with_capacity(num_matches);
-
-        let mut placeholder_matches = Vec::new();
-
-        let mut i = 0;
-        while i < entrants.len() {
-            let teams = [
-                EntrantSpot::new(entrants.get(i).cloned()),
-                EntrantSpot::new(entrants.get(i + 1).cloned()),
-            ];
-
-            if let EntrantSpot::Empty = teams[1] {
-                placeholder_matches.push(matches.len());
-            }
-
-            matches.push(Match::new(teams));
-
-            i += 2;
-        }
-
-        i /= 2;
-
-        let mut i2 = 0;
-        while i < calculate_wanted_inital_entrants(entrants.len()) / 2 {
-            let m = matches.get_mut(i2).unwrap();
-            let entrant = m.entrants[1].take();
-
-            matches.push(Match::new([entrant, EntrantSpot::Empty]));
-
-            placeholder_matches.push(i2);
-            placeholder_matches.push(i);
-
-            i2 += 1;
-            i += 1;
-        }
-
-        while i < matches.capacity() {
-            matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
-
-            i += 1;
-        }
-
-        let mut this = Self {
-            matches,
-            lower_bracket_index,
-            final_bracket_index,
-            initial_matches: match entrants.len() {
-                1 | 2 => 1,
-                _ => calculate_wanted_inital_entrants(entrants.len()) / 2,
-            },
-        };
-
-        let mut lower_bracket_placeholder_matches = Vec::new();
-
-        for index in placeholder_matches {
-            let entrant = this.get_mut(index).unwrap().entrants[0].unwrap_ref_mut();
-            entrant.set_winner(true);
-
-            let mut entrant = entrant.clone();
-            entrant.set_winner(false);
-
-            let NextMatches {
-                winner_index: winner,
-                winner_position: _,
-                loser_index: loser,
-                loser_position: _,
-            } = this.next_matches_index(index);
-
-            if let Some(winner) = winner {
-                let m = this.get_mut(winner).unwrap();
-                m.entrants[index % 2] = EntrantSpot::Entrant(entrant);
-            }
-
-            if let Some(loser) = loser {
-                let m = this.get_mut(loser).unwrap();
-                m.entrants[index % 2] = EntrantSpot::Empty;
-
-                lower_bracket_placeholder_matches.push(loser);
-            }
-        }
-
-        for index in lower_bracket_placeholder_matches {
-            let m = this.get(index).unwrap();
-            if m.entrants[0].is_empty() && m.entrants[1].is_empty() {
-                this.update_match(index, |_| {
-                    Some(MatchResult::Raw {
-                        winner: EntrantSpot::Empty,
-                        loser: EntrantSpot::Empty,
-                    })
-                });
-            }
-        }
-
-        this
-    }
-
-    /// Resumes the bracket from an existing `Vec` of matches.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `matches` has an incorrect length.
-    pub fn resume(matches: Vec<Match<T>>) -> Result<Self> {
-        let expected = match matches.len() {
-            1 => 1,
-            n => predict_amount_of_matches(n / 2) * 2,
-        };
-        let found = matches.len();
-
-        if found == expected {
-            Ok(Self::resume_unchecked(matches))
-        } else {
-            Err(Error::InvalidNumberOfMatches { expected, found })
-        }
-    }
-
-    /// Resumes the bracket from an existing `Vec` of matches.
-    ///
-    /// **Note:** This function assumes that the given input `Vec` has the correct length. It this
-    /// not the case weird behavoir including incorrect match updates or infinite loops might
-    /// occur.
-    pub fn resume_unchecked(matches: Vec<Match<T>>) -> Self {
-        let initial_matches = match matches.len() {
-            1 => 1,
-            n => div_ceil(n / 2, 2),
-        };
-
-        Self {
-            initial_matches,
-            lower_bracket_index: matches.len() / 2,
-            final_bracket_index: matches.len() - 1,
-            matches,
-        }
-    }
-
-    /// Returns the number of matches in the tournament.
-    pub fn len(&self) -> usize {
-        self.matches.len()
-    }
-
-    /// Returns `true` if the tournament has no matches.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn get(&self, index: usize) -> Option<&Match<T>> {
-        self.matches.get(index)
-    }
-
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Match<T>> {
-        self.matches.get_mut(index)
-    }
-
-    /// Returns a reference to the match at `index` without checking bounds.
-    ///
-    /// # Safety
-    ///
-    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
-    #[inline]
-    pub unsafe fn get_unchecked(&self, index: usize) -> &Match<T> {
-        self.matches.get_unchecked(index)
-    }
-
-    /// Returns a mutable reference to the match at `index` without checking bounds.
-    ///
-    /// # Safety
-    ///
-    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
-    #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Match<T> {
-        self.matches.get_unchecked_mut(index)
-    }
-
-    pub fn update_match<F>(&mut self, index: usize, f: F)
-    where
-        F: FnOnce(&mut Match<T>) -> Option<MatchResult<T>>,
-    {
-        let m = match self.get_mut(index) {
-            Some(m) => m,
-            None => return,
-        };
-
-        let res = f(m);
-
-        if let Some(res) = res {
-            let (winner, looser) = match res {
-                MatchResult::Entrants { winner, looser } => {
-                    (EntrantSpot::Entrant(winner), EntrantSpot::Entrant(looser))
-                }
-                MatchResult::Raw { winner, loser } => (winner, loser),
-                MatchResult::None => (EntrantSpot::TBD, EntrantSpot::TBD),
-            };
-
-            match index {
-                // Update a match in the final bracket.
-                i if i >= self.final_bracket_index => {}
-                // Update a match in the lower bracket.
-                i if i >= self.lower_bracket_index => {
-                    if i == self.final_bracket_index - 1 {
-                        let m = self.get_mut(self.final_bracket_index).unwrap();
-
-                        // The winner of the lower bracket takes the second spot.
-                        m.entrants[1] = winner;
-
-                        return;
-                    }
-
-                    // We need to know the number of matches in the current round, and the
-                    // index of the current round (see [`Self::lower_round_index`]).
-                    let mut round_index = 0;
-                    let mut buffer = 0;
-                    let mut num_matches = self.initial_matches / 2;
-
-                    while index - self.lower_bracket_index >= buffer + num_matches {
-                        round_index += 1;
-                        buffer += num_matches;
-
-                        if round_index % 2 == 0 {
-                            num_matches /= 2;
-                        }
-                    }
-
-                    // The index of the match within the current round.
-                    let match_index = index - buffer - self.lower_bracket_index;
-
-                    match round_index {
-                        i if i == self.final_bracket_index - 1 => {
-                            let winner_index = self.final_bracket_index;
-
-                            let m = self.get_mut(winner_index).unwrap();
-
-                            // The winner from the lower bracket always takes the second
-                            // spot.
-                            m.entrants[1] = winner;
-                        }
-                        i if i % 2 == 0 => {
-                            let winner_index = index + num_matches;
-
-                            let m = self.get_mut(winner_index).unwrap();
-
-                            // The winner always takes the first spot.
-                            m.entrants[0] = winner;
-                        }
-                        _ => {
-                            let winner_index =
-                                index + (num_matches - match_index + match_index / 2);
-
-                            let m = self.get_mut(winner_index).unwrap();
-
-                            m.entrants[(index - 1) % 2] = winner;
-                        }
-                    }
-                }
-                // Update a match in the upper bracket.
-                _ => {
-                    let index_winner = self.initial_matches + index / 2;
-
-                    match index {
-                        i if i == self.final_bracket_index / 2 => {
-                            let match_winner = self.get_mut(self.final_bracket_index).unwrap();
-
-                            // The winner from the upper bracket takes the first spot.
-                            match_winner.entrants[0] = winner;
-
-                            let match_looser = self.get_mut(self.final_bracket_index - 1).unwrap();
-                            match_looser.entrants[1] = looser.clone();
-
-                            if match_looser.is_placeholder() {
-                                match_looser.entrants[1].unwrap_ref_mut().set_winner(true);
-
-                                let loser_index = self.final_bracket_index - 1;
-
-                                if let Some(ptr) =
-                                    self.next_matches_index(loser_index).winner_mut(self)
-                                {
-                                    *ptr = looser;
-                                }
-                            }
-                        }
-                        // Handle the first round differently.
-                        i if i < self.initial_matches => {
-                            let index_looser = self.lower_bracket_index + (i / 2);
-
-                            let match_winner = self.get_mut(index_winner).unwrap();
-                            match_winner.entrants[index % 2] = winner;
-
-                            let match_looser = self.get_mut(index_looser).unwrap();
-                            match_looser.entrants[index % 2] = looser.clone();
-
-                            if match_looser.is_placeholder() {
-                                match_looser.entrants[index % 2]
-                                    .unwrap_ref_mut()
-                                    .set_winner(true);
-
-                                if let Some(ptr) =
-                                    self.next_matches_index(index_looser).winner_mut(self)
-                                {
-                                    *ptr = looser;
-                                }
-                            }
-                        }
-                        _ => {
-                            // Find the index of the match in the second round of the lower
-                            // bracket with the same number of matches as in the current round.
-                            let mut buffer = self.initial_matches;
-                            let mut num_matches = self.initial_matches / 2;
-                            let mut lower_buffer = 0;
-                            while index - self.upper_match_index(index) >= buffer {
-                                buffer += num_matches;
-                                lower_buffer += num_matches * 2;
-                                num_matches /= 2;
-                            }
-
-                            let index_loser = self.lower_bracket_index
-                                + lower_buffer
-                                + self.upper_match_index(index)
-                                - num_matches * 2;
-
-                            let match_winner = self.get_mut(index_winner).unwrap();
-                            match_winner.entrants[index % 2] = winner;
-
-                            let match_loser = self.get_mut(index_loser).unwrap();
-
-                            // The looser always takes the second spot.
-                            match_loser.entrants[1] = looser.clone();
-
-                            if match_loser.is_placeholder() {
-                                match_loser.entrants[1].unwrap_ref_mut().set_winner(true);
-
-                                if let Some(ptr) =
-                                    self.next_matches_index(index_loser).winner_mut(self)
-                                {
-                                    *ptr = looser;
-                                }
-                            }
-                        }
-                    };
-                }
-            }
-        }
-    }
-
-    pub fn upper_round_index(&self, index: usize) -> usize {
-        let mut counter = 0;
-        let mut buffer = 0;
-        let mut start = self.initial_matches;
-        while index >= buffer + start {
-            counter += 1;
-            buffer += start;
-            start /= 2;
-        }
-
-        counter
-    }
-
-    pub fn upper_match_index(&self, index: usize) -> usize {
-        let mut buffer = 0;
-        let mut start = self.initial_matches;
-        while index >= buffer + start {
-            buffer += start;
-            start /= 2;
-        }
-
-        index - buffer
-    }
-
-    /// Returns the index of the round in with the match at `index` is located.
-    pub fn lower_round_index(&self, index: usize) -> usize {
-        let mut counter = 0;
-        let mut buffer = 0;
-        let mut num_matches_per_round = self.initial_matches / 2;
-
-        while index - self.lower_bracket_index >= buffer + num_matches_per_round {
-            counter += 1;
-            buffer += num_matches_per_round;
-
-            if counter % 2 == 0 {
-                num_matches_per_round /= 2;
-            }
-        }
-
-        counter
-    }
-
-    pub fn lower_match_index(&self, index: usize) -> usize {
-        let mut buffer = 0;
-        let mut num_matches_per_round = self.initial_matches / 2;
-        let mut is_second_round = false;
-
-        while index - self.lower_bracket_index >= buffer + num_matches_per_round {
-            buffer += num_matches_per_round;
-
-            if is_second_round {
-                num_matches_per_round /= 2;
-            }
-            is_second_round = !is_second_round;
-        }
-
-        index - self.lower_bracket_index - buffer
-    }
-
-    pub fn next_match_upper_mut(&mut self, index: usize) -> Option<&mut Match<T>> {
-        if index != self.matches.len() - 1 {
-            Some(self.get_mut(self.initial_matches + index / 2).unwrap())
-        } else {
-            None
-        }
-    }
-
-    /// Returns the index of the winner and loser match following the match `index`.
-    /// The first value in the tuple contains the winner index, the second value contains
-    /// the loser index. A `None` value indicates no next match.
-    pub fn next_matches_index(&self, index: usize) -> NextMatches {
-        match index {
-            // Final match:
-            // No followup matches for winner or loser.
-            i if i >= self.final_bracket_index => NextMatches {
-                winner_index: None,
-                winner_position: 0,
-                loser_index: None,
-                loser_position: 0,
-            },
-            // Lower bracket:
-            // The winner continues in the lower bracket. The loser has no followup match.
-            i if i >= self.lower_bracket_index => {
-                if i == self.final_bracket_index {
-                    let winner = self.final_bracket_index;
-
-                    return NextMatches {
-                        winner_index: Some(winner),
-                        winner_position: 1,
-                        loser_index: None,
-                        loser_position: 0,
-                    };
-                }
-
-                let mut round_index = 0;
-                let mut buffer = 0;
-                let mut num_matches = self.initial_matches / 2;
-                while index - self.lower_bracket_index >= buffer + num_matches {
-                    round_index += 1;
-                    buffer += num_matches;
-
-                    if round_index % 2 == 0 {
-                        num_matches /= 2;
-                    }
-                }
-
-                let winner = index - buffer - self.lower_bracket_index;
-
-                let (winner, position) = match round_index {
-                    i if i == self.final_bracket_index - 1 => (self.final_bracket_index, 1),
-                    i if i % 2 == 0 => (index + num_matches, 0),
-                    _ => (index + (num_matches - winner + winner / 2), (index - 1) % 2),
-                };
-
-                NextMatches {
-                    winner_index: Some(winner),
-                    winner_position: position,
-                    loser_index: None,
-                    loser_position: 0,
-                }
-            }
-            // Upper bracket:
-            // The winner moves into the next round in the upper bracket. The loser moves
-            // into the same round in the lower bracket.
-            _ => {
-                let (winner, loser);
-                let (winner_position, loser_position);
-
-                match index {
-                    // The final match in the upper bracket. Move the winner into the final
-                    // bracket. Move the loser into the final lower bracket match.
-                    i if i == self.final_bracket_index / 2 => {
-                        winner = self.final_bracket_index;
-                        loser = self.final_bracket_index - 1;
-
-                        winner_position = 0;
-                        loser_position = 1;
-                    }
-                    // The first round of matches. All matches in the lower bracket need to
-                    // be filled.
-                    i if i < self.initial_matches => {
-                        winner = self.initial_matches + index / 2;
-                        loser = self.lower_bracket_index + (i / 2);
-
-                        winner_position = index % 2;
-                        loser_position = index % 2;
-                    }
-                    _ => {
-                        winner = self.initial_matches + index / 2;
-
-                        // Find the index of the match in the second round of the lower
-                        // bracket with the same number of matches as in the current round.
-                        let mut buffer = self.initial_matches;
-                        let mut num_matches = self.initial_matches / 2;
-                        let mut lower_buffer = 0;
-                        while index - self.upper_match_index(index) >= buffer {
-                            buffer += num_matches;
-                            lower_buffer += num_matches * 2;
-                            num_matches /= 2;
-                        }
-
-                        loser =
-                            self.lower_bracket_index + lower_buffer + self.upper_match_index(index)
-                                - num_matches * 2;
-
-                        winner_position = index % 2;
-                        loser_position = 1;
-                    }
-                }
-
-                NextMatches {
-                    winner_index: Some(winner),
-                    winner_position,
-                    loser_index: Some(loser),
-                    loser_position,
-                }
-            }
-        }
-    }
-
-    pub fn upper_bracket_iter(&self) -> RoundsIter<'_, T> {
-        RoundsIter {
-            slice: &self.matches[0..self.lower_bracket_index],
-            index: 0,
-            next_round: self.initial_matches,
-        }
-    }
-
-    pub fn lower_bracket_iter(&self) -> LowerBracketIter<'_, T> {
-        LowerBracketIter {
-            start: self.lower_bracket_index,
-            slice: &self.matches,
-            index: 0,
-            num_matches: self.initial_matches / 2,
-            iter_count: 0,
-        }
-    }
-
-    pub fn final_bracket_iter(&self) -> FinalBracketIter<'_, T> {
-        FinalBracketIter {
-            start: self.final_bracket_index,
-            slice: &self.matches,
-            index: 0,
-        }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Match<T>> {
-        self.matches.iter()
     }
 }
 
@@ -1296,1218 +726,62 @@ impl<'a, T> Iterator for FinalBracketIndexIter<'a, T> {
     }
 }
 
-#[derive(Clone, Debug)]
+/// Information about the next match.
+///
+/// # Safety
+///
+/// The methods on `NextMatches` assume that the given indexes and positions are valid, as long as
+/// those values are not `None`.
+///
+/// Calling methods with an value that is out-of-bounds for the given matches is unidentified
+/// behavoir.
+#[derive(Clone, Debug, Default)]
 pub struct NextMatches {
-    winner_index: Option<usize>,
+    winner_index: SmallOption<usize>,
     winner_position: usize,
-    loser_index: Option<usize>,
+    loser_index: SmallOption<usize>,
     loser_position: usize,
 }
 
 impl NextMatches {
-    pub fn winner_index(&self) -> Option<usize> {
-        self.winner_index
+    pub fn new(winner: Option<(usize, usize)>, loser: Option<(usize, usize)>) -> Self {
+        let (winner_index, winner_position) = winner
+            .map(|(index, position)| (SmallOption::new_unchecked(index), position))
+            .unwrap_or_default();
+
+        let (loser_index, loser_position) = loser
+            .map(|(index, position)| (SmallOption::new_unchecked(index), position))
+            .unwrap_or_default();
+
+        Self {
+            winner_index,
+            winner_position,
+            loser_index,
+            loser_position,
+        }
     }
 
-    pub fn winner_position(&self) -> Option<usize> {
-        self.winner_index?;
-        Some(self.winner_position)
+    pub fn winner_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut EntrantSpot<T>> {
+        if self.winner_index.is_some() {
+            unsafe {
+                let r#match = matches.get_unchecked_mut(*self.winner_index);
+
+                Some(r#match.get_unchecked_mut(self.winner_position))
+            }
+        } else {
+            None
+        }
     }
 
-    pub fn loser_index(&self) -> Option<usize> {
-        self.loser_index
-    }
-
-    pub fn loser_position(&self) -> Option<usize> {
-        self.loser_index?;
-        Some(self.loser_position)
-    }
-
-    pub fn winner_mut<'a, T>(
-        &self,
-        tournament: &'a mut DoubleElimination<T>,
-    ) -> Option<&'a mut EntrantSpot<T>>
-    where
-        T: Entrant,
-    {
-        let index = self.winner_index?;
-
-        let m = tournament.get_mut(index)?;
-
-        Some(&mut m.entrants[self.winner_position])
-    }
-
-    pub fn loser_mut<'a, T>(
-        &self,
-        tournament: &'a mut DoubleElimination<T>,
-    ) -> Option<&'a mut EntrantSpot<T>>
-    where
-        T: Entrant,
-    {
-        let index = self.loser_index?;
-
-        let m = tournament.get_mut(index)?;
-
-        Some(&mut m.entrants[self.loser_position])
-    }
-}
-
-/// Calculates `lhs / rhs` rounding the result upwards to the next value.
-fn div_ceil(lhs: usize, rhs: usize) -> usize {
-    (lhs + rhs - 1) / rhs
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Implement Entrant for i32 for testing only.
-    impl Entrant for i32 {
-        fn reset(&mut self) {}
-
-        fn set_winner(&mut self, _winner: bool) {}
-    }
-
-    #[test]
-    fn test_div_ceil() {
-        assert_eq!(div_ceil(1, 1), 1);
-        assert_eq!(div_ceil(2, 1), 2);
-        assert_eq!(div_ceil(3, 2), 2);
-    }
-
-    #[test]
-    fn test_predict_amount_of_matches() {
-        let entrants = 8;
-        assert_eq!(predict_amount_of_matches(entrants), 7);
-
-        let entrants = 2;
-        assert_eq!(predict_amount_of_matches(entrants), 1);
-
-        let entrants = 7;
-        assert_eq!(predict_amount_of_matches(entrants), 7);
-    }
-
-    #[test]
-    fn test_double_elimination() {
-        let entrants = vec![0];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 0);
-        assert_eq!(tournament.final_bracket_index, 0);
-        assert_eq!(tournament.initial_matches, 1);
-
-        let entrants = vec![0, 1];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![Match::new([
-                EntrantSpot::Entrant(0),
-                EntrantSpot::Entrant(1)
-            ])]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 0);
-        assert_eq!(tournament.final_bracket_index, 0);
-        assert_eq!(tournament.initial_matches, 1);
-
-        let entrants = vec![0, 1, 2];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 3);
-        assert_eq!(tournament.final_bracket_index, 5);
-        assert_eq!(tournament.initial_matches, 2);
-
-        // Test with a pow(2, n) number of teams.
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 7);
-        assert_eq!(tournament.final_bracket_index, 13);
-
-        // Test with a pow(2, n) - 1 number of teams.
-        // The entrant not playing in the first round continues immediately.
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 7);
-        assert_eq!(tournament.final_bracket_index, 13);
-
-        // Test with a pow(2, n) + 1 number of teams.
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7, 8];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                // R1
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(8), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::Empty]),
-                // R2
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(8), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(5)]),
-                // R3
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                // R4
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                // L
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                // L2
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        assert_eq!(tournament.lower_bracket_index, 15);
-        assert_eq!(tournament.final_bracket_index, 29);
-    }
-
-    #[test]
-    fn test_double_elimination_resume() {
-        let matches = vec![Match::new([
-            EntrantSpot::Entrant(0),
-            EntrantSpot::Entrant(1),
-        ])];
-
-        let tournament = DoubleElimination::resume(matches.clone()).unwrap();
-
-        assert_eq!(tournament.matches, matches);
-        assert_eq!(tournament.initial_matches, 1);
-        assert_eq!(tournament.lower_bracket_index, 0);
-        assert_eq!(tournament.final_bracket_index, 0);
-
-        let matches = vec![
-            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-        ];
-
-        let tournament = DoubleElimination::resume(matches.clone()).unwrap();
-
-        assert_eq!(tournament.matches, matches);
-        assert_eq!(tournament.initial_matches, 2);
-        assert_eq!(tournament.lower_bracket_index, 3);
-        assert_eq!(tournament.final_bracket_index, 5);
-    }
-
-    #[test]
-    fn test_double_elimination_next_match_inex() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        //
-        // UPPER BRACKET
-        //
-
-        let next_matches = tournament.next_matches_index(0);
-        assert_eq!(next_matches.winner_index, Some(4));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, Some(7));
-        assert_eq!(next_matches.loser_position, 0);
-
-        let next_matches = tournament.next_matches_index(1);
-        assert_eq!(next_matches.winner_index, Some(4));
-        assert_eq!(next_matches.winner_position, 1);
-        assert_eq!(next_matches.loser_index, Some(7));
-        assert_eq!(next_matches.loser_position, 1);
-
-        let next_matches = tournament.next_matches_index(2);
-        assert_eq!(next_matches.winner_index, Some(5));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, Some(8));
-        assert_eq!(next_matches.loser_position, 0);
-
-        let next_matches = tournament.next_matches_index(3);
-        assert_eq!(next_matches.winner_index, Some(5));
-        assert_eq!(next_matches.winner_position, 1);
-        assert_eq!(next_matches.loser_index, Some(8));
-        assert_eq!(next_matches.loser_position, 1);
-
-        let next_matches = tournament.next_matches_index(4);
-        assert_eq!(next_matches.winner_index, Some(6));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, Some(9));
-        assert_eq!(next_matches.loser_position, 1);
-
-        let next_matches = tournament.next_matches_index(5);
-        assert_eq!(next_matches.winner_index, Some(6));
-        assert_eq!(next_matches.winner_position, 1);
-        assert_eq!(next_matches.loser_index, Some(10));
-        assert_eq!(next_matches.loser_position, 1);
-
-        let next_matches = tournament.next_matches_index(6);
-        assert_eq!(next_matches.winner_index, Some(13));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, Some(12));
-        assert_eq!(next_matches.loser_position, 1);
-
-        //
-        // LOWER BRACKET
-        //
-
-        let next_matches = tournament.next_matches_index(7);
-        assert_eq!(next_matches.winner_index, Some(9));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, None);
-
-        let next_matches = tournament.next_matches_index(8);
-        assert_eq!(next_matches.winner_index, Some(10));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, None);
-
-        let next_matches = tournament.next_matches_index(9);
-        assert_eq!(next_matches.winner_index, Some(11));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, None);
-
-        let next_matches = tournament.next_matches_index(10);
-        assert_eq!(next_matches.winner_index, Some(11));
-        assert_eq!(next_matches.winner_position, 1);
-        assert_eq!(next_matches.loser_index, None);
-
-        let next_matches = tournament.next_matches_index(11);
-        assert_eq!(next_matches.winner_index, Some(12));
-        assert_eq!(next_matches.winner_position, 0);
-        assert_eq!(next_matches.loser_index, None);
-
-        let next_matches = tournament.next_matches_index(12);
-        assert_eq!(next_matches.winner_index, Some(13));
-        assert_eq!(next_matches.winner_position, 1);
-        assert_eq!(next_matches.loser_index, None);
-
-        //
-        // FINAL BRACKET
-        //
-
-        let next_matches = tournament.next_matches_index(13);
-        assert_eq!(next_matches.winner_index, None);
-        assert_eq!(next_matches.loser_index, None);
-    }
-
-    #[test]
-    fn test_double_elimination_update_match() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let mut tournament = DoubleElimination::new(entrants);
-
-        tournament.update_match(0, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(1, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[1].unwrap(),
-                looser: m.entrants[0].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(2, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(3, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(7, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(8, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // Last match has no followup matches, and no changes are made.
-        tournament.update_match(13, |_| {
-            Some(MatchResult::Entrants {
-                winner: 8,
-                looser: 9,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(5), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // Test with a pow(2, n) - 1 number of entrants.
-        let entrants = vec![0, 1, 2, 3, 4];
-        let mut tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(1, |_| {
-            Some(MatchResult::Entrants {
-                winner: 2,
-                looser: 3,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(4, |_| {
-            Some(MatchResult::Entrants {
-                winner: 0,
-                looser: 2,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(5, |_| {
-            Some(MatchResult::Entrants {
-                winner: 4,
-                looser: 1,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        tournament.update_match(6, |_| {
-            Some(MatchResult::Entrants {
-                winner: 0,
-                looser: 4,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD])
-            ]
-        );
-
-        tournament.update_match(9, |_| {
-            Some(MatchResult::Entrants {
-                winner: 3,
-                looser: 2,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD])
-            ]
-        );
-
-        tournament.update_match(11, |_| {
-            Some(MatchResult::Entrants {
-                winner: 3,
-                looser: 1,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD])
-            ]
-        );
-
-        tournament.update_match(12, |_| {
-            Some(MatchResult::Entrants {
-                winner: 3,
-                looser: 4,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)])
-            ]
-        );
-
-        tournament.update_match(13, |_| {
-            Some(MatchResult::Entrants {
-                winner: 0,
-                looser: 3,
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(1), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(2)]),
-                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(3), EntrantSpot::Entrant(4)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)])
-            ]
-        );
-    }
-
-    #[test]
-    fn test_double_elimination_lower_round_index() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(tournament.lower_round_index(7), 0);
-        assert_eq!(tournament.lower_round_index(8), 0);
-        assert_eq!(tournament.lower_round_index(9), 1);
-        assert_eq!(tournament.lower_round_index(10), 1);
-        assert_eq!(tournament.lower_round_index(11), 2);
-        assert_eq!(tournament.lower_round_index(12), 3);
-    }
-
-    #[test]
-    fn test_double_elimination_lower_match_index() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(tournament.lower_match_index(7), 0);
-        assert_eq!(tournament.lower_match_index(8), 1);
-        assert_eq!(tournament.lower_match_index(9), 0);
-        assert_eq!(tournament.lower_match_index(10), 1);
-        assert_eq!(tournament.lower_match_index(11), 0);
-        assert_eq!(tournament.lower_match_index(12), 0);
-
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-        let tournament = DoubleElimination::new(entrants);
-
-        assert_eq!(tournament.lower_match_index(15), 0);
-        assert_eq!(tournament.lower_match_index(16), 1);
-        assert_eq!(tournament.lower_match_index(17), 2);
-        assert_eq!(tournament.lower_match_index(18), 3);
-        assert_eq!(tournament.lower_match_index(19), 0);
-        assert_eq!(tournament.lower_match_index(20), 1);
-        assert_eq!(tournament.lower_match_index(21), 2);
-        assert_eq!(tournament.lower_match_index(22), 3);
-        assert_eq!(tournament.lower_match_index(23), 0);
-        assert_eq!(tournament.lower_match_index(24), 1);
-        assert_eq!(tournament.lower_match_index(25), 0);
-        assert_eq!(tournament.lower_match_index(26), 1);
-        assert_eq!(tournament.lower_match_index(27), 0);
-        assert_eq!(tournament.lower_match_index(28), 0);
-    }
-
-    #[test]
-    fn test_double_elimination_upper_iter() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        let mut iter = tournament.upper_bracket_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
-        );
-        assert_eq!(iter.next(), None);
-
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-        let tournament = DoubleElimination::new(entrants);
-
-        let mut iter = tournament.upper_bracket_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(8), EntrantSpot::Entrant(9)]),
-                Match::new([EntrantSpot::Entrant(10), EntrantSpot::Entrant(11)]),
-                Match::new([EntrantSpot::Entrant(12), EntrantSpot::Entrant(13)]),
-                Match::new([EntrantSpot::Entrant(14), EntrantSpot::Entrant(15)]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),]
-        );
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_double_elimination_lower_iter() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = DoubleElimination::new(entrants);
-
-        let mut iter = tournament.lower_bracket_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD])
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD])
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
-        );
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_single_elimination_update_match() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let mut tournament = SingleElimination::new(entrants);
-
-        tournament.update_match(0, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ],
-        );
-
-        tournament.update_match(1, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[1].unwrap(),
-                looser: m.entrants[0].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // No change
-        tournament.update_match(1, |_| None);
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // Undo second update_match operation.
-        tournament.update_match(1, |_| Some(MatchResult::None));
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // 7 is out-of-bounds and doesn't update anything.
-        tournament.update_match(7, |m| {
-            Some(MatchResult::Entrants {
-                winner: m.entrants[0].unwrap(),
-                looser: m.entrants[1].unwrap(),
-            })
-        });
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_single_elimination_rounds_iter() {
-        let entrants = vec![0];
-        let tournament = SingleElimination::new(entrants);
-
-        let mut iter = tournament.rounds_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
-        );
-        assert_eq!(iter.next(), None);
-
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = SingleElimination::new(entrants);
-
-        let mut iter = tournament.rounds_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD])
-            ]
-        );
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
-        );
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_single_elimination() {
-        let entrants = vec![0];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![Match::new([EntrantSpot::Entrant(0), EntrantSpot::Empty])]
-        );
-
-        assert_eq!(tournament.initial_matches, 1);
-
-        let entrants = vec![0, 1];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![Match::new([
-                EntrantSpot::Entrant(0),
-                EntrantSpot::Entrant(1)
-            ])]
-        );
-
-        assert_eq!(tournament.initial_matches, 1);
-
-        let entrants = vec![0, 1, 2];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(2)]),
-            ]
-        );
-
-        assert_eq!(tournament.initial_matches, 2);
-
-        // Test with a pow(2, n) number of teams.
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-
-        // Test with a pow(2, n) - 1 number of teams.
-        // The entrant not playing in the first round continues immediately.
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(
-            tournament.matches,
-            vec![
-                Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-                Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-                Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-                Match::new([EntrantSpot::Entrant(6), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(6)]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_single_elimination_resume() {
-        let matches = vec![Match::new([
-            EntrantSpot::Entrant(0),
-            EntrantSpot::Entrant(1),
-        ])];
-
-        let tournament = SingleElimination::resume(matches.clone()).unwrap();
-
-        assert_eq!(tournament.matches, matches);
-        assert_eq!(tournament.initial_matches, 1);
-
-        let matches = vec![
-            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-        ];
-
-        let tournament = SingleElimination::resume(matches.clone()).unwrap();
-
-        assert_eq!(tournament.matches, matches);
-        assert_eq!(tournament.initial_matches, 2);
-
-        let matches = vec![
-            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-            Match::new([EntrantSpot::Entrant(4), EntrantSpot::Entrant(5)]),
-            Match::new([EntrantSpot::Entrant(6), EntrantSpot::Entrant(7)]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
-        ];
-
-        let tournament = SingleElimination::resume(matches.clone()).unwrap();
-
-        assert_eq!(tournament.matches, matches);
-        assert_eq!(tournament.initial_matches, 4);
-
-        let matches = vec![
-            Match::new([EntrantSpot::Entrant(0), EntrantSpot::Entrant(1)]),
-            Match::new([EntrantSpot::Entrant(2), EntrantSpot::Entrant(3)]),
-        ];
-
-        SingleElimination::resume(matches).unwrap_err();
-    }
-
-    #[test]
-    pub fn test_single_elimination_round_index() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(tournament.round_index(0), 0);
-        assert_eq!(tournament.round_index(1), 0);
-        assert_eq!(tournament.round_index(2), 0);
-        assert_eq!(tournament.round_index(3), 0);
-        assert_eq!(tournament.round_index(4), 1);
-        assert_eq!(tournament.round_index(5), 1);
-        assert_eq!(tournament.round_index(6), 2);
-    }
-
-    #[test]
-    pub fn test_single_elimination_match_index() {
-        let entrants = vec![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = SingleElimination::new(entrants);
-
-        assert_eq!(tournament.match_index(0), 0);
-        assert_eq!(tournament.match_index(1), 1);
-        assert_eq!(tournament.match_index(2), 2);
-        assert_eq!(tournament.match_index(3), 3);
-        assert_eq!(tournament.match_index(4), 0);
-        assert_eq!(tournament.match_index(5), 1);
-        assert_eq!(tournament.match_index(6), 0);
+    pub fn loser_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut EntrantSpot<T>> {
+        if self.loser_index.is_some() {
+            unsafe {
+                let r#match = matches.get_unchecked_mut(*self.loser_index);
+
+                Some(r#match.get_unchecked_mut(self.loser_position))
+            }
+        } else {
+            None
+        }
     }
 }
