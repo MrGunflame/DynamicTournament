@@ -45,8 +45,8 @@ body {
 
 .match {
   display: flex;
-  justify-content: center;
   align-items: center;
+  width: 100%;
 }
 
 .match>span {
@@ -58,6 +58,7 @@ body {
   margin: 10px;
   display: flex;
   box-shadow: 2px 2px 2px black;
+  flex-grow: 1;
 }
 
 .bracket-round {

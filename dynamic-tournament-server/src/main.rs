@@ -210,7 +210,7 @@ impl State {
     }
 
     pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
-        let res = sqlx::query("INSERT INTO tournaments (name, bracket_type) VALUES (?, ?, ?)")
+        let res = sqlx::query("INSERT INTO tournaments (name, bracket_type) VALUES (?, ?)")
             .bind(tournament.name)
             .bind(u8::from(tournament.bracket_type))
             .execute(&self.store)
