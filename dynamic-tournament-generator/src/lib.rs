@@ -59,6 +59,12 @@ where
     }
 }
 
+impl<T> From<Vec<T>> for Entrants<T> {
+    fn from(entrants: Vec<T>) -> Self {
+        Self { entrants }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -128,8 +134,10 @@ pub trait EntrantData: Default {
 
 /// An entrant in a match.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Entrant<D> {
     pub index: usize,
+    #[cfg_attr(feature = "serde-flatten", serde(flatten))]
     pub data: D,
 }
 
@@ -243,6 +251,7 @@ pub enum Error {
 pub struct MatchResult<D> {
     pub(crate) winner: Option<(EntrantSpot<usize>, D)>,
     pub(crate) loser: Option<(EntrantSpot<usize>, D)>,
+    pub(crate) reset: bool,
 }
 
 impl<D> MatchResult<D> {
@@ -250,7 +259,20 @@ impl<D> MatchResult<D> {
         Self {
             winner: None,
             loser: None,
+            reset: false,
         }
+    }
+
+    /// Resets the match the default state of `D`.
+    pub fn reset_default(&mut self) -> &mut Self
+    where
+        D: Default,
+    {
+        self.winner = Some((EntrantSpot::TBD, D::default()));
+        self.loser = Some((EntrantSpot::TBD, D::default()));
+        self.reset = true;
+
+        self
     }
 
     pub fn winner<'a, T>(
@@ -812,7 +834,7 @@ impl<'a, T> Iterator for FinalBracketIndexIter<'a, T> {
 ///
 /// Calling methods with an value that is out-of-bounds for the given matches is unidentified
 /// behavoir.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct NextMatches {
     winner_index: SmallOption<usize>,
     pub(crate) winner_position: usize,
@@ -875,6 +897,17 @@ impl NextMatches {
             }
         } else {
             None
+        }
+    }
+}
+
+impl Default for NextMatches {
+    fn default() -> Self {
+        Self {
+            winner_index: SmallOption::none(),
+            winner_position: 0,
+            loser_index: SmallOption::none(),
+            loser_position: 0,
         }
     }
 }

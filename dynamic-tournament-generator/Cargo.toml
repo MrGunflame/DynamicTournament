@@ -5,7 +5,9 @@ edition = "2021"
 
 [features]
 serde = ["dep:serde"]
+serde-flatten = ["serde"]
 
 [dependencies]
+log = "0.4.16"
 thiserror = "1.0.30"
 serde = { version = "1.0.136", features = ["derive"], optional = true }

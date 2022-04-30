@@ -20,6 +20,11 @@ where
     {
         let entrants: Entrants<T> = entrants.collect();
 
+        log::debug!(
+            "Creating new SingleElimination bracket with {} entrants",
+            entrants.len()
+        );
+
         let initial_matches = match entrants.len() {
             1 | 2 => 1,
             n => n.next_power_of_two() / 2,
@@ -80,6 +85,11 @@ where
             index += 1;
         }
 
+        log::debug!(
+            "Created new SingleElimination bracket with {} matches",
+            matches.len()
+        );
+
         Self { entrants, matches }
     }
 
@@ -89,14 +99,7 @@ where
     ///
     /// Returns an error if `matches` has an invalid number of matches for `entrants` or an
     /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
-    pub fn resume<E, M>(entrants: E, matches: M) -> Result<Self>
-    where
-        E: Into<Entrants<T>>,
-        M: Into<Matches<Entrant<D>>>,
-    {
-        let entrants = entrants.into();
-        let matches = matches.into();
-
+    pub fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
         if found == expected {
@@ -114,20 +117,30 @@ where
     /// `entrants` will create an [`SingleElimination`] object with false assumptions. Usage
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
-    pub unsafe fn resume_unchecked<E, M>(entrants: E, matches: M) -> Self
-    where
-        E: Into<Entrants<T>>,
-        M: Into<Matches<Entrant<D>>>,
-    {
+    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+        log::debug!(
+            "Resuming SingleElimination bracket with {} entrants and {} matches",
+            entrants.len(),
+            matches.len()
+        );
+
         Self {
             entrants: entrants.into(),
             matches: matches.into(),
         }
     }
 
+    pub fn entrants(&self) -> &Entrants<T> {
+        &self.entrants
+    }
+
+    pub fn matches(&self) -> &Matches<Entrant<D>> {
+        &self.matches
+    }
+
     /// Returns the [`NextMatches`] of the match with the given `index`.
     pub fn next_matches(&self, index: usize) -> NextMatches {
-        let winner_index = self.entrants.len() / 2 + index / 2;
+        let winner_index = self.entrants.len().next_power_of_two() / 2 + index / 2;
 
         if self.matches.len() > winner_index {
             NextMatches::new(Some((winner_index, index % 2)), None)
@@ -159,9 +172,17 @@ where
 
         let next_matches = self.next_matches(index);
 
+        log::debug!(
+            "Got match results: winner: {:?}, loser: {:?}",
+            res.winner.as_ref().map(|(e, _)| e),
+            res.loser.as_ref().map(|(e, _)| e),
+        );
+
         if let Some((entrant, data)) = res.winner {
             // Only update the next match if it actually exists.
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
+                log::debug!("Next winner match is {}", *next_matches.winner_index);
+
                 *spot = match entrant {
                     EntrantSpot::Entrant(index) => {
                         EntrantSpot::Entrant(Entrant::new_with_data(index, data))
@@ -169,6 +190,16 @@ where
                     EntrantSpot::Empty => EntrantSpot::Empty,
                     EntrantSpot::TBD => EntrantSpot::TBD,
                 };
+            }
+        }
+
+        if res.reset {
+            let r#match = self.matches.get_mut(index).unwrap();
+
+            for entrant in r#match.entrants.iter_mut() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    entrant.data = D::default();
+                }
             }
         }
     }
@@ -212,6 +243,14 @@ impl<'a, T> RoundsIter<'a, T> {
     fn new(slice: &'a [Match<T>], num_matches: usize) -> Self {
         Self { slice, num_matches }
     }
+
+    pub fn with_index(self) -> RoundsIterIndex<'a, T> {
+        RoundsIterIndex {
+            slice: self.slice,
+            num_matches: self.num_matches,
+            index: 0,
+        }
+    }
 }
 
 impl<'a, T> Iterator for RoundsIter<'a, T> {
@@ -228,6 +267,31 @@ impl<'a, T> Iterator for RoundsIter<'a, T> {
             self.num_matches /= 2;
 
             Some(slice)
+        }
+    }
+}
+
+pub struct RoundsIterIndex<'a, T> {
+    slice: &'a [Match<T>],
+    num_matches: usize,
+    index: usize,
+}
+
+impl<'a, T> Iterator for RoundsIterIndex<'a, T> {
+    type Item = (usize, &'a [Match<T>]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.slice.is_empty() {
+            None
+        } else {
+            let (slice, rem) = self.slice.split_at(self.num_matches);
+            let index = self.index;
+
+            self.slice = rem;
+            self.index += slice.len();
+            self.num_matches /= 2;
+
+            Some((index, slice))
         }
     }
 }

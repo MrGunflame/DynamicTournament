@@ -27,6 +27,10 @@ where
         }
     }
 
+    pub fn none() -> Self {
+        Self::new_unchecked(T::NONE)
+    }
+
     /// Creates a new `SmallOption` with the given `value` without checking whether it collides
     /// with the value of `T::NONE`.
     pub fn new_unchecked(value: T) -> Self {
