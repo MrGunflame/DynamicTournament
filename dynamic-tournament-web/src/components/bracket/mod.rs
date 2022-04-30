@@ -1,10 +1,10 @@
-// pub mod double_elimination;
+pub mod double_elimination;
 pub mod single_elimination;
 
 mod r#match;
 mod team;
 
-// use double_elimination::DoubleEliminationBracket;
+use double_elimination::DoubleEliminationBracket;
 use r#match::{Action, BracketMatch};
 use single_elimination::SingleEliminationBracket;
 use team::BracketTeam;
@@ -40,10 +40,9 @@ impl Component for Bracket {
             Self::SingleElimination => html! {
                 <SingleEliminationBracket tournament={tournament} bracket={bracket} />
             },
-            // Self::DoubleElimination => html! {
-            //     <DoubleEliminationBracket tournament={tournament} bracket={bracket} />
-            // },
-            Self::DoubleElimination => html! {},
+            Self::DoubleElimination => html! {
+                <DoubleEliminationBracket tournament={tournament} bracket={bracket} />
+            },
         }
     }
 }

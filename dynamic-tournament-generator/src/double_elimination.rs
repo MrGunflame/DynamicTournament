@@ -23,6 +23,11 @@ where
     {
         let entrants: Entrants<T> = entrants.collect();
 
+        log::debug!(
+            "Creating a new DoubleElimination bracket with {} entrants",
+            entrants.len()
+        );
+
         let initial_matches = match entrants.len() {
             1 | 2 => 1,
             n => n.next_power_of_two() / 2,
@@ -91,6 +96,11 @@ where
             index += 1;
         }
 
+        log::debug!(
+            "Created a new DoubleElimination bracket with {} matches",
+            matches.len()
+        );
+
         Self {
             entrants,
             matches,
@@ -98,10 +108,20 @@ where
         }
     }
 
+    pub fn entrants(&self) -> &Entrants<T> {
+        &self.entrants
+    }
+
+    pub fn matches(&self) -> &Matches<Entrant<D>> {
+        &self.matches
+    }
+
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
     {
+        log::debug!("Updating match {}", index);
+
         let mut match_ = match self.matches.get_mut(index) {
             Some(match_) => match_.to_ref_mut(&self.entrants),
             None => return,
@@ -113,18 +133,48 @@ where
 
         let next_matches = self.next_matches(index);
 
+        log::debug!(
+            "Got match results: winner: {:?}, loser: {:?}",
+            res.winner.as_ref().map(|(e, _)| e),
+            res.loser.as_ref().map(|(e, _)| e),
+        );
+
         if let Some((entrant, data)) = res.winner {
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
+                log::debug!("Next winner match is {}", *next_matches.winner_index);
+
                 *spot = entrant.map(|index| Entrant::new_with_data(index, data));
             }
         }
 
         if let Some((entrant, data)) = res.loser {
             if let Some(m) = next_matches.loser_match_mut(&mut self.matches) {
-                let entrant = entrant.map(|index| Entrant::new_with_data(index, data));
+                log::debug!("Next loser match is {}", *next_matches.loser_index);
+
+                let mut index = 0;
+                let entrant = entrant.map(|i| {
+                    index = i;
+                    Entrant::new_with_data(index, data)
+                });
 
                 unsafe {
-                    *m.get_unchecked_mut(next_matches.loser_position % 2) = entrant;
+                    *m.get_unchecked_mut(next_matches.loser_position) = entrant;
+                }
+
+                if m.is_placeholder() {
+                    unsafe {
+                        if let EntrantSpot::Entrant(entrant) =
+                            m.get_unchecked_mut(next_matches.loser_position)
+                        {
+                            entrant.data.set_winner(true);
+                        }
+                    }
+
+                    let next_matches = self.next_matches(*next_matches.loser_index);
+
+                    if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
+                        *spot = EntrantSpot::Entrant(Entrant::new(index));
+                    }
                 }
             }
         }
@@ -173,7 +223,8 @@ where
                 }
                 // The first round of matches. All matches in the lower bracket need to be filled.
                 i if i < initial_matches => {
-                    let winner_index = self.entrants.len().next_power_of_two() + i / 2;
+                    log::debug!("ok");
+                    let winner_index = initial_matches + i / 2;
                     let loser_index = self.lower_bracket_index + (i / 2);
 
                     NextMatches::new(
@@ -242,6 +293,24 @@ where
             slice: &self.matches[self.final_bracket_index()..],
             starting_index: self.final_bracket_index(),
         }
+    }
+}
+
+impl<T, D> AsRef<Entrants<T>> for DoubleElimination<T, D>
+where
+    D: EntrantData,
+{
+    fn as_ref(&self) -> &Entrants<T> {
+        self.entrants()
+    }
+}
+
+impl<T, D> AsRef<Matches<Entrant<D>>> for DoubleElimination<T, D>
+where
+    D: EntrantData,
+{
+    fn as_ref(&self) -> &Matches<Entrant<D>> {
+        self.matches()
     }
 }
 
@@ -535,6 +604,207 @@ mod tests {
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_double_elimination_update_match() {
+        let entrants = entrants![0, 1, 2, 3];
+        let mut tournament = DoubleElimination::<i32, u32>::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(0, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Entrant::new(2)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(1, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(1))
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(2, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(1))
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Entrant::new(3))]),
+                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(3, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(1))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(4, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(1))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+            ]
+        );
+
+        tournament.update_match(5, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(1)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(1))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(2)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Entrant::new(0)),
+                    EntrantSpot::Entrant(Entrant::new(3))
+                ]),
             ]
         );
     }

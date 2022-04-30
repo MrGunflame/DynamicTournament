@@ -1,3 +1,4 @@
+use std::ops::DerefMut;
 use std::rc::Rc;
 
 use yew::prelude::*;
@@ -9,15 +10,13 @@ use crate::components::update_bracket::BracketUpdate;
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
 
-use super::{find_match_winner, Action, BracketMatch};
+use super::{Action, BracketMatch};
 
-use dynamic_tournament_generator::{
-    DoubleElimination, EntrantSpot, EntrantWithScore, Match, MatchResult,
-};
+use dynamic_tournament_generator::{DoubleElimination, Entrant, EntrantScore, EntrantSpot, Match};
 
 /// A bracket for a [`DoubleElimination`] tournament.
 pub struct DoubleEliminationBracket {
-    state: DoubleElimination<EntrantWithScore<Team, u64>>,
+    state: DoubleElimination<Team, EntrantScore<u64>>,
     popup: Option<PopupState>,
 }
 
@@ -26,20 +25,11 @@ impl Component for DoubleEliminationBracket {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let state = match &ctx.props().bracket {
-            Some(bracket) => DoubleElimination::resume(bracket.0.clone()).unwrap(),
-            _ => {
-                let teams = ctx
-                    .props()
-                    .tournament
-                    .teams
-                    .iter()
-                    .cloned()
-                    .map(EntrantWithScore::new)
-                    .collect();
+        let teams = ctx.props().tournament.teams.clone();
 
-                DoubleElimination::new(teams)
-            }
+        let state = match &ctx.props().bracket {
+            // Some(bracket) => DoubleElimination::resume(bracket.0.clone()).unwrap(),
+            _ => DoubleElimination::new(teams.into_iter()),
         };
 
         Self { state, popup: None }
@@ -64,37 +54,42 @@ impl Component for DoubleEliminationBracket {
 
                 true
             }
-            Message::UpdateScore { index, scores } => {
-                self.state.update_match(index, |m| {
-                    m.entrants[0].unwrap_ref_mut().score = scores[0];
-                    m.entrants[1].unwrap_ref_mut().score = scores[1];
+            Message::UpdateScoreUI => {
+                self.popup = None;
 
-                    match find_match_winner(ctx.props().tournament.best_of, m) {
-                        Some(index) => {
-                            let winner = m.entrants[index].unwrap_ref_mut();
-                            winner.winner = true;
+                true
+            }
+            Message::UpdateMatch { index, nodes } => {
+                self.state.update_match(index, |m, res| {
+                    let mut winner = None;
 
-                            let winner = m.entrants[index].unwrap_ref();
-                            let looser = m.entrants[match index {
-                                0 => 1,
-                                1 => 0,
-                                _ => unreachable!(),
-                            }]
-                            .unwrap_ref();
+                    for (i, (entrant, node)) in
+                        m.entrants.iter_mut().zip(nodes.into_iter()).enumerate()
+                    {
+                        if let EntrantSpot::Entrant(entrant) = entrant {
+                            *entrant.deref_mut() = node;
 
-                            Some(MatchResult::Entrants {
-                                winner: EntrantWithScore::new(winner.entrant.clone()),
-                                looser: EntrantWithScore::new(looser.entrant.clone()),
-                            })
+                            if node.winner {
+                                winner = Some(i);
+                            }
                         }
-                        _ => None,
+                    }
+
+                    if let Some(index) = winner {
+                        res.winner_default(&m[index]);
+                        res.loser_default(
+                            &m[match index {
+                                0 => 1,
+                                _ => 0,
+                            }],
+                        );
                     }
                 });
 
                 let client = ClientProvider::take(ctx);
 
                 let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.iter().cloned().collect());
+                let bracket = Bracket(self.state.matches().clone());
                 ctx.link().send_future_batch(async move {
                     let client = client.tournaments();
                     let client = client.bracket(id);
@@ -110,36 +105,15 @@ impl Component for DoubleEliminationBracket {
 
                 false
             }
-            Message::UpdateScoreUI => {
-                self.popup = None;
-
-                true
-            }
             Message::ResetMatch(index) => {
-                self.state.update_match(index, |m| {
-                    for entrant in &mut m.entrants {
-                        if let EntrantSpot::Entrant(entrant) = entrant {
-                            entrant.score = 0;
-                            entrant.winner = false;
-                        }
-                    }
-
-                    None
+                self.state.update_match(index, |_, res| {
+                    res.reset_default();
                 });
-
-                let next_matches = self.state.next_matches_index(index);
-                if let Some(winner) = next_matches.winner_mut(&mut self.state) {
-                    *winner = EntrantSpot::TBD;
-                }
-
-                if let Some(loser) = next_matches.loser_mut(&mut self.state) {
-                    *loser = EntrantSpot::TBD;
-                }
 
                 let client = ClientProvider::take(ctx);
 
                 let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.iter().cloned().collect());
+                let bracket = Bracket(self.state.matches().clone());
                 ctx.link().send_future_batch(async move {
                     let client = client.tournaments();
                     let client = client.bracket(id);
@@ -164,28 +138,22 @@ impl Component for DoubleEliminationBracket {
                 // on_close handler for the popup.
                 let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
-                let m = self.state.get(index).unwrap();
+                let m = self.state.matches().get(index).unwrap();
 
-                let teams = m.entrants.clone();
+                let teams = m
+                    .entrants
+                    .clone()
+                    .map(|e| e.map(|e| e.entrant(&self.state).clone()));
 
-                let scores = [
-                    match m.entrants[0] {
-                        EntrantSpot::Entrant(ref e) => e.score,
-                        _ => 0,
-                    },
-                    match m.entrants[1] {
-                        EntrantSpot::Entrant(ref e) => e.score,
-                        _ => 0,
-                    },
-                ];
+                let nodes = m.entrants.clone().map(|e| e.unwrap().data);
 
                 let on_submit = ctx
                     .link()
-                    .callback(move |scores| Message::UpdateScore { index, scores });
+                    .callback(move |nodes| Message::UpdateMatch { index, nodes });
 
                 html! {
                     <Popup on_close={on_close}>
-                        <BracketUpdate {teams} scores={scores} on_submit={on_submit} />
+                        <BracketUpdate {teams} {nodes} on_submit={on_submit} />
                     </Popup>
                 }
             }
@@ -205,21 +173,21 @@ impl Component for DoubleEliminationBracket {
             .state
             .upper_bracket_iter()
             .with_index()
-            .map(|(round, starting_index)| render_round(ctx, round, starting_index))
+            .map(|(starting_index, round)| render_round(&self.state, ctx, round, starting_index))
             .collect();
 
         let lower: Html = self
             .state
             .lower_bracket_iter()
             .with_index()
-            .map(|(round, starting_index)| render_round(ctx, round, starting_index))
+            .map(|(starting_index, round)| render_round(&self.state, ctx, round, starting_index))
             .collect();
 
         let finals: Html = self
             .state
             .final_bracket_iter()
             .with_index()
-            .map(|(m, index)| render_match(ctx, m, index))
+            .map(|(index, m)| render_round(&self.state, ctx, m, index))
             .collect();
 
         html! {
@@ -273,15 +241,16 @@ impl PartialEq for Props {
 }
 
 fn render_round(
+    state: &DoubleElimination<Team, EntrantScore<u64>>,
     ctx: &Context<DoubleEliminationBracket>,
-    round: &[Match<EntrantWithScore<Team, u64>>],
+    round: &[Match<Entrant<EntrantScore<u64>>>],
     starting_index: usize,
 ) -> Html {
     let round: Html = round
         .iter()
         .enumerate()
         .map(|(index, m)| {
-            html! {render_match(ctx, m, starting_index + index)}
+            html! {render_match(state, ctx, m, starting_index + index, index)}
         })
         .collect();
 
@@ -293,25 +262,40 @@ fn render_round(
 }
 
 fn render_match(
+    state: &DoubleElimination<Team, EntrantScore<u64>>,
     ctx: &Context<DoubleEliminationBracket>,
-    m: &Match<EntrantWithScore<Team, u64>>,
+    m: &Match<Entrant<EntrantScore<u64>>>,
     index: usize,
+    match_index: usize,
 ) -> Html {
     let on_action = ctx
         .link()
         .callback(move |action| Message::Action { index, action });
 
+    let entrants = m
+        .entrants
+        .clone()
+        .map(|e| e.map(|e| e.entrant(state).clone()));
+
+    let nodes = m.entrants.clone().map(|e| e.map(|e| e.data));
+
     html! {
-        <BracketMatch entrants={m.entrants.clone()} on_action={on_action} />
+        <BracketMatch {entrants} {nodes} on_action={on_action} number={match_index + 1} />
     }
 }
 
 pub enum Message {
-    Action { index: usize, action: Action },
+    Action {
+        index: usize,
+        action: Action,
+    },
     ClosePopup,
-    UpdateScore { index: usize, scores: [u64; 2] },
     UpdateScoreUI,
     ResetMatch(usize),
+    UpdateMatch {
+        index: usize,
+        nodes: [EntrantScore<u64>; 2],
+    },
 }
 
 /// The popup can either be the update-scores dialog or the reset match confirmation.

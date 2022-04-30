@@ -147,8 +147,8 @@ impl Component for BracketUpdate {
                     </tr>
                     { for teams.into_iter() }
                 </table>
-                <div>
-                    <h3>{ "Declare a winner (optional)"}</h3>
+                <div class="winner-input-box">
+                    <h3 class="h-center">{ "Declare a winner (optional)"}</h3>
                     <div class="flex-center winner-input-wrapper">
                         { for winner_input.into_iter() }
                     </div>

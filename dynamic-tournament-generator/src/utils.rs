@@ -51,7 +51,7 @@ where
     T: SmallOptionValue + PartialEq + Default,
 {
     fn default() -> Self {
-        Self::new_unchecked(T::default())
+        Self::new_unchecked(T::NONE)
     }
 }
 
