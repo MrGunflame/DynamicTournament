@@ -1,15 +1,16 @@
 //! Bracket Generator
+mod double_elimination;
 mod single_elimination;
 mod utils;
 
+pub use double_elimination::DoubleElimination;
 pub use single_elimination::SingleElimination;
 use utils::SmallOption;
 
 use thiserror::Error;
 
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
-use std::ops::{Index, IndexMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::result;
 
 #[cfg(feature = "serde")]
@@ -146,17 +147,25 @@ impl<D> Entrant<D> {
     pub fn new_with_data(index: usize, data: D) -> Self {
         Self { index, data }
     }
+
+    /// Returns the entrant `T` associated with the current node.
+    pub fn entrant<'a, T, U>(&self, entrants: &'a U) -> &'a T
+    where
+        U: AsRef<Entrants<T>>,
+    {
+        unsafe { entrants.as_ref().get_unchecked(self.index) }
+    }
 }
 
 #[derive(Debug)]
 pub struct EntrantRef<'a, T, D> {
     index: usize,
     entrant: &'a T,
-    data: &'a mut D,
+    data: &'a D,
 }
 
 impl<'a, T, D> EntrantRef<'a, T, D> {
-    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a mut D) -> Self {
+    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a D) -> Self {
         Self {
             index,
             entrant,
@@ -179,7 +188,38 @@ impl<'a, T, D> Deref for EntrantRef<'a, T, D> {
     }
 }
 
-impl<'a, T, D> DerefMut for EntrantRef<'a, T, D> {
+#[derive(Debug)]
+pub struct EntrantRefMut<'a, T, D> {
+    index: usize,
+    entrant: &'a T,
+    data: &'a mut D,
+}
+
+impl<'a, T, D> EntrantRefMut<'a, T, D> {
+    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a mut D) -> Self {
+        Self {
+            index,
+            entrant,
+            data,
+        }
+    }
+}
+
+impl<'a, T, D> AsRef<T> for EntrantRefMut<'a, T, D> {
+    fn as_ref(&self) -> &T {
+        &self.entrant
+    }
+}
+
+impl<'a, T, D> Deref for EntrantRefMut<'a, T, D> {
+    type Target = D;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<'a, T, D> DerefMut for EntrantRefMut<'a, T, D> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
@@ -215,7 +255,7 @@ impl<D> MatchResult<D> {
 
     pub fn winner<'a, T>(
         &mut self,
-        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
         data: D,
     ) -> &mut Self {
         self.winner = Some((entrant.as_ref().map(|e| e.index), data));
@@ -224,7 +264,7 @@ impl<D> MatchResult<D> {
 
     pub fn winner_default<'a, T>(
         &mut self,
-        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
     ) -> &mut Self
     where
         D: Default,
@@ -234,14 +274,17 @@ impl<D> MatchResult<D> {
 
     pub fn loser<'a, T>(
         &mut self,
-        entrant: &EntrantSpot<EntrantRef<'a, T, D>>,
+        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
         data: D,
     ) -> &mut Self {
         self.loser = Some((entrant.as_ref().map(|e| e.index), data));
         self
     }
 
-    pub fn loser_default<'a, T>(&mut self, entrant: &EntrantSpot<EntrantRef<'a, T, D>>) -> &mut Self
+    pub fn loser_default<'a, T>(
+        &mut self,
+        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
+    ) -> &mut Self
     where
         D: Default,
     {
@@ -259,6 +302,11 @@ pub struct Match<T> {
 impl<T> Match<T> {
     pub fn new(entrants: [EntrantSpot<T>; 2]) -> Self {
         Self { entrants }
+    }
+
+    pub(crate) fn is_placeholder(&self) -> bool {
+        matches!(self.entrants[0], EntrantSpot::Empty)
+            || matches!(self.entrants[1], EntrantSpot::Empty)
     }
 
     /// Returns a reference to the entrant at `index`.
@@ -311,11 +359,11 @@ impl<T> IndexMut<usize> for Match<T> {
 impl<D> Match<Entrant<D>> {
     /// Converts this `Match<Entrant<D>>` into a `Match<EntrantRef<'a, T, D>>` with the referenced
     /// entrant `T` from `entrants`.
-    pub(crate) fn into_ref<'a, T>(
+    pub(crate) fn to_ref_mut<'a, T>(
         &'a mut self,
         entrants: &'a Entrants<T>,
-    ) -> Match<EntrantRef<'a, T, D>> {
-        let mut array: [MaybeUninit<EntrantSpot<EntrantRef<'_, T, D>>>; 2] =
+    ) -> Match<EntrantRefMut<'a, T, D>> {
+        let mut array: [MaybeUninit<EntrantSpot<EntrantRefMut<'_, T, D>>>; 2] =
             unsafe { MaybeUninit::uninit().assume_init() };
 
         for (elem, entrant) in array.iter_mut().zip(self.entrants.iter_mut()) {
@@ -323,7 +371,7 @@ impl<D> Match<Entrant<D>> {
                 EntrantSpot::Entrant(ref mut e) => {
                     let entrant = unsafe { entrants.get_unchecked(e.index) };
 
-                    elem.write(EntrantSpot::Entrant(EntrantRef::new(
+                    elem.write(EntrantSpot::Entrant(EntrantRefMut::new(
                         e.index,
                         entrant,
                         &mut e.data,
@@ -338,7 +386,36 @@ impl<D> Match<Entrant<D>> {
             }
         }
 
-        // panic!();
+        Match {
+            // SAFETY: Every element in `array` has been initialized.
+            entrants: unsafe { std::mem::transmute(array) },
+        }
+    }
+
+    pub(crate) fn to_ref<'a, T>(
+        &'a self,
+        entrants: &'a Entrants<T>,
+    ) -> Match<EntrantRef<'a, T, D>> {
+        let mut array: [MaybeUninit<EntrantSpot<EntrantRef<'_, T, D>>>; 2] =
+            unsafe { MaybeUninit::uninit().assume_init() };
+
+        for (elem, entrant) in array.iter_mut().zip(self.entrants.iter()) {
+            match entrant {
+                EntrantSpot::Entrant(ref e) => {
+                    let entrant = unsafe { entrants.get_unchecked(e.index) };
+
+                    elem.write(EntrantSpot::Entrant(EntrantRef::new(
+                        e.index, entrant, &e.data,
+                    )));
+                }
+                EntrantSpot::Empty => {
+                    elem.write(EntrantSpot::Empty);
+                }
+                EntrantSpot::TBD => {
+                    elem.write(EntrantSpot::TBD);
+                }
+            }
+        }
 
         Match {
             // SAFETY: Every element in `array` has been initialized.
@@ -738,12 +815,28 @@ impl<'a, T> Iterator for FinalBracketIndexIter<'a, T> {
 #[derive(Clone, Debug, Default)]
 pub struct NextMatches {
     winner_index: SmallOption<usize>,
-    winner_position: usize,
+    pub(crate) winner_position: usize,
     loser_index: SmallOption<usize>,
-    loser_position: usize,
+    pub(crate) loser_position: usize,
 }
 
 impl NextMatches {
+    pub fn winner_match_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut Match<T>> {
+        if self.winner_index.is_some() {
+            unsafe { Some(matches.get_unchecked_mut(*self.winner_index)) }
+        } else {
+            None
+        }
+    }
+
+    pub fn loser_match_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut Match<T>> {
+        if self.loser_index.is_some() {
+            unsafe { Some(matches.get_unchecked_mut(*self.loser_index)) }
+        } else {
+            None
+        }
+    }
+
     pub fn new(winner: Option<(usize, usize)>, loser: Option<(usize, usize)>) -> Self {
         let (winner_index, winner_position) = winner
             .map(|(index, position)| (SmallOption::new_unchecked(index), position))
@@ -783,5 +876,22 @@ impl NextMatches {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EntrantData;
+
+    #[macro_export]
+    macro_rules! entrants {
+        ($($x:expr),*) => {
+            vec![$($x),*].into_iter()
+        };
+    }
+
+    impl EntrantData for u32 {
+        fn set_winner(&mut self, _winner: bool) {}
+        fn reset(&mut self) {}
     }
 }

@@ -1,4 +1,4 @@
-use crate::{Entrant, EntrantRef, EntrantSpot, Error, MatchResult, Result};
+use crate::{Entrant, EntrantRefMut, EntrantSpot, Error, MatchResult, Result};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches};
 
 use std::ptr;
@@ -141,7 +141,7 @@ where
     /// out-of-bounds the function is never called.
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRef<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
     {
         // Get the match at `index` or abort.
         // Note: This will borrow `self.matches` mutably until the end of the scope. All
@@ -149,7 +149,7 @@ where
         // safe.
 
         let mut r#match = match self.matches.get_mut(index) {
-            Some(r#match) => r#match.into_ref(&self.entrants),
+            Some(r#match) => r#match.to_ref_mut(&self.entrants),
             None => return,
         };
 
@@ -174,7 +174,10 @@ where
     }
 
     pub fn rounds_iter(&self) -> RoundsIter<'_, Entrant<D>> {
-        RoundsIter::new(self.matches.as_ref(), self.entrants.len() / 2)
+        RoundsIter::new(
+            self.matches.as_ref(),
+            self.entrants.len().next_power_of_two() / 2,
+        )
     }
 
     /// Calculates the number of matches required to build a [`SingleElimination`] tournament
@@ -231,18 +234,9 @@ impl<'a, T> Iterator for RoundsIter<'a, T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::entrants;
+
     use super::*;
-
-    macro_rules! entrants {
-        ($($x:expr),*) => {
-            vec![$($x),*].into_iter()
-        };
-    }
-
-    impl EntrantData for u32 {
-        fn set_winner(&mut self, _winner: bool) {}
-        fn reset(&mut self) {}
-    }
 
     #[test]
     fn test_single_elimination() {
