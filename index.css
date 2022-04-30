@@ -377,6 +377,7 @@ td {
   background-color: #393d4a;
   color: white;
   font-weight: bold;
+  font-size: 1rem;
 }
 
 .winner-input.active {
@@ -392,4 +393,8 @@ td {
   padding: 0;
   height: 100%;
   width: 5px;
+}
+
+.winner-input-box {
+  margin: 10px;
 }
