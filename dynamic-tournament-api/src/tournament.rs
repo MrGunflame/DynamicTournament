@@ -1,6 +1,6 @@
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::{EntrantWithScore, Match};
+use dynamic_tournament_generator::{Entrant, EntrantScore, Matches};
 
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -28,7 +28,6 @@ pub struct TournamentOverview {
     pub id: TournamentId,
     pub name: String,
     pub bracket_type: BracketType,
-    pub best_of: u64,
     pub teams: u64,
 }
 
@@ -39,7 +38,6 @@ pub struct Tournament {
     pub id: TournamentId,
     pub name: String,
     pub bracket_type: BracketType,
-    pub best_of: u64,
     pub teams: Vec<Team>,
 }
 
@@ -226,7 +224,7 @@ impl<'a> TournamentClient<'a> {
 // ///////////////////////////////////
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Bracket(pub Vec<Match<EntrantWithScore<Team, u64>>>);
+pub struct Bracket(pub Matches<Entrant<EntrantScore<u64>>>);
 
 #[derive(Copy, Clone, Debug)]
 pub struct BracketClient<'a> {
