@@ -1,6 +1,6 @@
 mod http;
 mod logger;
-mod websocket;
+// mod websocket;
 
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
 use log::LevelFilter;
@@ -35,7 +35,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let state = State { store, users };
 
     let tables = [
-        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, bracket_type TINYINT UNSIGNED NOT NULL, best_of BIGINT UNSIGNED NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, bracket_type TINYINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_teams (tournament_id BIGINT UNSIGNED NOT NULL, name TEXT NOT NULL, team_index BIGINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_teams_players (tournament_id BIGINT UNSIGNED NOT NULL, account_name TEXT NOT NULL, role TINYINT UNSIGNED, team_index BIGINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_brackets (tournament_id BIGINT UNSIGNED PRIMARY KEY, data BLOB NOT NULL)"
@@ -124,15 +124,14 @@ impl State {
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows = sqlx::query("SELECT id, name, bracket_type, best_of FROM tournaments")
-            .fetch(&self.store);
+        let mut rows =
+            sqlx::query("SELECT id, name, bracket_type FROM tournaments").fetch(&self.store);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let id = row.try_get("id")?;
             let name = row.try_get("name")?;
             let bracket_type: u8 = row.try_get("bracket_type")?;
-            let best_of = row.try_get("best_of")?;
 
             let row = sqlx::query(
                 "SELECT COUNT(*) AS teams FROM tournaments_teams WHERE tournament_id = ?",
@@ -147,7 +146,6 @@ impl State {
                 id: TournamentId(id),
                 name,
                 bracket_type: bracket_type.try_into().unwrap(),
-                best_of,
                 teams: teams as u64,
             });
         }
@@ -156,16 +154,15 @@ impl State {
     }
 
     pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
-        let row =
-            match sqlx::query("SELECT name, bracket_type, best_of FROM tournaments WHERE id = ?")
-                .bind(id)
-                .fetch_one(&self.store)
-                .await
-            {
-                Ok(v) => v,
-                Err(sqlx::Error::RowNotFound) => return Ok(None),
-                Err(err) => return Err(err.into()),
-            };
+        let row = match sqlx::query("SELECT name, bracket_type FROM tournaments WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.store)
+            .await
+        {
+            Ok(v) => v,
+            Err(sqlx::Error::RowNotFound) => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
 
         let mut tournament = Tournament {
             id: TournamentId(id),
@@ -174,7 +171,6 @@ impl State {
                 .try_get::<'_, u8, _>("bracket_type")?
                 .try_into()
                 .unwrap(),
-            best_of: row.try_get("best_of")?,
             teams: Vec::new(),
         };
 
@@ -214,13 +210,11 @@ impl State {
     }
 
     pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
-        let res =
-            sqlx::query("INSERT INTO tournaments (name, bracket_type, best_of) VALUES (?, ?, ?)")
-                .bind(tournament.name)
-                .bind(u8::from(tournament.bracket_type))
-                .bind(tournament.best_of)
-                .execute(&self.store)
-                .await?;
+        let res = sqlx::query("INSERT INTO tournaments (name, bracket_type) VALUES (?, ?, ?)")
+            .bind(tournament.name)
+            .bind(u8::from(tournament.bracket_type))
+            .execute(&self.store)
+            .await?;
 
         let id = res.last_insert_id();
 
