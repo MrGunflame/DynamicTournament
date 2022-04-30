@@ -1,16 +1,15 @@
-pub mod double_elimination;
+// pub mod double_elimination;
 pub mod single_elimination;
 
 mod r#match;
 mod team;
 
-use double_elimination::DoubleEliminationBracket;
+// use double_elimination::DoubleEliminationBracket;
 use r#match::{Action, BracketMatch};
 use single_elimination::SingleEliminationBracket;
 use team::BracketTeam;
 
 use dynamic_tournament_api::tournament::{Bracket as BracketState, BracketType, Tournament};
-use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore, Match};
 
 use std::rc::Rc;
 
@@ -41,9 +40,10 @@ impl Component for Bracket {
             Self::SingleElimination => html! {
                 <SingleEliminationBracket tournament={tournament} bracket={bracket} />
             },
-            Self::DoubleElimination => html! {
-                <DoubleEliminationBracket tournament={tournament} bracket={bracket} />
-            },
+            // Self::DoubleElimination => html! {
+            //     <DoubleEliminationBracket tournament={tournament} bracket={bracket} />
+            // },
+            Self::DoubleElimination => html! {},
         }
     }
 }
@@ -63,21 +63,4 @@ impl PartialEq for Properties {
                 .zip(other.bracket.as_ref())
                 .map_or(false, |(a, b)| Rc::ptr_eq(a, b))
     }
-}
-
-pub fn find_match_winner<T>(best_of: u64, m: &Match<EntrantWithScore<T, u64>>) -> Option<usize> {
-    let required_score = match best_of % 2 {
-        0 => best_of / 2,
-        _ => best_of / 2 + 1,
-    };
-
-    for (i, e) in m.entrants.iter().enumerate() {
-        if let EntrantSpot::Entrant(e) = e {
-            if e.score >= required_score {
-                return Some(i);
-            }
-        }
-    }
-
-    None
 }

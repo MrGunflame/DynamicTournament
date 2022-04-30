@@ -1,11 +1,14 @@
 use yew::prelude::*;
 
 use dynamic_tournament_api::tournament::Team;
-use dynamic_tournament_generator::{EntrantSpot, EntrantWithScore};
+use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
 
 use super::BracketTeam;
 use crate::components::button::Button;
 use crate::components::providers::{ClientProvider, Provider};
+
+const COLOR_RED: &'static str = "#a52423";
+const COLOR_BLUE: &'static str = "#193d6b";
 
 pub struct BracketMatch;
 
@@ -32,9 +35,16 @@ impl Component for BracketMatch {
             .props()
             .entrants
             .iter()
-            .map(|entrant| {
+            .zip(ctx.props().nodes)
+            .enumerate()
+            .map(|(index, (entrant, node))| {
+                let color = match index {
+                    0 => Some(COLOR_RED),
+                    _ => Some(COLOR_BLUE),
+                };
+
                 html! {
-                    <BracketTeam entrant={entrant.clone()} />
+                    <BracketTeam entrant={entrant.clone()} {node} {color} />
                 }
             })
             .collect();
@@ -80,12 +90,17 @@ impl Component for BracketMatch {
             }
         };
 
+        let number = ctx.props().number;
+
         html! {
             <div class="match">
-                <div class="match-teams">
-                    {entrants}
+                <span>{ number }</span>
+                <div>
+                    <div class="match-teams">
+                        {entrants}
+                    </div>
+                    {action_button}
                 </div>
-                {action_button}
             </div>
         }
     }
@@ -93,8 +108,10 @@ impl Component for BracketMatch {
 
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
-    pub entrants: [EntrantSpot<EntrantWithScore<Team, u64>>; 2],
+    pub entrants: [EntrantSpot<Team>; 2],
+    pub nodes: [EntrantSpot<EntrantScore<u64>>; 2],
     pub on_action: Callback<Action>,
+    pub number: usize,
 }
 
 impl PartialEq for Props {

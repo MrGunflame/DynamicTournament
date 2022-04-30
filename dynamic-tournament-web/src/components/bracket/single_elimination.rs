@@ -1,3 +1,4 @@
+use std::ops::DerefMut;
 use std::rc::Rc;
 
 use crate::components::confirmation::Confirmation;
@@ -6,17 +7,15 @@ use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
-use dynamic_tournament_generator::{
-    EntrantSpot, EntrantWithScore, Match, MatchResult, SingleElimination,
-};
+use dynamic_tournament_generator::{Entrant, EntrantScore, EntrantSpot, Match, SingleElimination};
 
-use super::{find_match_winner, Action, BracketMatch};
+use super::{Action, BracketMatch};
 
 use yew::prelude::*;
 
 /// A bracket for a [`SingleElimination`] tournament.
 pub struct SingleEliminationBracket {
-    state: SingleElimination<EntrantWithScore<Team, u64>>,
+    state: SingleElimination<Team, EntrantScore<u64>>,
     // Popup open for match with index.
     popup: Option<PopupState>,
 }
@@ -26,18 +25,11 @@ impl Component for SingleEliminationBracket {
     type Properties = BracketProperties;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let teams: Vec<EntrantWithScore<Team, u64>> = ctx
-            .props()
-            .tournament
-            .teams
-            .iter()
-            .cloned()
-            .map(EntrantWithScore::new)
-            .collect();
+        let teams = ctx.props().tournament.teams.clone();
 
         let state = match &ctx.props().bracket {
-            Some(bracket) => SingleElimination::resume(bracket.0.clone()).unwrap(),
-            None => SingleElimination::new(teams),
+            Some(bracket) => SingleElimination::resume(teams.into(), bracket.0.clone()).unwrap(),
+            _ => SingleElimination::new(teams.into_iter()),
         };
 
         Self { state, popup: None }
@@ -55,37 +47,25 @@ impl Component for SingleEliminationBracket {
                     true
                 }
             },
-            Message::UpdateScore { index, scores } => {
-                self.state.update_match(index, |m| {
-                    m.entrants[0].unwrap_ref_mut().score = scores[0];
-                    m.entrants[1].unwrap_ref_mut().score = scores[1];
+            Message::UpdateScoreUI => {
+                self.popup = None;
 
-                    match find_match_winner(ctx.props().tournament.best_of, m) {
-                        Some(index) => {
-                            let winner = m.entrants[index].unwrap_ref_mut();
-                            winner.winner = true;
+                true
+            }
+            Message::ClosePopup => {
+                self.popup = None;
 
-                            let winner = m.entrants[index].unwrap_ref();
-                            let looser = m.entrants[match index {
-                                0 => 1,
-                                1 => 0,
-                                _ => unreachable!(),
-                            }]
-                            .unwrap_ref();
-
-                            Some(MatchResult::Entrants {
-                                winner: EntrantWithScore::new(winner.entrant.clone()),
-                                looser: EntrantWithScore::new(looser.entrant.clone()),
-                            })
-                        }
-                        _ => None,
-                    }
+                true
+            }
+            Message::ResetMatch(index) => {
+                self.state.update_match(index, |_, res| {
+                    res.reset_default();
                 });
 
                 let client = ClientProvider::take(ctx);
 
                 let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.iter().cloned().collect());
+                let bracket = Bracket(self.state.matches().clone());
                 // Update server data.
                 ctx.link().send_future_batch(async move {
                     let client = client.tournaments();
@@ -102,36 +82,33 @@ impl Component for SingleEliminationBracket {
 
                 false
             }
-            Message::UpdateScoreUI => {
-                self.popup = None;
+            Message::UpdateMatch { index, nodes } => {
+                self.state.update_match(index, |m, res| {
+                    let mut has_winner = false;
 
-                true
-            }
-            Message::ClosePopup => {
-                self.popup = None;
-
-                true
-            }
-            Message::ResetMatch(index) => {
-                self.state.update_match(index, |m| {
-                    for entrant in &mut m.entrants {
+                    for (entrant, node) in m.entrants.iter_mut().zip(nodes.into_iter()) {
                         if let EntrantSpot::Entrant(entrant) = entrant {
-                            entrant.score = 0;
-                            entrant.winner = false;
+                            *entrant.deref_mut() = node;
+                        }
+
+                        if node.winner {
+                            res.winner_default(entrant);
+                            has_winner = true;
+                            continue;
+                        }
+
+                        if has_winner {
+                            res.loser_default(entrant);
+                            break;
                         }
                     }
-
-                    None
                 });
-
-                if let Some(winner) = self.state.next_match_mut(index) {
-                    winner.entrants[index % 2] = EntrantSpot::TBD;
-                }
 
                 let client = ClientProvider::take(ctx);
 
                 let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.iter().cloned().collect());
+                let bracket = Bracket(self.state.matches().clone());
+                // Update server data.
                 ctx.link().send_future_batch(async move {
                     let client = client.tournaments();
                     let client = client.bracket(id);
@@ -156,28 +133,21 @@ impl Component for SingleEliminationBracket {
                 // on_close handler for the popup.
                 let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
-                let m = self.state.get(index).unwrap();
+                let m = self.state.matches().get(index).unwrap();
 
-                let teams = m.entrants.clone();
-
-                let scores = [
-                    match m.entrants[0] {
-                        EntrantSpot::Entrant(ref e) => e.score,
-                        _ => 0,
-                    },
-                    match m.entrants[1] {
-                        EntrantSpot::Entrant(ref e) => e.score,
-                        _ => 0,
-                    },
-                ];
+                let teams = m
+                    .entrants
+                    .clone()
+                    .map(|e| e.map(|e| e.entrant(&self.state).clone()));
+                let nodes = m.entrants.clone().map(|e| e.unwrap().data);
 
                 let on_submit = ctx
                     .link()
-                    .callback(move |scores| Message::UpdateScore { index, scores });
+                    .callback(move |nodes| Message::UpdateMatch { index, nodes });
 
                 html! {
                     <Popup on_close={on_close}>
-                        <BracketUpdate {teams} scores={scores} on_submit={on_submit} />
+                        <BracketUpdate {teams} {nodes} on_submit={on_submit} />
                     </Popup>
                 }
             }
@@ -197,7 +167,7 @@ impl Component for SingleEliminationBracket {
             .state
             .rounds_iter()
             .with_index()
-            .map(|(round, starting_index)| render_round(ctx, round, starting_index))
+            .map(|(starting_index, round)| render_round(&self.state, ctx, round, starting_index))
             .collect();
 
         html! {
@@ -229,15 +199,16 @@ impl PartialEq for BracketProperties {
 }
 
 fn render_round(
+    state: &SingleElimination<Team, EntrantScore<u64>>,
     ctx: &Context<SingleEliminationBracket>,
-    round: &[Match<EntrantWithScore<Team, u64>>],
+    round: &[Match<Entrant<EntrantScore<u64>>>],
     starting_index: usize,
 ) -> Html {
     let round: Html = round
         .iter()
         .enumerate()
         .map(|(index, m)| {
-            html! {render_match(ctx,m,starting_index+index)}
+            html! {render_match(state, ctx,m,starting_index+index,index)}
         })
         .collect();
 
@@ -249,25 +220,39 @@ fn render_round(
 }
 
 fn render_match(
+    state: &SingleElimination<Team, EntrantScore<u64>>,
     ctx: &Context<SingleEliminationBracket>,
-    m: &Match<EntrantWithScore<Team, u64>>,
+    m: &Match<Entrant<EntrantScore<u64>>>,
     index: usize,
+    match_index: usize,
 ) -> Html {
     let on_action = ctx
         .link()
         .callback(move |action| Message::Action { index, action });
 
+    let entrants = m
+        .entrants
+        .clone()
+        .map(|e| e.map(|e| e.entrant(state).clone()));
+    let nodes = m.entrants.clone().map(|e| e.map(|e| e.data));
+
     html! {
-        <BracketMatch entrants={m.entrants.clone()} on_action={on_action} />
+        <BracketMatch {entrants} {nodes} on_action={on_action} number={match_index+1} />
     }
 }
 
 pub enum Message {
-    Action { index: usize, action: Action },
+    Action {
+        index: usize,
+        action: Action,
+    },
     ClosePopup,
-    UpdateScore { index: usize, scores: [u64; 2] },
     UpdateScoreUI,
     ResetMatch(usize),
+    UpdateMatch {
+        index: usize,
+        nodes: [EntrantScore<u64>; 2],
+    },
 }
 
 /// The popup can either be the update-scores dialog or the reset match confirmation.
