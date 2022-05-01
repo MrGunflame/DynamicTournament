@@ -4,6 +4,7 @@ use crate::{
 };
 
 /// A double elimination tournament.
+#[derive(Clone, Debug)]
 pub struct DoubleElimination<T, D>
 where
     D: EntrantData,

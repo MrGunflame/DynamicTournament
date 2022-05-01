@@ -4,6 +4,7 @@ use crate::{EntrantData, Entrants, Match, Matches, NextMatches};
 use std::ptr;
 
 /// A single elimination tournament.
+#[derive(Clone, Debug)]
 pub struct SingleElimination<T, D> {
     entrants: Entrants<T>,
     matches: Matches<Entrant<D>>,
