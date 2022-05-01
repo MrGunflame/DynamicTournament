@@ -1,5 +1,3 @@
-mod proto;
-
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament, TournamentId};
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantScore, EntrantSpot, SingleElimination,
