@@ -16,7 +16,7 @@ impl Component for Overview {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <>
-                { ctx.props().tournament.id }
+                { ctx.props().tournament.description.clone() }
             </>
         }
     }

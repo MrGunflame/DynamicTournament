@@ -5,9 +5,12 @@ use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
+use crate::services::{EventBus, WebSocketService};
 
 use dynamic_tournament_api::tournament::{Bracket, Team, Tournament};
+use dynamic_tournament_api::websocket;
 use dynamic_tournament_generator::{Entrant, EntrantScore, EntrantSpot, Match, SingleElimination};
+use yew_agent::{Bridge, Bridged};
 
 use super::{Action, BracketMatch};
 
@@ -18,6 +21,8 @@ pub struct SingleEliminationBracket {
     state: SingleElimination<Team, EntrantScore<u64>>,
     // Popup open for match with index.
     popup: Option<PopupState>,
+    websocket: WebSocketService,
+    _producer: Box<dyn Bridge<EventBus>>,
 }
 
 impl Component for SingleEliminationBracket {
@@ -32,7 +37,16 @@ impl Component for SingleEliminationBracket {
             _ => SingleElimination::new(teams.into_iter()),
         };
 
-        Self { state, popup: None }
+        let client = ClientProvider::take(ctx);
+
+        let websocket = WebSocketService::new(client, ctx.props().tournament.id.0);
+
+        Self {
+            state,
+            popup: None,
+            websocket,
+            _producer: EventBus::bridge(ctx.link().callback(Message::HandleMessage)),
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -47,82 +61,78 @@ impl Component for SingleEliminationBracket {
                     true
                 }
             },
-            Message::UpdateScoreUI => {
-                self.popup = None;
-
-                true
-            }
             Message::ClosePopup => {
                 self.popup = None;
 
                 true
             }
             Message::ResetMatch(index) => {
-                self.state.update_match(index, |_, res| {
-                    res.reset_default();
-                });
-
-                let client = ClientProvider::take(ctx);
-
-                let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.matches().clone());
-                // Update server data.
+                let mut websocket = self.websocket.clone();
                 ctx.link().send_future_batch(async move {
-                    let client = client.tournaments();
-                    let client = client.bracket(id);
+                    websocket
+                        .send(dynamic_tournament_api::websocket::Message::ResetMatch {
+                            index: index.try_into().unwrap(),
+                        })
+                        .await;
 
-                    match client.put(&bracket).await {
-                        Ok(_) => vec![Message::UpdateScoreUI],
-                        Err(err) => {
-                            log::error!("{}", err);
-                            vec![]
-                        }
-                    }
+                    vec![Message::ClosePopup]
                 });
 
                 false
             }
             Message::UpdateMatch { index, nodes } => {
-                self.state.update_match(index, |m, res| {
-                    let mut has_winner = false;
-
-                    for (entrant, node) in m.entrants.iter_mut().zip(nodes.into_iter()) {
-                        if let EntrantSpot::Entrant(entrant) = entrant {
-                            *entrant.deref_mut() = node;
-                        }
-
-                        if node.winner {
-                            res.winner_default(entrant);
-                            has_winner = true;
-                            continue;
-                        }
-
-                        if has_winner {
-                            res.loser_default(entrant);
-                            break;
-                        }
-                    }
-                });
-
-                let client = ClientProvider::take(ctx);
-
-                let id = ctx.props().tournament.id;
-                let bracket = Bracket(self.state.matches().clone());
-                // Update server data.
+                let mut websocket = self.websocket.clone();
                 ctx.link().send_future_batch(async move {
-                    let client = client.tournaments();
-                    let client = client.bracket(id);
+                    websocket
+                        .send(dynamic_tournament_api::websocket::Message::UpdateMatch {
+                            index: index.try_into().unwrap(),
+                            nodes,
+                        })
+                        .await;
 
-                    match client.put(&bracket).await {
-                        Ok(_) => vec![Message::UpdateScoreUI],
-                        Err(err) => {
-                            log::error!("{}", err);
-                            vec![]
-                        }
-                    }
+                    vec![Message::ClosePopup]
                 });
 
                 false
+            }
+            Message::HandleMessage(msg) => {
+                log::debug!("Got message: {:?}", msg);
+                match msg {
+                    websocket::Message::UpdateMatch { index, nodes } => {
+                        let index = index.try_into().unwrap();
+
+                        self.state.update_match(index, |m, res| {
+                            let mut has_winner = false;
+
+                            for (entrant, node) in m.entrants.iter_mut().zip(nodes.into_iter()) {
+                                if let EntrantSpot::Entrant(entrant) = entrant {
+                                    *entrant.deref_mut() = node;
+                                }
+
+                                if node.winner {
+                                    res.winner_default(entrant);
+                                    has_winner = true;
+                                    continue;
+                                }
+
+                                if has_winner {
+                                    res.loser_default(entrant);
+                                    break;
+                                }
+                            }
+                        });
+                    }
+                    websocket::Message::ResetMatch { index } => {
+                        let index = index.try_into().unwrap();
+
+                        self.state.update_match(index, |_, res| {
+                            res.reset_default();
+                        });
+                    }
+                    _ => (),
+                }
+
+                true
             }
         }
     }
@@ -247,12 +257,12 @@ pub enum Message {
         action: Action,
     },
     ClosePopup,
-    UpdateScoreUI,
     ResetMatch(usize),
     UpdateMatch {
         index: usize,
         nodes: [EntrantScore<u64>; 2],
     },
+    HandleMessage(websocket::Message),
 }
 
 /// The popup can either be the update-scores dialog or the reset match confirmation.
