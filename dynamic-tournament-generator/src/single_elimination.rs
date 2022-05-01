@@ -207,7 +207,10 @@ where
     pub fn rounds_iter(&self) -> RoundsIter<'_, Entrant<D>> {
         RoundsIter::new(
             self.matches.as_ref(),
-            self.entrants.len().next_power_of_two() / 2,
+            match self.entrants.len() {
+                1 | 2 => 1,
+                n => n.next_power_of_two() / 2,
+            },
         )
     }
 
