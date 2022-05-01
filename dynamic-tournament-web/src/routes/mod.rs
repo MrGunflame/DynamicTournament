@@ -173,13 +173,12 @@ impl Component for Embed {
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
-        render_data(&self.data, |(data, bracket)| {
+        render_data(&self.data, |(data, _)| {
             let tournament = data.clone();
-            let bracket = bracket.clone();
 
             html! {
                 <MovableBoxed classes="bracket-fullscreen">
-                    <Bracket {tournament} {bracket} />
+                    <Bracket {tournament} />
                 </MovableBoxed>
             }
         })

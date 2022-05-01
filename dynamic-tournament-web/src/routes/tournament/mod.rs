@@ -10,7 +10,8 @@ use yew_router::prelude::*;
 
 use crate::components::bracket::Bracket;
 use crate::components::movable_boxed::MovableBoxed;
-use crate::{render_data, Data, DataResult, Title};
+use crate::utils::FetchData;
+use crate::{DataResult, Title};
 
 use dynamic_tournament_api::tournament as api;
 use dynamic_tournament_api::tournament::TournamentId;
@@ -21,7 +22,7 @@ use std::rc::Rc;
 use overview::Overview;
 
 pub struct Tournament {
-    data: Data<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)>,
+    tournament: FetchData<Rc<api::Tournament>>,
 }
 
 impl Component for Tournament {
@@ -37,31 +38,28 @@ impl Component for Tournament {
             async fn fetch_data(
                 client: Client,
                 id: TournamentId,
-            ) -> DataResult<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)> {
+            ) -> DataResult<Rc<api::Tournament>> {
                 let client = client.tournaments();
 
                 let data = client.get(id).await?;
 
-                let bracket = match client.bracket(id).get().await {
-                    Ok(bracket) => Some(Rc::new(bracket)),
-                    Err(_) => None,
-                };
-
-                Ok((Rc::new(data), bracket))
+                Ok(Rc::new(data))
             }
 
             let data = Some(fetch_data(client, id).await);
 
-            Msg::Update(data)
+            Msg::Update(data.into())
         });
 
-        Self { data: None }
+        Self {
+            tournament: FetchData::default(),
+        }
     }
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Update(data) => {
-                self.data = data;
+                self.tournament = data;
 
                 true
             }
@@ -69,17 +67,15 @@ impl Component for Tournament {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        render_data(&self.data, |(data, bracket)| {
-            Title::set(&data.name);
+        self.tournament.render(|tournament| {
+            Title::set(&tournament.name);
 
-            let tournament = data.clone();
-            let bracket = bracket.clone();
+            let tournament = tournament.clone();
 
             let id = ctx.props().id.0;
 
             let switch = move |route: &Route| -> Html {
                 let tournament = tournament.clone();
-                let bracket = bracket.clone();
 
                 let mut routes = Vec::with_capacity(4);
                 for (r, n) in &[
@@ -104,7 +100,7 @@ impl Component for Tournament {
                     },
                     Route::Bracket { id: _ } => html! {
                         <MovableBoxed>
-                            <Bracket tournament={tournament.clone()} bracket={bracket} />
+                            <Bracket tournament={tournament.clone()} />
                         </MovableBoxed>
                     },
                     Route::Teams { id: _ } => html! {
@@ -147,7 +143,7 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Update(Data<(Rc<api::Tournament>, Option<Rc<api::Bracket>>)>),
+    Update(FetchData<Rc<api::Tournament>>),
 }
 
 #[derive(Clone, Routable, PartialEq)]

@@ -3,6 +3,7 @@ mod consts;
 mod logger;
 mod routes;
 mod services;
+mod utils;
 
 use yew::prelude::*;
 use yew::start_app_in_element;
