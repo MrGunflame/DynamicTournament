@@ -30,7 +30,7 @@ impl Component for SingleEliminationBracket {
     type Properties = BracketProperties;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let teams = ctx.props().tournament.teams.clone();
+        let teams = ctx.props().tournament.entrants.clone().unwrap_teams();
 
         let state = match &ctx.props().bracket {
             Some(bracket) => SingleElimination::resume(teams.into(), bracket.0.clone()).unwrap(),

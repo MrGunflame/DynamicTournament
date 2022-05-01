@@ -1,6 +1,6 @@
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::{Entrant, EntrantScore, Matches};
+use dynamic_tournament_generator::{Entrant as Node, EntrantScore, Matches};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct TournamentOverview {
     /// RFC3339
     pub date: DateTime<Utc>,
     pub bracket_type: BracketType,
-    pub teams: u64,
+    pub entrants: u64,
 }
 
 /// Full data about a tournament.
@@ -43,7 +43,7 @@ pub struct Tournament {
     /// RFC3339
     pub date: DateTime<Utc>,
     pub bracket_type: BracketType,
-    pub teams: Vec<Team>,
+    pub entrants: Entrants,
 }
 
 /// The type of the bracket of a [`Tournament`].
@@ -155,6 +155,28 @@ impl Display for Role {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Entrants {
+    Players(Vec<Player>),
+    Teams(Vec<Team>),
+}
+
+impl Entrants {
+    pub fn unwrap_players(self) -> Vec<Player> {
+        match self {
+            Self::Players(players) => players,
+            _ => panic!("Called unwrap_players on `Entrants::Teams`"),
+        }
+    }
+
+    pub fn unwrap_teams(self) -> Vec<Team> {
+        match self {
+            Self::Teams(teams) => teams,
+            _ => panic!("Called unwrap_teams on `Entrants::Players`"),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct TournamentClient<'a> {
     client: &'a Client,
@@ -229,7 +251,7 @@ impl<'a> TournamentClient<'a> {
 // ///////////////////////////////////
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Bracket(pub Matches<Entrant<EntrantScore<u64>>>);
+pub struct Bracket(pub Matches<Node<EntrantScore<u64>>>);
 
 #[derive(Copy, Clone, Debug)]
 pub struct BracketClient<'a> {

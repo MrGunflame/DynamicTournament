@@ -67,7 +67,7 @@ impl Component for TournamentList {
                     let name = tournament.name.clone();
                     let bracket_type = tournament.bracket_type.to_string();
                     let date = tournament.date.clone();
-                    let teams = tournament.teams;
+                    let teams = tournament.entrants;
 
                     let on_click = ctx.link().callback(move |_| Msg::ClickTournament { id });
 

@@ -36,7 +36,9 @@ impl Component for Teams {
         let teams: Html = ctx
             .props()
             .teams
-            .teams
+            .entrants
+            .clone()
+            .unwrap_teams()
             .iter()
             .enumerate()
             .map(|(i, team)| {

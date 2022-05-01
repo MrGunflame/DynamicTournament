@@ -15,7 +15,14 @@ impl Component for TeamDetails {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let team = match ctx.props().teams.teams.get(ctx.props().index as usize) {
+        let team = match ctx
+            .props()
+            .teams
+            .entrants
+            .clone()
+            .unwrap_teams()
+            .get(ctx.props().index as usize)
+        {
             Some(team) => team.clone(),
             None => {
                 return html! {

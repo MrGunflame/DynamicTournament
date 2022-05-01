@@ -30,7 +30,7 @@ impl Component for DoubleEliminationBracket {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let teams = ctx.props().tournament.teams.clone();
+        let teams = ctx.props().tournament.entrants.clone().unwrap_teams();
 
         let state = match &ctx.props().bracket {
             // Some(bracket) => DoubleElimination::resume(bracket.0.clone()).unwrap(),
