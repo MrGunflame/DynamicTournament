@@ -2,8 +2,8 @@ use crate::{Client, Result};
 
 use dynamic_tournament_generator::{Entrant, EntrantScore, Matches};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -27,6 +27,8 @@ impl Display for TournamentId {
 pub struct TournamentOverview {
     pub id: TournamentId,
     pub name: String,
+    /// RFC3339
+    pub date: DateTime<Utc>,
     pub bracket_type: BracketType,
     pub teams: u64,
 }
@@ -37,12 +39,15 @@ pub struct Tournament {
     #[cfg_attr(feature = "server", serde(skip_deserializing))]
     pub id: TournamentId,
     pub name: String,
+    pub description: String,
+    /// RFC3339
+    pub date: DateTime<Utc>,
     pub bracket_type: BracketType,
     pub teams: Vec<Team>,
 }
 
 /// The type of the bracket of a [`Tournament`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum BracketType {
     SingleElimination = 0,
@@ -97,7 +102,7 @@ pub struct Player {
 }
 
 /// The role of a [`Player`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Role {
     Unknown = 0,

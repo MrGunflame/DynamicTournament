@@ -1,8 +1,9 @@
 use crate::http::RequestUri;
 use crate::{Error, State};
 
-use hyper::header::HeaderValue;
+use hyper::header::{HeaderValue, CONNECTION, UPGRADE};
 use hyper::{Body, Method, Request, Response, StatusCode};
+use sha1::{Digest, Sha1};
 
 pub async fn route<'a>(
     req: Request<Body>,
@@ -26,13 +27,11 @@ pub async fn route<'a>(
 
             match uri.take_str() {
                 Some("bracket") => match req.method() {
-                    &Method::GET => get_bracket(req, id, state).await,
-                    &Method::PUT => put_bracket(req, id, state).await,
+                    &Method::GET => bracket(req, id, state).await,
                     &Method::OPTIONS => Ok(Response::builder()
                         .status(204)
                         .body(Body::from("No Content"))
                         .unwrap()),
-
                     _ => Err(Error::MethodNotAllowed),
                 },
                 None => match req.method() {
@@ -112,65 +111,61 @@ async fn get(_req: Request<Body>, id: u64, state: State) -> Result<Response<Body
     Ok(resp)
 }
 
-async fn put_bracket(req: Request<Body>, id: u64, state: State) -> Result<Response<Body>, Error> {
-    if !state.is_authenticated(&req) {
-        return Ok(Response::builder()
-            .status(403)
-            .body(Body::from("Forbidden"))
-            .unwrap());
-    }
-
-    let bytes = hyper::body::to_bytes(req.into_body()).await?;
-
+pub async fn bracket(
+    mut req: Request<Body>,
+    id: u64,
+    state: State,
+) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
 
-    let bracket = match serde_json::from_slice(&bytes) {
-        Ok(bracket) => bracket,
-        Err(err) => {
-            *resp.status_mut() = StatusCode::BAD_GATEWAY;
-            *resp.body_mut() = Body::from(err.to_string());
+    if !req.headers().contains_key(UPGRADE) {
+        match state.get_bracket(id).await? {
+            Some(bracket) => {
+                *resp.status_mut() = StatusCode::OK;
+                resp.headers_mut()
+                    .insert("Content-Type", HeaderValue::from_static("application/json"));
 
-            return Ok(resp);
+                let body = serde_json::to_string(&bracket)?;
+                *resp.body_mut() = Body::from(body);
+            }
+            None => {
+                *resp.status_mut() = StatusCode::NOT_FOUND;
+                *resp.body_mut() = Body::from("Not Found");
+            }
         }
-    };
 
-    state.update_bracket(id, bracket).await?;
+        return Ok(resp);
+    }
 
-    *resp.status_mut() = StatusCode::OK;
+    log::info!("Upgraded connection");
 
+    if let Some(value) = req.headers().get("Sec-WebSocket-Key") {
+        let value = value.to_str().unwrap().to_owned() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+        let mut hasher = Sha1::new();
+        hasher.update(value.as_bytes());
+        let result = hasher.finalize();
+
+        let val = base64::encode(result);
+
+        resp.headers_mut()
+            .insert("Sec-WebSocket-Accept", HeaderValue::from_str(&val).unwrap());
+    }
+
+    tokio::task::spawn(async move {
+        match hyper::upgrade::on(&mut req).await {
+            Ok(conn) => crate::websocket::handle(conn, state, id).await,
+            Err(err) => log::error!("Failed to upgrade connection: {:?}", err),
+        }
+    });
+
+    resp.headers_mut()
+        .insert("Sec-WebSocket-Version", HeaderValue::from_static("13"));
+
+    *resp.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
+    resp.headers_mut()
+        .insert(CONNECTION, HeaderValue::from_static("Upgrade"));
+    resp.headers_mut()
+        .insert(UPGRADE, HeaderValue::from_static("websocket"));
     Ok(resp)
-}
-
-async fn get_bracket(_req: Request<Body>, id: u64, state: State) -> Result<Response<Body>, Error> {
-    match state.get_tournament(id).await? {
-        Some(_) => (),
-        None => {
-            let resp = Response::builder()
-                .status(404)
-                .body(Body::from("Not found"))
-                .unwrap();
-
-            return Ok(resp);
-        }
-    };
-
-    let bracket = match state.get_bracket(id).await? {
-        Some(b) => b,
-        None => {
-            let resp = Response::builder()
-                .status(404)
-                .body(Body::from("Not Found"))
-                .unwrap();
-
-            return Ok(resp);
-        }
-    };
-
-    let resp = Response::builder()
-        .status(200)
-        .header("Content-Type", "application/json");
-
-    let body = serde_json::to_string(&bracket)?;
-
-    Ok(resp.body(Body::from(body)).unwrap())
 }

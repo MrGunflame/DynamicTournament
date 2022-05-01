@@ -1,9 +1,12 @@
 mod http;
 mod logger;
-// mod websocket;
+mod websocket;
 
+use chrono::DateTime;
+use chrono::Utc;
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
 use log::LevelFilter;
+use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 use sqlx::mysql::MySqlPool;
@@ -16,10 +19,14 @@ use dynamic_tournament_api::tournament::{Tournament, TournamentId};
 
 use futures::TryStreamExt;
 use sqlx::Row;
+use tokio::sync::broadcast;
+use websocket::LiveBracket;
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -32,10 +39,14 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let store = MySqlPool::connect(&config.database.connect_string()).await?;
 
-    let state = State { store, users };
+    let state = State {
+        store,
+        users,
+        subscribers: Arc::new(RwLock::new(HashMap::new())),
+    };
 
     let tables = [
-        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, bracket_type TINYINT UNSIGNED NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, date TEXT NOT NULL, description TEXT NOT NULL, bracket_type TINYINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_teams (tournament_id BIGINT UNSIGNED NOT NULL, name TEXT NOT NULL, team_index BIGINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_teams_players (tournament_id BIGINT UNSIGNED NOT NULL, account_name TEXT NOT NULL, role TINYINT UNSIGNED, team_index BIGINT UNSIGNED NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_brackets (tournament_id BIGINT UNSIGNED PRIMARY KEY, data BLOB NOT NULL)"
@@ -54,6 +65,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 pub struct State {
     store: MySqlPool,
     users: Vec<LoginData>,
+    pub subscribers: Arc<RwLock<HashMap<u64, LiveBracket>>>,
 }
 
 #[derive(Debug, Error)]
@@ -91,7 +103,11 @@ impl State {
             None => return false,
         };
 
-        let header = match header.strip_prefix(b"Basic ") {
+        self.is_authenticated_string(header)
+    }
+
+    pub fn is_authenticated_string(&self, header: impl AsRef<[u8]>) -> bool {
+        let header = match header.as_ref().strip_prefix(b"Basic ") {
             Some(header) => header,
             None => return false,
         };
@@ -125,12 +141,13 @@ impl State {
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
         let mut rows =
-            sqlx::query("SELECT id, name, bracket_type FROM tournaments").fetch(&self.store);
+            sqlx::query("SELECT id, name, date, bracket_type FROM tournaments").fetch(&self.store);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let id = row.try_get("id")?;
             let name = row.try_get("name")?;
+            let date: String = row.try_get("date")?;
             let bracket_type: u8 = row.try_get("bracket_type")?;
 
             let row = sqlx::query(
@@ -145,6 +162,9 @@ impl State {
             tournaments.push(TournamentOverview {
                 id: TournamentId(id),
                 name,
+                date: DateTime::parse_from_rfc3339(&date)
+                    .unwrap()
+                    .with_timezone(&Utc),
                 bracket_type: bracket_type.try_into().unwrap(),
                 teams: teams as u64,
             });
@@ -154,10 +174,12 @@ impl State {
     }
 
     pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
-        let row = match sqlx::query("SELECT name, bracket_type FROM tournaments WHERE id = ?")
-            .bind(id)
-            .fetch_one(&self.store)
-            .await
+        let row = match sqlx::query(
+            "SELECT name, date, bracket_type, description FROM tournaments WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(&self.store)
+        .await
         {
             Ok(v) => v,
             Err(sqlx::Error::RowNotFound) => return Ok(None),
@@ -167,10 +189,14 @@ impl State {
         let mut tournament = Tournament {
             id: TournamentId(id),
             name: row.try_get("name")?,
+            date: DateTime::parse_from_rfc3339(&row.try_get::<'_, String, _>("date")?)
+                .unwrap()
+                .with_timezone(&Utc),
             bracket_type: row
                 .try_get::<'_, u8, _>("bracket_type")?
                 .try_into()
                 .unwrap(),
+            description: row.try_get("description")?,
             teams: Vec::new(),
         };
 
@@ -210,11 +236,15 @@ impl State {
     }
 
     pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
-        let res = sqlx::query("INSERT INTO tournaments (name, bracket_type) VALUES (?, ?)")
-            .bind(tournament.name)
-            .bind(u8::from(tournament.bracket_type))
-            .execute(&self.store)
-            .await?;
+        let res = sqlx::query(
+            "INSERT INTO tournaments (name, date, bracket_type, description) VALUES (?, ?, ?, ?)",
+        )
+        .bind(tournament.name)
+        .bind(tournament.date.to_rfc3339())
+        .bind(u8::from(tournament.bracket_type))
+        .bind(tournament.description)
+        .execute(&self.store)
+        .await?;
 
         let id = res.last_insert_id();
 

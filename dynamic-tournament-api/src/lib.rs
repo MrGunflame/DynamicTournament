@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod tournament;
+pub mod websocket;
 
 use crate::auth::AuthClient;
 use crate::tournament::TournamentClient;
@@ -48,6 +49,18 @@ impl Client {
     pub fn is_authenticated(&self) -> bool {
         let inner = self.inner.read().unwrap();
         inner.authorization.header.is_some()
+    }
+
+    pub fn base_url(&self) -> String {
+        let inner = self.inner.read().unwrap();
+
+        inner.base_url.clone()
+    }
+
+    pub fn authorization(&self) -> Option<String> {
+        let inner = self.inner.read().unwrap();
+
+        inner.authorization.header.clone()
     }
 
     pub fn logout(&self) {
