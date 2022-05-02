@@ -12,8 +12,16 @@ pub struct FetchData<T> {
 }
 
 impl<T> FetchData<T> {
+    /// Creates a new `FetchData` with an uninitialized state.
     pub fn new() -> Self {
         Self { inner: None }
+    }
+
+    /// Creates a new `FetchData` with an initialized `Ok` state.
+    pub fn new_with_value(value: T) -> Self {
+        Self {
+            inner: Some(Ok(value)),
+        }
     }
 
     pub fn render<F>(&self, f: F) -> Html
@@ -22,12 +30,24 @@ impl<T> FetchData<T> {
     {
         match &self.inner {
             Some(res) => match res {
-                Ok(value) => f(value),
-                Err(err) => html! {
-                    <Error error={err.to_string()} />
-                },
+                Ok(value) => {
+                    log::debug!("FetchData is initialized to an `Ok` value, rendering using `F`");
+
+                    f(value)
+                }
+                Err(err) => {
+                    log::debug!(
+                        "FetchData is initialized to an `Err` value, rendering error component"
+                    );
+
+                    html! {
+                        <Error error={err.to_string()} />
+                    }
+                }
             },
             None => {
+                log::debug!("FetchData is `None`, rendering loader component");
+
                 html! {
                     <Loader />
                 }
@@ -51,5 +71,13 @@ impl<T> From<Option<Result<T, BoxError>>> for FetchData<T> {
 impl<T> From<Result<T, BoxError>> for FetchData<T> {
     fn from(res: Result<T, BoxError>) -> Self {
         Self { inner: Some(res) }
+    }
+}
+
+impl<T> From<T> for FetchData<T> {
+    fn from(value: T) -> Self {
+        Self {
+            inner: Some(Ok(value)),
+        }
     }
 }
