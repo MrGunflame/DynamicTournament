@@ -48,6 +48,7 @@ pub struct Tournament {
 
 /// The type of the bracket of a [`Tournament`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[repr(u8)]
 pub enum BracketType {
     SingleElimination = 0,
@@ -96,13 +97,16 @@ pub struct Team {
 /// A single player in a [`Team`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Player {
-    #[serde(rename = "accountName")]
     pub account_name: String,
     pub role: Role,
+    /// Rating of the player.
+    #[serde(default)]
+    pub rating: Option<u64>,
 }
 
 /// The role of a [`Player`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[repr(u8)]
 pub enum Role {
     Unknown = 0,
@@ -157,11 +161,24 @@ impl Display for Role {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Entrants {
+    #[serde(rename = "players")]
     Players(Vec<Player>),
+    #[serde(rename = "teams")]
     Teams(Vec<Team>),
 }
 
 impl Entrants {
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Players(players) => players.len(),
+            Self::Teams(teams) => teams.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn unwrap_players(self) -> Vec<Player> {
         match self {
             Self::Players(players) => players,
