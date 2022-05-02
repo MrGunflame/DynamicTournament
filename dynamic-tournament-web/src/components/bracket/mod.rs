@@ -19,11 +19,11 @@ use std::rc::Rc;
 use yew::prelude::*;
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::{render_data, Data, DataResult};
+use crate::utils::FetchData;
 
 #[derive(Debug)]
 pub struct Bracket {
-    bracket: Data<Rc<tournament::Bracket>>,
+    bracket: FetchData<Option<Rc<tournament::Bracket>>>,
 }
 
 impl Component for Bracket {
@@ -35,12 +35,15 @@ impl Component for Bracket {
         let id = ctx.props().tournament.id;
 
         ctx.link().send_future(async move {
-            async fn fetch_data(client: Client, id: TournamentId) -> Data<Rc<tournament::Bracket>> {
+            async fn fetch_data(
+                client: Client,
+                id: TournamentId,
+            ) -> FetchData<Option<Rc<tournament::Bracket>>> {
                 let client = client.tournaments();
 
                 match client.bracket(id).get().await {
-                    Ok(bracket) => Some(Ok(Rc::new(bracket))),
-                    Err(_) => None,
+                    Ok(bracket) => FetchData::new_with_value(Some(Rc::new(bracket))),
+                    Err(_) => FetchData::new_with_value(None),
                 }
             }
 
@@ -49,22 +52,24 @@ impl Component for Bracket {
             Message::Update(data)
         });
 
-        Self { bracket: None }
+        Self {
+            bracket: FetchData::new(),
+        }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::Update(data) => {
                 self.bracket = data;
 
-                false
+                true
             }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let tournament = ctx.props().tournament.clone();
-        render_data(&self.bracket, |data| {
+        self.bracket.render(|data| {
+            let tournament = ctx.props().tournament.clone();
             let bracket = data.clone();
 
             match ctx.props().tournament.bracket_type {
@@ -80,7 +85,7 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    Update(Data<Rc<tournament::Bracket>>),
+    Update(FetchData<Option<Rc<tournament::Bracket>>>),
 }
 
 #[derive(Clone, Debug, Properties)]
