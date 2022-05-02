@@ -2,8 +2,6 @@ mod http;
 mod logger;
 mod websocket;
 
-use chrono::DateTime;
-use chrono::Utc;
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
 use log::LevelFilter;
 use parking_lot::RwLock;
@@ -13,13 +11,10 @@ use sqlx::mysql::MySqlPool;
 
 use thiserror::Error;
 
-use dynamic_tournament_api::tournament::Player;
-use dynamic_tournament_api::tournament::Team;
 use dynamic_tournament_api::tournament::{Tournament, TournamentId};
 
 use futures::TryStreamExt;
 use sqlx::Row;
-use tokio::sync::broadcast;
 use websocket::LiveBracket;
 
 use std::collections::HashMap;
@@ -46,9 +41,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
 
     let tables = [
-        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, date TEXT NOT NULL, description TEXT NOT NULL, bracket_type TINYINT UNSIGNED NOT NULL)",
-        "CREATE TABLE IF NOT EXISTS tournaments_teams (tournament_id BIGINT UNSIGNED NOT NULL, name TEXT NOT NULL, team_index BIGINT UNSIGNED NOT NULL)",
-        "CREATE TABLE IF NOT EXISTS tournaments_teams_players (tournament_id BIGINT UNSIGNED NOT NULL, account_name TEXT NOT NULL, role TINYINT UNSIGNED, team_index BIGINT UNSIGNED NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, data BLOB NOT NULL)",
         "CREATE TABLE IF NOT EXISTS tournaments_brackets (tournament_id BIGINT UNSIGNED PRIMARY KEY, data BLOB NOT NULL)"
     ];
 
@@ -140,33 +133,21 @@ impl State {
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows =
-            sqlx::query("SELECT id, name, date, bracket_type FROM tournaments").fetch(&self.store);
+        let mut rows = sqlx::query("SELECT id, data FROM tournaments").fetch(&self.store);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
             let id = row.try_get("id")?;
-            let name = row.try_get("name")?;
-            let date: String = row.try_get("date")?;
-            let bracket_type: u8 = row.try_get("bracket_type")?;
+            let data: Vec<u8> = row.try_get("data")?;
 
-            let row = sqlx::query(
-                "SELECT COUNT(*) AS teams FROM tournaments_teams WHERE tournament_id = ?",
-            )
-            .bind(id)
-            .fetch_one(&self.store)
-            .await?;
-
-            let teams: i64 = row.try_get("teams")?;
+            let data: Tournament = serde_json::from_slice(&data).unwrap();
 
             tournaments.push(TournamentOverview {
                 id: TournamentId(id),
-                name,
-                date: DateTime::parse_from_rfc3339(&date)
-                    .unwrap()
-                    .with_timezone(&Utc),
-                bracket_type: bracket_type.try_into().unwrap(),
-                teams: teams as u64,
+                name: data.name,
+                date: data.date,
+                bracket_type: data.bracket_type,
+                entrants: data.entrants.len().try_into().unwrap(),
             });
         }
 
@@ -174,99 +155,30 @@ impl State {
     }
 
     pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
-        let row = match sqlx::query(
-            "SELECT name, date, bracket_type, description FROM tournaments WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(&self.store)
-        .await
+        let row = match sqlx::query("SELECT data FROM tournaments WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.store)
+            .await
         {
             Ok(v) => v,
             Err(sqlx::Error::RowNotFound) => return Ok(None),
             Err(err) => return Err(err.into()),
         };
 
-        let mut tournament = Tournament {
-            id: TournamentId(id),
-            name: row.try_get("name")?,
-            date: DateTime::parse_from_rfc3339(&row.try_get::<'_, String, _>("date")?)
-                .unwrap()
-                .with_timezone(&Utc),
-            bracket_type: row
-                .try_get::<'_, u8, _>("bracket_type")?
-                .try_into()
-                .unwrap(),
-            description: row.try_get("description")?,
-            teams: Vec::new(),
-        };
+        let data: Vec<u8> = row.try_get("data")?;
+        let mut data: Tournament = serde_json::from_slice(&data).unwrap();
+        data.id = TournamentId(id);
 
-        let mut rows = sqlx::query(
-            "SELECT name FROM tournaments_teams WHERE tournament_id = ? ORDER BY team_index ASC",
-        )
-        .bind(tournament.id.0)
-        .fetch(&self.store);
-
-        while let Some(row) = rows.try_next().await? {
-            let team = Team {
-                name: row.try_get("name")?,
-                players: Vec::new(),
-            };
-
-            tournament.teams.push(team);
-        }
-
-        let mut rows = sqlx::query(
-            "SELECT account_name, role, team_index FROM tournaments_teams_players WHERE tournament_id = ?",
-                )
-                .bind(tournament.id.0)
-                .fetch(&self.store);
-
-        while let Some(row) = rows.try_next().await? {
-            let player = Player {
-                account_name: row.try_get("account_name")?,
-                role: row.try_get::<'_, u8, _>("role")?.try_into().unwrap(),
-            };
-
-            let team_index: u64 = row.try_get("team_index")?;
-
-            tournament.teams[team_index as usize].players.push(player);
-        }
-
-        Ok(Some(tournament))
+        Ok(Some(data))
     }
 
     pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
-        let res = sqlx::query(
-            "INSERT INTO tournaments (name, date, bracket_type, description) VALUES (?, ?, ?, ?)",
-        )
-        .bind(tournament.name)
-        .bind(tournament.date.to_rfc3339())
-        .bind(u8::from(tournament.bracket_type))
-        .bind(tournament.description)
-        .execute(&self.store)
-        .await?;
-
-        let id = res.last_insert_id();
-
-        for (i, team) in tournament.teams.into_iter().enumerate() {
-            sqlx::query(
-                "INSERT INTO tournaments_teams (name, tournament_id, team_index) VALUES (?, ?, ?)",
-            )
-            .bind(team.name)
-            .bind(id)
-            .bind(i as u64)
+        let res = sqlx::query("INSERT INTO tournaments (data) VALUES (?)")
+            .bind(serde_json::to_vec(&tournament).unwrap())
             .execute(&self.store)
             .await?;
 
-            for player in team.players {
-                sqlx::query("INSERT INTO tournaments_teams_players (tournament_id, team_index, account_name, role) VALUES (?, ?, ?, ?)")
-                .bind(id)
-                .bind(i as u64)
-                .bind(player.account_name)
-                .bind(u8::from(player.role))
-                .execute(&self.store).await?;
-            }
-        }
+        let id = res.last_insert_id();
 
         Ok(id)
     }

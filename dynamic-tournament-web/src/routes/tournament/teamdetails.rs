@@ -38,7 +38,7 @@ impl Component for TeamDetails {
                 html! {
                     <tr>
                         <td>{player.role.to_string()}</td>
-                        <td>{player.account_name}</td>
+                        <td>{player.name}</td>
                     </tr>
                 }
             })

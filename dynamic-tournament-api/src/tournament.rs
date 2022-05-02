@@ -97,7 +97,7 @@ pub struct Team {
 /// A single player in a [`Team`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Player {
-    pub account_name: String,
+    pub name: String,
     pub role: Role,
     /// Rating of the player.
     #[serde(default)]

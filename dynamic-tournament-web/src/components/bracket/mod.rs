@@ -9,9 +9,7 @@ use r#match::{Action, BracketMatch};
 use single_elimination::SingleEliminationBracket;
 use team::BracketTeam;
 
-use dynamic_tournament_api::tournament::{
-    self, Bracket as BracketState, BracketType, Tournament, TournamentId,
-};
+use dynamic_tournament_api::tournament::{self, BracketType, Tournament, TournamentId};
 use dynamic_tournament_api::Client;
 
 use std::rc::Rc;

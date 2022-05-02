@@ -272,10 +272,12 @@ impl LiveBracket {
         let bracket = match tournament.bracket_type {
             dynamic_tournament_api::tournament::BracketType::SingleElimination => {
                 TournamentBracket::SingleElimination(match bracket {
-                    Some(bracket) => {
-                        SingleElimination::resume(tournament.teams.into(), bracket.0).unwrap()
-                    }
-                    None => SingleElimination::new(tournament.teams.into_iter()),
+                    Some(bracket) => SingleElimination::resume(
+                        tournament.entrants.unwrap_teams().into(),
+                        bracket.0,
+                    )
+                    .unwrap(),
+                    None => SingleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
                 })
             }
             _ => unimplemented!(),

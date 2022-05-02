@@ -45,6 +45,8 @@ pub fn render_data<T, F>(
 where
     F: FnOnce(&T) -> Html,
 {
+    log::debug!("Fetchdata is {}", data.is_some());
+
     match data {
         Some(data) => match data {
             Ok(data) => f(data),
@@ -52,9 +54,13 @@ where
                 <crate::components::error::Error error={err.to_string()} />
             },
         },
-        None => html! {
-            <crate::components::loader::Loader />
-        },
+        None => {
+            log::debug!("FetchData is None");
+
+            html! {
+                <crate::components::loader::Loader />
+            }
+        }
     }
 }
 
