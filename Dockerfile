@@ -2,6 +2,7 @@ FROM rust:latest as builder
 
 WORKDIR /app
 COPY . .
+RUN dd if=/dev/urandom of=/app/dynamic-tournament-server/jwt-secret bs=1 count=512
 
 RUN cargo build --bin dynamic-tournament-server --release
 
