@@ -1,4 +1,4 @@
-mod auth;
+pub mod auth;
 mod tournament;
 
 use crate::http::RequestUri;

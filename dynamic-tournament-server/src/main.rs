@@ -2,7 +2,10 @@ mod http;
 mod logger;
 mod websocket;
 
+use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::Validation;
 use log::LevelFilter;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -75,6 +78,8 @@ pub enum Error {
     MethodNotAllowed,
     #[error("bad request")]
     BadRequest,
+    #[error("{0}")]
+    JsonWebToken(#[from] jsonwebtoken::errors::Error),
 }
 
 impl State {
@@ -96,40 +101,31 @@ impl State {
             None => return false,
         };
 
-        self.is_authenticated_string(header)
-    }
-
-    pub fn is_authenticated_string(&self, header: impl AsRef<[u8]>) -> bool {
-        let header = match header.as_ref().strip_prefix(b"Basic ") {
+        let header = match header.as_ref().strip_prefix(b"Bearer ") {
             Some(header) => header,
             None => return false,
         };
 
-        let data = match base64::decode(header) {
-            Ok(v) => v,
+        self.is_authenticated_string(header)
+    }
+
+    pub fn is_authenticated_string(&self, header: impl AsRef<[u8]>) -> bool {
+        match String::from_utf8(header.as_ref().to_vec()) {
+            Ok(s) => self.decode_token(&s).is_ok(),
             Err(err) => {
-                log::debug!("Authorization header decoding failed: {:?}", err);
-
-                return false;
+                log::info!("Failed to convert header to string: {:?}", err);
+                false
             }
-        };
+        }
+    }
 
-        let string = match std::str::from_utf8(&data) {
-            Ok(v) => v,
-            Err(_) => return false,
-        };
+    pub fn decode_token(&self, token: &String) -> Result<Claims, jsonwebtoken::errors::Error> {
+        let key = DecodingKey::from_secret(http::v1::auth::SECRET);
+        let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
-        let (username, password) = match string.split_once(":") {
-            Some((u, p)) => (u, p),
-            None => return false,
-        };
+        let data = jsonwebtoken::decode(token, &key, &validation)?;
 
-        let data = LoginData {
-            username: username.to_owned(),
-            password: password.to_owned(),
-        };
-
-        self.is_allowed(&data)
+        Ok(data.claims)
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {

@@ -1,4 +1,4 @@
-mod v1;
+pub mod v1;
 
 use crate::{Error, State};
 
@@ -135,6 +135,14 @@ impl<'a> RequestUri<'a> {
                     path
                 }
             })
+        }
+    }
+
+    pub fn take_all(self) -> Option<&'a str> {
+        if self.path.is_empty() {
+            None
+        } else {
+            Some(self.path)
         }
     }
 }

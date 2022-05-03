@@ -5,6 +5,7 @@ pub mod websocket;
 use crate::auth::AuthClient;
 use crate::tournament::TournamentClient;
 
+use auth::TokenPair;
 use reqwasm::http::{Headers, Method, Request};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -48,19 +49,19 @@ impl Client {
 
     pub fn is_authenticated(&self) -> bool {
         let inner = self.inner.read().unwrap();
-        inner.authorization.header.is_some()
+        inner.authorization.tokens.is_some()
+    }
+
+    pub fn authorization(&self) -> Authorization {
+        let inner = self.inner.read().unwrap();
+
+        inner.authorization.clone()
     }
 
     pub fn base_url(&self) -> String {
         let inner = self.inner.read().unwrap();
 
         inner.base_url.clone()
-    }
-
-    pub fn authorization(&self) -> Option<String> {
-        let inner = self.inner.read().unwrap();
-
-        inner.authorization.header.clone()
     }
 
     pub fn logout(&self) {
@@ -75,7 +76,7 @@ impl PartialEq for Client {
     }
 }
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) struct ClientInner {
@@ -99,8 +100,8 @@ impl RequestBuilder {
             body: None,
         };
 
-        match &authorization.header {
-            Some(auth) => this.header("Authorization", auth),
+        match authorization.auth_token() {
+            Some(token) => this.header("Authorization", format!("Bearer {}", token)),
             None => this,
         }
     }
@@ -160,20 +161,26 @@ impl RequestBuilder {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("bad status code: {0}")]
     BadStatusCode(u16),
+    #[error("unauthorized")]
+    Unauthorized,
+    #[error(transparent)]
+    Reqwasm(#[from] reqwasm::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authorization {
-    header: Option<String>,
+    pub(crate) tokens: Option<TokenPair>,
 }
 
 impl Authorization {
     pub fn new() -> Self {
-        let mut this = Self { header: None };
+        let mut this = Self { tokens: None };
 
         #[cfg(feature = "local-storage")]
         if let Ok(new) = LocalStorage::get("dynamic-tournament-api-client") {
@@ -183,11 +190,9 @@ impl Authorization {
         this
     }
 
-    pub fn update<T>(&mut self, header: Option<T>)
-    where
-        T: ToString,
-    {
-        self.header = header.and_then(|v| Some(v.to_string()));
+    /// Update the authorization tokens to the newly provided [`TokenPair`].
+    pub fn update(&mut self, tokens: TokenPair) {
+        self.tokens = Some(tokens);
 
         #[cfg(feature = "local-storage")]
         {
@@ -196,8 +201,29 @@ impl Authorization {
         }
     }
 
+    /// Delete all authorization tokens.
     pub fn delete(&mut self) {
-        self.header = None;
+        #[cfg(feature = "local-storage")]
+        LocalStorage::delete("dynamic-tournament-api-client");
+
+        self.tokens = None;
+    }
+
+    /// Returns a reference to the auth token. This is the token to make requests. Returns [`None`]
+    /// if no tokens are avaliable.
+    pub fn auth_token(&self) -> Option<&str> {
+        match self.tokens {
+            Some(ref tokens) => Some(&tokens.auth_token),
+            None => None,
+        }
+    }
+
+    /// Returns a reference to the refresh token. Returns [`None`] if no tokens are avaliable.
+    pub fn refresh_token(&self) -> Option<&str> {
+        match self.tokens {
+            Some(ref tokens) => Some(&tokens.refresh_token),
+            None => None,
+        }
     }
 }
 

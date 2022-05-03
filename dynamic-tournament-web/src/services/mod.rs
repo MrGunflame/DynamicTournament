@@ -1,3 +1,5 @@
+pub mod client;
+
 use std::collections::HashSet;
 
 use futures::channel::mpsc;
@@ -27,7 +29,7 @@ impl WebSocketService {
             id
         );
 
-        let auth = client.authorization();
+        let auth = client.authorization().auth_token().map(|s| s.to_owned());
 
         let ws = WebSocket::open(&uri).unwrap();
 

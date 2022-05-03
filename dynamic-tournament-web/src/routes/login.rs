@@ -1,9 +1,11 @@
 use crate::components::providers::auth::{Auth, InnerAuth};
 use crate::routes::Route;
+use crate::services::client::ClientEventBus;
 
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew::Callback;
+use yew_agent::Dispatched;
 use yew_router::components::Redirect;
 
 use dynamic_tournament_api::Client;
@@ -73,6 +75,8 @@ impl Component for Login {
                     .link()
                     .context::<Auth>(Callback::noop())
                     .expect("No AuthContext provided");
+
+                ClientEventBus::dispatcher().send(());
 
                 let mut inner = auth.inner.lock().unwrap();
                 *inner = Some(data);
