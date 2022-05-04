@@ -4,6 +4,7 @@ mod websocket;
 
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
+use hyper::StatusCode;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Validation;
 use log::LevelFilter;
@@ -78,8 +79,29 @@ pub enum Error {
     MethodNotAllowed,
     #[error("bad request")]
     BadRequest,
+    #[error("status code error")]
+    StatusCodeError(#[from] StatusCodeError),
     #[error("{0}")]
     JsonWebToken(#[from] jsonwebtoken::errors::Error),
+}
+
+#[derive(Debug, Error)]
+#[error("error {code}: {message}")]
+pub struct StatusCodeError {
+    code: StatusCode,
+    message: String,
+}
+
+impl StatusCodeError {
+    pub fn new<T>(code: StatusCode, message: T) -> Self
+    where
+        T: ToString,
+    {
+        Self {
+            code,
+            message: message.to_string(),
+        }
+    }
 }
 
 impl State {
@@ -95,7 +117,7 @@ impl State {
         false
     }
 
-    pub fn is_authenticated<T>(&self, req: &hyper::Request<T>) -> bool {
+    pub fn is_authenticated(&self, req: &http::Request) -> bool {
         let header = match req.headers().get("Authorization") {
             Some(header) => header.as_bytes(),
             None => return false,

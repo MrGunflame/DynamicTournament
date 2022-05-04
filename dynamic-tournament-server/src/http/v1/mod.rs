@@ -1,13 +1,13 @@
 pub mod auth;
 mod tournament;
 
-use crate::http::RequestUri;
+use crate::http::{Request, RequestUri};
 use crate::{Error, State};
 
-use hyper::{Body, Request, Response};
+use hyper::{Body, Response};
 
 pub async fn route<'a>(
-    req: Request<Body>,
+    req: Request,
     mut uri: RequestUri<'a>,
     state: State,
 ) -> Result<Response<Body>, Error> {

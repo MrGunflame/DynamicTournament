@@ -1,9 +1,12 @@
 use chrono::Utc;
-use hyper::{Body, Request, Response};
+use hyper::{Body, Response};
 use hyper::{Method, StatusCode};
 use jsonwebtoken::{EncodingKey, Header};
 
-use crate::{http::RequestUri, Error, State};
+use crate::{
+    http::{Request, RequestUri},
+    Error, State,
+};
 
 use dynamic_tournament_api::auth::{Claims, RefreshToken, TokenPair};
 
@@ -15,7 +18,7 @@ const REFRESH_TOKEN_EXPR: u64 = 60 * 60 * 24;
 pub const SECRET: &'static [u8] = include_bytes!("../../../jwt-secret");
 
 pub async fn route<'a>(
-    req: Request<Body>,
+    req: Request,
     uri: RequestUri<'a>,
     state: State,
 ) -> Result<Response<Body>, Error> {
@@ -41,20 +44,10 @@ pub async fn route<'a>(
     }
 }
 
-async fn login(req: Request<Body>, state: State) -> Result<Response<Body>, Error> {
-    let bytes = hyper::body::to_bytes(req.into_body()).await?;
+async fn login(req: Request, state: State) -> Result<Response<Body>, Error> {
+    let data = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
-
-    let data = match serde_json::from_slice(&bytes) {
-        Ok(v) => v,
-        Err(err) => {
-            *resp.status_mut() = StatusCode::BAD_REQUEST;
-            *resp.body_mut() = Body::from(err.to_string());
-
-            return Ok(resp);
-        }
-    };
 
     if state.is_allowed(&data) {
         let tokens = create_token_pair(Claims::new(0))?;
@@ -69,20 +62,10 @@ async fn login(req: Request<Body>, state: State) -> Result<Response<Body>, Error
     Ok(resp)
 }
 
-async fn refresh(req: Request<Body>, state: State) -> Result<Response<Body>, Error> {
-    let bytes = hyper::body::to_bytes(req.into_body()).await?;
+async fn refresh(req: Request, state: State) -> Result<Response<Body>, Error> {
+    let body: RefreshToken = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
-
-    let body: RefreshToken = match serde_json::from_slice(&bytes) {
-        Ok(v) => v,
-        Err(err) => {
-            *resp.status_mut() = StatusCode::BAD_REQUEST;
-            *resp.body_mut() = Body::from(err.to_string());
-
-            return Ok(resp);
-        }
-    };
 
     let claims = match state.decode_token(&body.refresh_token) {
         Ok(claims) => claims,

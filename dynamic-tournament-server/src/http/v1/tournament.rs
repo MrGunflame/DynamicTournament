@@ -1,12 +1,12 @@
-use crate::http::RequestUri;
+use crate::http::{Request, RequestUri};
 use crate::{Error, State};
 
 use hyper::header::{HeaderValue, CONNECTION, UPGRADE};
-use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::{Body, Method, Response, StatusCode};
 use sha1::{Digest, Sha1};
 
 pub async fn route<'a>(
-    req: Request<Body>,
+    req: Request,
     mut uri: RequestUri<'a>,
     state: State,
 ) -> Result<Response<Body>, Error> {
@@ -48,7 +48,7 @@ pub async fn route<'a>(
     }
 }
 
-async fn list(_req: Request<Body>, state: State) -> Result<Response<Body>, Error> {
+async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
     let ids = state.list_tournaments().await?;
 
     let body = serde_json::to_string(&ids)?;
@@ -62,7 +62,7 @@ async fn list(_req: Request<Body>, state: State) -> Result<Response<Body>, Error
     Ok(resp)
 }
 
-async fn create(req: Request<Body>, state: State) -> Result<Response<Body>, Error> {
+async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
     if !state.is_authenticated(&req) {
         return Ok(Response::builder()
             .status(403)
@@ -70,19 +70,9 @@ async fn create(req: Request<Body>, state: State) -> Result<Response<Body>, Erro
             .unwrap());
     }
 
-    let bytes = hyper::body::to_bytes(req.into_body()).await?;
+    let tournament = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
-
-    let tournament = match serde_json::from_slice(&bytes) {
-        Ok(tournament) => tournament,
-        Err(err) => {
-            *resp.status_mut() = StatusCode::BAD_REQUEST;
-            *resp.body_mut() = Body::from(err.to_string());
-
-            return Ok(resp);
-        }
-    };
 
     let id = state.create_tournament(tournament).await?;
 
@@ -92,7 +82,7 @@ async fn create(req: Request<Body>, state: State) -> Result<Response<Body>, Erro
     Ok(resp)
 }
 
-async fn get(_req: Request<Body>, id: u64, state: State) -> Result<Response<Body>, Error> {
+async fn get(_req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
 
     resp.headers_mut()
@@ -111,11 +101,7 @@ async fn get(_req: Request<Body>, id: u64, state: State) -> Result<Response<Body
     Ok(resp)
 }
 
-pub async fn bracket(
-    mut req: Request<Body>,
-    id: u64,
-    state: State,
-) -> Result<Response<Body>, Error> {
+pub async fn bracket(mut req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
 
     if !req.headers().contains_key(UPGRADE) {
@@ -153,7 +139,7 @@ pub async fn bracket(
     }
 
     tokio::task::spawn(async move {
-        match hyper::upgrade::on(&mut req).await {
+        match hyper::upgrade::on(&mut req.request).await {
             Ok(conn) => crate::websocket::handle(conn, state, id).await,
             Err(err) => log::error!("Failed to upgrade connection: {:?}", err),
         }

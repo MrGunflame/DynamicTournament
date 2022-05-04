@@ -1,15 +1,18 @@
 pub mod v1;
 
-use crate::{Error, State};
+use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::Duration;
 
 use hyper::header::HeaderValue;
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, StatusCode};
+use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
+use serde::de::DeserializeOwned;
+use tokio::time::Instant;
 
 pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
     let make_svc = make_service_fn(move |_conn| {
@@ -35,7 +38,52 @@ async fn shutdown_signal() {
     tokio::signal::ctrl_c().await.unwrap()
 }
 
-async fn service_root(req: Request<Body>, state: State) -> Result<Response<Body>, Infallible> {
+async fn service_root(
+    req: hyper::Request<Body>,
+    state: State,
+) -> Result<Response<Body>, Infallible> {
+    log::trace!("Received Request:");
+    log::trace!("Head: {} {}", req.method(), req.uri());
+    log::trace!("Headers: {:?}", req.headers());
+    log::trace!("Body: {:?}", req.body());
+
+    let req = Request { request: req };
+
+    if req.method() == Method::POST {
+        let mut resp = Response::new(Body::empty());
+        match req.headers().get("Content-Length") {
+            Some(value) => match value.to_str() {
+                Ok(s) => match s.parse::<u64>() {
+                    Ok(length) => {
+                        if length > 16384 {
+                            *resp.status_mut() = StatusCode::PAYLOAD_TOO_LARGE;
+                            *resp.body_mut() = Body::from("Payload Too Large");
+                            return Ok(resp);
+                        }
+                    }
+                    // Content-Length header is malformed.
+                    _ => {
+                        *resp.status_mut() = StatusCode::BAD_REQUEST;
+                        *resp.body_mut() = Body::from("Bad Request");
+                        return Ok(resp);
+                    }
+                },
+                // Content-Length header is malformed.
+                _ => {
+                    *resp.status_mut() = StatusCode::BAD_REQUEST;
+                    *resp.body_mut() = Body::from("Bad Request");
+                    return Ok(resp);
+                }
+            },
+            // Content-Length header is missing.
+            None => {
+                *resp.status_mut() = StatusCode::LENGTH_REQUIRED;
+                *resp.body_mut() = Body::from("Length Required");
+                return Ok(resp);
+            }
+        }
+    }
+
     let uri = String::from(req.uri().path());
 
     let mut uri = RequestUri::new(&uri);
@@ -85,6 +133,10 @@ async fn service_root(req: Request<Body>, state: State) -> Result<Response<Body>
                     *resp.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
                     *resp.body_mut() = Body::from("Method Not Allowed");
                 }
+                Error::StatusCodeError(err) => {
+                    *resp.status_mut() = err.code;
+                    *resp.body_mut() = Body::from(err.message);
+                }
                 err => {
                     log::error!("{:?}", err);
 
@@ -94,6 +146,48 @@ async fn service_root(req: Request<Body>, state: State) -> Result<Response<Body>
             }
 
             Ok(resp)
+        }
+    }
+}
+
+pub struct Request {
+    pub request: hyper::Request<Body>,
+}
+
+impl Request {
+    pub fn method(&self) -> &Method {
+        self.request.method()
+    }
+
+    pub fn headers(&self) -> &HeaderMap<HeaderValue> {
+        self.request.headers()
+    }
+
+    pub fn uri(&self) -> &Uri {
+        self.request.uri()
+    }
+
+    pub async fn json<T>(self) -> Result<T, Error>
+    where
+        T: DeserializeOwned,
+    {
+        const DUR: Duration = Duration::new(30, 0);
+
+        let deadline = Instant::now() + DUR;
+
+        let bytes = tokio::select! {
+            res = hyper::body::to_bytes(self.request.into_body()) => {
+                res?
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                log::info!("Client failed to transmit body in {}s, dropping connection", DUR.as_secs());
+                return Err(StatusCodeError::new(StatusCode::REQUEST_TIMEOUT, "Request Timeout").into());
+            }
+        };
+
+        match serde_json::from_slice(&bytes) {
+            Ok(value) => Ok(value),
+            Err(err) => Err(StatusCodeError::new(StatusCode::BAD_REQUEST, err).into()),
         }
     }
 }
