@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::components::bracket::Bracket;
 use crate::components::config_provider::ConfigProvider;
 use crate::components::movable_boxed::MovableBoxed;
-use crate::components::providers::{AuthProvider, ClientProvider, Provider};
+use crate::components::providers::{ClientProvider, Provider};
 use crate::{render_data, Data, DataResult};
 
 use yew::prelude::*;
@@ -37,36 +37,34 @@ impl Component for App {
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <ConfigProvider>
-                <AuthProvider>
-                    <ClientProvider>
-                        <BrowserRouter>
-                            <div class="main-wrapper">
-                                <div>
-                                    <div class="navbar">
-                                        <ul>
-                                            <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                                            <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
-                                            <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
-                                            <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
-                                        </ul>
-                                    </div>
-                                    <div class="main">
-                                        <Switch<Route> render={Switch::render(switch)} />
-                                    </div>
-                                    <div id="popup-host"></div>
+                <ClientProvider>
+                    <BrowserRouter>
+                        <div class="main-wrapper">
+                            <div>
+                                <div class="navbar">
+                                    <ul>
+                                        <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
+                                        <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
+                                        <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
+                                        <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
+                                    </ul>
                                 </div>
-                                <div class="footer">
-                                    <p>
-                                        { "This viewer is still in an early stage, please report issues on " }
-                                        <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
-                                        { " or to MagiiTech#0534 on Discord." }
-                                    </p>
-                                    <a href="/privacy.html">{ "Privacy Policy" }</a>
+                                <div class="main">
+                                    <Switch<Route> render={Switch::render(switch)} />
                                 </div>
+                                <div id="popup-host"></div>
                             </div>
-                        </BrowserRouter>
-                    </ClientProvider>
-                </AuthProvider>
+                            <div class="footer">
+                                <p>
+                                    { "This viewer is still in an early stage, please report issues on " }
+                                    <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
+                                    { " or to MagiiTech#0534 on Discord." }
+                                </p>
+                                <a href="/privacy.html">{ "Privacy Policy" }</a>
+                            </div>
+                        </div>
+                    </BrowserRouter>
+                </ClientProvider>
             </ConfigProvider>
         }
     }

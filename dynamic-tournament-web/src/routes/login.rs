@@ -1,4 +1,5 @@
-use crate::components::providers::auth::{Auth, InnerAuth};
+use crate::components::providers::ClientProvider;
+use crate::components::providers::Provider;
 use crate::routes::Route;
 use crate::services::client::ClientEventBus;
 
@@ -63,23 +64,15 @@ impl Component for Login {
                     }
 
                     match fetch_data(client, username.clone(), password.clone()).await {
-                        Ok(_) => Message::ReqeustResolve(InnerAuth { username, password }),
+                        Ok(_) => Message::ReqeustResolve,
                         Err(err) => Message::RequestReject(err.to_string()),
                     }
                 });
 
                 false
             }
-            Message::ReqeustResolve(data) => {
-                let (auth, _) = ctx
-                    .link()
-                    .context::<Auth>(Callback::noop())
-                    .expect("No AuthContext provided");
-
+            Message::ReqeustResolve => {
                 ClientEventBus::dispatcher().send(());
-
-                let mut inner = auth.inner.lock().unwrap();
-                *inner = Some(data);
 
                 // Redirect to / now.
                 true
@@ -93,19 +86,13 @@ impl Component for Login {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        // Move to different block here so we drop the mutexguard after the check.
-        {
-            let (auth, _) = ctx
-                .link()
-                .context::<Auth>(Callback::noop())
-                .expect("No AuthContext provided");
+        let client = ClientProvider::take(ctx);
 
-            // Redirect to /.
-            if auth.inner.lock().unwrap().is_some() {
-                return html! {
-                    <Redirect<Route> to={Route::Index} />
-                };
-            }
+        // Redirect to /.
+        if client.is_authenticated() {
+            return html! {
+                <Redirect<Route> to={Route::Index} />
+            };
         }
 
         let link = ctx.link().clone();
@@ -170,6 +157,6 @@ pub enum Message {
     UpdateUsername(String),
     UpdatePassword(String),
     Submit,
+    ReqeustResolve,
     RequestReject(String),
-    ReqeustResolve(InnerAuth),
 }
