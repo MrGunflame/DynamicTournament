@@ -1,11 +1,11 @@
 [package]
 name = "dynamic-tournament-server"
-version = "0.1.0"
+version = "0.3.2"
 edition = "2021"
 
 [dependencies]
-dynamic-tournament-api = { version = "0.1.0", path = "../dynamic-tournament-api", features = ["server"] }
-dynamic-tournament-generator = { version = "0.1.0", path = "../dynamic-tournament-generator", features = ["serde"] }
+dynamic-tournament-api = { version = "0.3.2", path = "../dynamic-tournament-api", features = ["server"] }
+dynamic-tournament-generator = { version = "0.3.2", path = "../dynamic-tournament-generator", features = ["serde"] }
 tokio = { version = "1.17.0", features = ["full"] }
 sqlx = { version = "0.5.11", features = ["runtime-tokio-rustls", "mysql", "json"] }
 serde = "1.0.136"

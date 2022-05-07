@@ -1,9 +1,10 @@
 [package]
 name = "dynamic-tournament-generator"
-version = "0.1.0"
+version = "0.3.2"
 edition = "2021"
 
 [features]
+default = []
 serde = ["dep:serde"]
 serde-flatten = ["serde"]
 

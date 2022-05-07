@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-api"
-version = "0.1.0"
+version = "0.3.2"
 edition = "2021"
 
 [features]
@@ -9,7 +9,7 @@ server = []
 local-storage = ["dep:gloo-storage"]
 
 [dependencies]
-dynamic-tournament-generator = { version = "0.1.0", path = "../dynamic-tournament-generator", features = ["serde"] }
+dynamic-tournament-generator = { version = "0.3.2", path = "../dynamic-tournament-generator", features = ["serde"] }
 
 reqwasm = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
