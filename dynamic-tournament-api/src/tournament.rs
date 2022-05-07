@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 
 // //////////////////////
-// /// /v1/tournament ///
+// /// /v2/tournament ///
 // //////////////////////
 
 /// A unique identifier for a [`Tournament`].
@@ -210,7 +210,7 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>> {
-        let req = self.client.request().url("/v1/tournament");
+        let req = self.client.request().url("/v2/tournament");
 
         let resp = req.build().send().await?.json().await?;
 
@@ -226,7 +226,7 @@ impl<'a> TournamentClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v1/tournament/{}", id.0));
+            .url(format!("/v2/tournament/{}", id.0));
 
         let resp = req.build().send().await?.json().await?;
 
@@ -242,7 +242,7 @@ impl<'a> TournamentClient<'a> {
         let req = self
             .client
             .request()
-            .url("/v1/tournament")
+            .url("/v2/tournament")
             .post()
             .body(tournament);
 
@@ -264,7 +264,7 @@ impl<'a> TournamentClient<'a> {
 }
 
 // ///////////////////////////////////
-// /// /v1/tournament/{id}/bracket ///
+// /// /v2/tournament/{id}/bracket ///
 // ///////////////////////////////////
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -286,7 +286,7 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v1/tournament/{}/bracket", self.tournament_id.0));
+            .url(format!("/v2/tournament/{}/bracket", self.tournament_id.0));
 
         let resp = req.build().send().await?.json().await?;
 
@@ -302,7 +302,7 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v1/tournament/{}/bracket", self.tournament_id.0))
+            .url(format!("/v2/tournament/{}/bracket", self.tournament_id.0))
             .put()
             .body(bracket);
 

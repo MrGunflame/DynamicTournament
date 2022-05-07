@@ -27,7 +27,7 @@ impl<'a> AuthClient<'a> {
             .client
             .request()
             .post()
-            .url("/v1/auth/login")
+            .url("/v2/auth/login")
             .body(body);
 
         let resp = req.build().send().await?;
@@ -70,7 +70,7 @@ impl<'a> AuthClient<'a> {
             .client
             .request()
             .post()
-            .url("/v1/auth/refresh")
+            .url("/v2/auth/refresh")
             .body(&body)
             .build();
 
