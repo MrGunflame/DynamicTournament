@@ -103,14 +103,42 @@ impl StatusCodeError {
         }
     }
 
-    pub fn length_required() -> Self {
-        Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
-    }
-
+    /// 400 Bad Request
     pub fn bad_request() -> Self {
         Self::new(StatusCode::BAD_REQUEST, "Bad Request")
     }
 
+    /// 401 Unauthorized
+    pub fn unauthorized() -> Self {
+        Self::new(StatusCode::UNAUTHORIZED, "Unauthorized")
+    }
+
+    /// 403 Forbidden
+    pub fn forbidden() -> Self {
+        Self::new(StatusCode::FORBIDDEN, "Forbidden")
+    }
+
+    /// 404 Not Found
+    pub fn not_found() -> Self {
+        Self::new(StatusCode::NOT_FOUND, "Not Found")
+    }
+
+    /// 405 Method Not Allowed
+    pub fn method_not_allowed() -> Self {
+        Self::new(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed")
+    }
+
+    /// 408 Request Timeout
+    pub fn request_timeout() -> Self {
+        Self::new(StatusCode::REQUEST_TIMEOUT, "Request Timeout")
+    }
+
+    /// 411 Length Required
+    pub fn length_required() -> Self {
+        Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
+    }
+
+    /// 413 Payload Too Large
     pub fn payload_too_large() -> Self {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
     }

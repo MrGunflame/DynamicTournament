@@ -2,7 +2,7 @@ pub mod auth;
 mod tournament;
 
 use crate::http::{Request, RequestUri};
-use crate::{Error, State};
+use crate::{Error, State, StatusCodeError};
 
 use hyper::{Body, Response};
 
@@ -14,6 +14,6 @@ pub async fn route<'a>(
     match uri.take_str() {
         Some("tournament") => tournament::route(req, uri, state).await,
         Some("auth") => auth::route(req, uri, state).await,
-        _ => Err(Error::NotFound),
+        _ => Err(StatusCodeError::not_found().into()),
     }
 }

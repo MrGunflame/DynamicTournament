@@ -1,5 +1,5 @@
 use crate::http::{Request, RequestUri};
-use crate::{Error, State};
+use crate::{Error, State, StatusCodeError};
 
 use hyper::header::{HeaderValue, CONNECTION, UPGRADE};
 use hyper::{Body, Method, Response, StatusCode};
@@ -10,39 +10,37 @@ pub async fn route<'a>(
     mut uri: RequestUri<'a>,
     state: State,
 ) -> Result<Response<Body>, Error> {
-    let path = uri.take();
-
-    match path {
-        None => match req.method() {
-            &Method::GET => list(req, state).await,
-            &Method::POST => create(req, state).await,
-            &Method::OPTIONS => Ok(Response::builder()
+    match uri.take() {
+        None => match *req.method() {
+            Method::GET => list(req, state).await,
+            Method::POST => create(req, state).await,
+            Method::OPTIONS => Ok(Response::builder()
                 .status(204)
                 .body(Body::from("No Content"))
                 .unwrap()),
-            _ => Err(Error::MethodNotAllowed),
+            _ => Err(StatusCodeError::method_not_allowed().into()),
         },
         Some(id) => {
             let id: u64 = id.parse()?;
 
             match uri.take_str() {
-                Some("bracket") => match req.method() {
-                    &Method::GET => bracket(req, id, state).await,
-                    &Method::OPTIONS => Ok(Response::builder()
+                Some("bracket") => match *req.method() {
+                    Method::GET => bracket(req, id, state).await,
+                    Method::OPTIONS => Ok(Response::builder()
                         .status(204)
                         .body(Body::from("No Content"))
                         .unwrap()),
-                    _ => Err(Error::MethodNotAllowed),
+                    _ => Err(StatusCodeError::method_not_allowed().into()),
                 },
-                None => match req.method() {
-                    &Method::GET => get(req, id, state).await,
-                    &Method::OPTIONS => Ok(Response::builder()
+                None => match *req.method() {
+                    Method::GET => get(req, id, state).await,
+                    Method::OPTIONS => Ok(Response::builder()
                         .status(204)
                         .body(Body::from("No Content"))
                         .unwrap()),
-                    _ => Err(Error::MethodNotAllowed),
+                    _ => Err(StatusCodeError::method_not_allowed().into()),
                 },
-                _ => Err(Error::NotFound),
+                _ => Err(StatusCodeError::not_found().into()),
             }
         }
     }

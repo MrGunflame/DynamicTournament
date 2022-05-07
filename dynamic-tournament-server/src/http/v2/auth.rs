@@ -5,7 +5,7 @@ use jsonwebtoken::{EncodingKey, Header};
 
 use crate::{
     http::{Request, RequestUri},
-    Error, State,
+    Error, State, StatusCodeError,
 };
 
 use dynamic_tournament_api::auth::{Claims, RefreshToken, TokenPair};
@@ -30,7 +30,7 @@ pub async fn route<'a>(
                 .body(Body::from("No Content"))
                 .unwrap()),
 
-            _ => Err(Error::MethodNotAllowed),
+            _ => Err(StatusCodeError::method_not_allowed().into()),
         },
         Some("refresh") => match *req.method() {
             Method::POST => refresh(req, state).await,
@@ -38,9 +38,9 @@ pub async fn route<'a>(
                 .status(204)
                 .body(Body::from("No Content"))
                 .unwrap()),
-            _ => Err(Error::MethodNotAllowed),
+            _ => Err(StatusCodeError::method_not_allowed().into()),
         },
-        _ => Err(Error::NotFound),
+        _ => Err(StatusCodeError::not_found().into()),
     }
 }
 

@@ -184,7 +184,7 @@ impl Request {
             }
             _ = tokio::time::sleep_until(deadline) => {
                 log::info!("Client failed to transmit body in {}s, dropping connection", DUR.as_secs());
-                return Err(StatusCodeError::new(StatusCode::REQUEST_TIMEOUT, "Request Timeout").into());
+                return Err(StatusCodeError::request_timeout().into());
             }
         };
 
@@ -196,7 +196,7 @@ impl Request {
 
     /// Returns the value of the "Content-Length" header. If the header is not present or has an
     /// invalid value an error is returned.
-    pub async fn content_length(&self) -> Result<u64, Error> {
+    pub fn content_length(&self) -> Result<u64, Error> {
         match self.request.headers().get("Content-Length") {
             Some(value) => match value.to_str() {
                 Ok(value) => match value.parse() {
