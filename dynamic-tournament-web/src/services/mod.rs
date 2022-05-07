@@ -24,7 +24,7 @@ impl WebSocketService {
     pub fn new(client: Client, id: u64) -> Self {
         // Replace http with ws and https with wss.
         let uri = format!(
-            "{}/v1/tournament/{}/bracket",
+            "{}/v2/tournament/{}/bracket",
             client.base_url().replacen("http", "ws", 1),
             id
         );
