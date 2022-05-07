@@ -102,6 +102,18 @@ impl StatusCodeError {
             message: message.to_string(),
         }
     }
+
+    pub fn length_required() -> Self {
+        Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
+    }
+
+    pub fn bad_request() -> Self {
+        Self::new(StatusCode::BAD_REQUEST, "Bad Request")
+    }
+
+    pub fn payload_too_large() -> Self {
+        Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
+    }
 }
 
 impl State {
@@ -142,7 +154,7 @@ impl State {
     }
 
     pub fn decode_token(&self, token: &String) -> Result<Claims, jsonwebtoken::errors::Error> {
-        let key = DecodingKey::from_secret(http::v1::auth::SECRET);
+        let key = DecodingKey::from_secret(http::v2::auth::SECRET);
         let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
         let data = jsonwebtoken::decode(token, &key, &validation)?;

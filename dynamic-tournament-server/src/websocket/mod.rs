@@ -104,6 +104,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                 log::debug!("Client is not authenticated: skipping");
                             }
                         }
+                        protocol::Message::Pong(_) => {}
                         // Unexpected packet, close the connection.
                         _ => {
                             let _ = tx.send(websocket::Message::Close).await;
@@ -119,6 +120,10 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
     tokio::task::spawn(async move {
         loop {
             tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::new(30, 0)) => {
+                    log::debug!("Sending ping to client");
+                    sink.send(Message::ping(vec![0])).await.unwrap();
+                }
                 // Listen to message from the reader half.
                 msg = rx.recv() => {
                     match msg {
@@ -251,6 +256,12 @@ impl Message {
     {
         Self {
             inner: protocol::Message::binary(msg),
+        }
+    }
+
+    pub fn ping(msg: Vec<u8>) -> Self {
+        Self {
+            inner: protocol::Message::Ping(msg),
         }
     }
 }
