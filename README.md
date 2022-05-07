@@ -36,9 +36,9 @@ These features are still work in progress:
 - [x] A way to save and load the bracket state
 - [x] A proper score system
 - [x] Auto-forward placeholder matches
-- [ ] A way to undo matches and revert the bracket state
+- [x] A way to undo matches and revert the bracket state
 - [x] DoubleElimination
 - [ ] Seeding
 - [ ] Full refactor for v1.0
-- [ ] Live bracket updates with WebSockets
-- [ ] Split Entrants and Data in dynamic-tournament-generator
+- [x] Live bracket updates with WebSockets
+- [x] Split Entrants and Data in dynamic-tournament-generator
