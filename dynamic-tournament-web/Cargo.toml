@@ -15,10 +15,11 @@ yew-router = "0.16.0"
 gloo-console = "0.2.1"
 gloo-timers = "0.2.3"
 web-sys = { version = "0.3.56", features = ["Document", "Element", "Node", "Window", "HtmlCollection", "HtmlInputElement"] }
-log = { version = "0.4.16", default-features = false, features = ["release_max_level_warn"] }
+log = "0.4.16"
 futures = "0.3.21"
 wasm-bindgen-futures = "0.4.30"
 yew-agent = "0.1.0"
+chrono = { version = "0.4.19", features = ["wasmbind"] }
 
 [profile.release]
 debug-assertions = false
