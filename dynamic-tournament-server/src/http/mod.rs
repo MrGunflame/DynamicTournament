@@ -1,4 +1,5 @@
-pub mod v1;
+mod v1;
+pub mod v2;
 
 use crate::{Error, State, StatusCodeError};
 
@@ -93,7 +94,8 @@ async fn service_root(
     let origin = req.headers().get("Origin").cloned();
 
     let res = match uri.take_str() {
-        Some("v1") => v1::route(req, uri, state).await,
+        Some("v1") => v1::route().await,
+        Some("v2") => v2::route(req, uri, state).await,
         _ => Err(Error::NotFound),
     };
 
@@ -150,6 +152,7 @@ async fn service_root(
     }
 }
 
+#[derive(Debug)]
 pub struct Request {
     pub request: hyper::Request<Body>,
 }
@@ -188,6 +191,29 @@ impl Request {
         match serde_json::from_slice(&bytes) {
             Ok(value) => Ok(value),
             Err(err) => Err(StatusCodeError::new(StatusCode::BAD_REQUEST, err).into()),
+        }
+    }
+
+    /// Returns the value of the "Content-Length" header. If the header is not present or has an
+    /// invalid value an error is returned.
+    pub async fn content_length(&self) -> Result<u64, Error> {
+        match self.request.headers().get("Content-Length") {
+            Some(value) => match value.to_str() {
+                Ok(value) => match value.parse() {
+                    Ok(value) => Ok(value),
+                    Err(err) => {
+                        log::debug!("Failed to parse \"Content-Length\" header: {:?}", err);
+
+                        Err(StatusCodeError::bad_request().into())
+                    }
+                },
+                Err(err) => {
+                    log::debug!("Failed to parse \"Content-Length\" header: {:?}", err);
+
+                    Err(StatusCodeError::bad_request().into())
+                }
+            },
+            None => Err(StatusCodeError::length_required().into()),
         }
     }
 }
