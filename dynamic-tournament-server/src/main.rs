@@ -19,6 +19,7 @@ use dynamic_tournament_api::tournament::{Tournament, TournamentId};
 
 use futures::TryStreamExt;
 use sqlx::Row;
+use tokio::sync::{mpsc, watch};
 use websocket::LiveBracket;
 
 use std::collections::HashMap;
@@ -38,10 +39,21 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let store = MySqlPool::connect(&config.database.connect_string()).await?;
 
+    let (shutdown_responder_tx, mut shutdown_responder_rx) = mpsc::channel(1);
+    let (shutdown_tx, shutdown_rx) = watch::channel(None);
+
+    tokio::task::spawn(async move {
+        tokio::signal::ctrl_c().await.unwrap();
+        log::info!("Interrupt");
+
+        let _ = shutdown_tx.send(Some(shutdown_responder_tx));
+    });
+
     let state = State {
         store,
         users,
         subscribers: Arc::new(RwLock::new(HashMap::new())),
+        shutdown_rx,
     };
 
     let tables = [
@@ -55,6 +67,9 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     http::bind(config.bind, state).await.unwrap();
 
+    // Wait for all shutdown listeners to complete.
+    while let Some(_) = shutdown_responder_rx.recv().await {}
+
     Ok(())
 }
 
@@ -63,6 +78,8 @@ pub struct State {
     store: MySqlPool,
     users: Vec<LoginData>,
     pub subscribers: Arc<RwLock<HashMap<u64, LiveBracket>>>,
+    // Note: Clone before polling.
+    pub shutdown_rx: watch::Receiver<Option<mpsc::Sender<bool>>>,
 }
 
 #[derive(Debug, Error)]
@@ -83,6 +100,8 @@ pub enum Error {
     StatusCodeError(#[from] StatusCodeError),
     #[error("{0}")]
     JsonWebToken(#[from] jsonwebtoken::errors::Error),
+    #[error("{0}")]
+    Bracket(#[from] dynamic_tournament_generator::Error),
 }
 
 #[derive(Debug, Error)]

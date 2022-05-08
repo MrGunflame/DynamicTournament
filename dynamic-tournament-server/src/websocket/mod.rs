@@ -1,28 +1,33 @@
-use dynamic_tournament_api::tournament::{Bracket, Team, Tournament, TournamentId};
+use dynamic_tournament_api::tournament::{Bracket, BracketType, Team, Tournament};
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantScore, EntrantSpot, SingleElimination,
 };
-use futures::{future, pin_mut, ready, FutureExt, Sink, SinkExt, Stream};
+use futures::{future, ready, FutureExt, Sink, SinkExt, Stream};
 use hyper::upgrade::Upgraded;
 use parking_lot::RwLock;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use tokio::sync::{broadcast, mpsc};
-use tokio_tungstenite::tungstenite::protocol::{self};
+use tokio::select;
+use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::time::MissedTickBehavior;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::{self, CloseFrame};
 use tokio_tungstenite::WebSocketStream;
 
 use dynamic_tournament_api::websocket;
 
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use parking_lot::lock_api::RwLockUpgradableReadGuard;
 
 use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use crate::State;
 
 pub async fn handle(conn: Upgraded, state: State, id: u64) {
+    let mut shutdown_rx = state.shutdown_rx.clone();
+
     // let stream = tokio_tungstenite::accept_async(conn).await.unwrap();
     let stream = WebSocket::from_raw_socket(conn, protocol::Role::Server, None).await;
 
@@ -33,9 +38,15 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
         let subscribers = state.subscribers.upgradable_read();
 
         match subscribers.get(&id) {
-            Some(b) => (b.tx.subscribe(), b.clone()),
+            Some(b) => (b.subscribe(), b.clone()),
             None => {
-                let (bracket, rx) = LiveBracket::load(tournament, bracket);
+                let (bracket, rx) = match LiveBracket::new(tournament, bracket) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        log::error!("Failed to create new LiveBracket: {err}");
+                        return;
+                    }
+                };
 
                 let mut subscribers = RwLockUpgradableReadGuard::upgrade(subscribers);
 
@@ -48,7 +59,8 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
         }
     };
 
-    let (tx, mut rx) = mpsc::channel::<websocket::Message>(32);
+    let (tx, mut rx) = mpsc::channel::<WebSocketMessage>(32);
+    let (close_tx, close_rx) = oneshot::channel::<()>();
 
     let (mut sink, mut stream) = stream.split();
 
@@ -56,94 +68,141 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
     let state2 = state.clone();
     tokio::task::spawn(async move {
         let mut is_authenticated = false;
+        let mut shutdown_notify = None;
 
-        while let Some(msg) = stream.next().await {
-            let msg = msg.unwrap();
-
-            match msg {
-                Message { inner } => {
-                    match inner {
-                        protocol::Message::Binary(buf) => {
-                            log::debug!("Got {:?} ({} bytes)", buf, buf.len());
-
-                            let msg = match websocket::Message::from_bytes(&buf) {
-                                Ok(msg) => msg,
-                                Err(err) => {
-                                    log::debug!("Message deserialization failed: {:?}", err);
-
-                                    // Close the connection.
-                                    let _ = tx.send(websocket::Message::Close).await;
-                                    return;
+        loop {
+            select! {
+                msg = stream.next() => {
+                    match msg {
+                        Some(msg) => match msg {
+                            Ok(msg) => match msg.inner {
+                                // Text is not supported. Close the connection immediately if a frame text is
+                                // received.
+                                protocol::Message::Text(_) => {
+                                    log::debug!("Received a text frame from client");
+                                    break;
                                 }
-                            };
+                                protocol::Message::Binary(bytes) => {
+                                    log::debug!("Received a binary frame from client");
 
-                            match msg {
-                                websocket::Message::Authorize(s) => {
-                                    if state.is_authenticated_string(&s) {
-                                        is_authenticated = true;
-                                    } else {
-                                        let _ = tx.send(websocket::Message::Close).await;
-                                        return;
+                                    let msg = match websocket::Message::from_bytes(&bytes) {
+                                        Ok(msg) => msg,
+                                        Err(err) => {
+                                            log::debug!("Failed to deserialize message: {:?}", err);
+                                            break;
+                                        }
+                                    };
+
+                                    match msg {
+                                        websocket::Message::Reserved => (),
+                                        websocket::Message::Authorize(string) => {
+                                            if state.is_authenticated_string(&string) {
+                                                is_authenticated = true;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        websocket::Message::UpdateMatch { index, nodes } => {
+                                            // Only update the bracket when the client is authenticated.
+                                            // Otherwise we will just ignore the message.
+                                            if is_authenticated {
+                                                bracket.update(index.try_into().unwrap(), nodes);
+                                                store_bracket(&bracket, &state2, id).await;
+                                            }
+                                        }
+                                        websocket::Message::ResetMatch { index } => {
+                                            // Only update the bracket when the client is authenticated.
+                                            // Otherwise we will just ignore the message.
+                                            if is_authenticated {
+                                                bracket.reset(index);
+                                                store_bracket(&bracket, &state2, id).await;
+                                            }
+                                        }
                                     }
                                 }
-                                websocket::Message::Close => {
-                                    let _ = tx.send(websocket::Message::Close).await;
-                                    return;
+                                protocol::Message::Ping(buf) => {
+                                    let _ = tx.send(WebSocketMessage::Pong(buf)).await;
                                 }
-                                msg => {
-                                    // Only update the bracket when the client is authenticated.
-                                    // Otherwise we will just ignore the message.
-                                    if is_authenticated {
-                                        bracket.update(&state2, msg).await;
+                                protocol::Message::Pong(_) => (),
+                                protocol::Message::Close(_) => {
+                                    // Closing handshake initialized from server.
+                                    if shutdown_notify.is_some() {
+                                        break;
                                     }
-                                }
-                            }
 
-                            #[cfg(debug_assertions)]
-                            if !is_authenticated {
-                                log::debug!("Client is not authenticated: skipping");
+                                    let _ = tx.send(WebSocketMessage::Close).await;
+                                    break;
+                                }
+                                protocol::Message::Frame(_) => unreachable!(),
+                            },
+                            Err(err) => {
+                                log::warn!("Failed to read from stream: {:?}", err);
+                                break;
                             }
-                        }
-                        protocol::Message::Pong(_) => {}
-                        // Unexpected packet, close the connection.
-                        _ => {
-                            let _ = tx.send(websocket::Message::Close).await;
-                            return;
-                        }
+                        },
+                        None => break,
                     }
+                }
+                _ = shutdown_rx.changed() => {
+                    log::debug!("Closing websocket connection due to server shutdown");
+
+                    let _ = tx.send(WebSocketMessage::Close).await;
+
+                    shutdown_notify = Some(shutdown_rx.borrow().clone().unwrap());
                 }
             }
         }
+
+        // Wait for the writer to close.
+        let _ = close_rx.await;
+        let _ = shutdown_notify.unwrap().send(true).await;
     });
 
     // Writer
     tokio::task::spawn(async move {
+        // Interval timer for pings.
+        let mut interval = tokio::time::interval(Duration::new(30, 0));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
-            tokio::select! {
-                _ = tokio::time::sleep(std::time::Duration::new(30, 0)) => {
+            select! {
+                _ = interval.tick() => {
                     log::debug!("Sending ping to client");
-                    sink.send(Message::ping(vec![0])).await.unwrap();
+
+                    if let Err(err) = sink.send(Message::ping(vec![0])).await {
+                        log::warn!("Failed to send ping: {:?}", err);
+                        break;
+                    }
                 }
-                // Listen to message from the reader half.
                 msg = rx.recv() => {
                     match msg {
                         Some(msg) => match msg {
-                            websocket::Message::Close => {
-                                match sink.close().await {
-                                    Err(err) => log::warn!("Failed to close sink: {:?}", err),
-                                    _ => (),
+                            WebSocketMessage::Message(msg) => {
+                                let bytes = msg.into_bytes();
+
+                                if let Err(err) = sink.send(Message::binary(bytes)).await {
+                                    log::warn!("Failed to send frame: {:?}", err);
+                                    break;
                                 }
-                                return;
-                            },
-                            _ => unreachable!(),
-                        }
-                        None => {
-                            match sink.close().await {
-                                Err(err) => log::warn!("Failed to close sink: {:?}", err),
-                                _ => (),
                             }
-                            return;
-                        }
+                            WebSocketMessage::Pong(buf) => {
+                                log::debug!("Sending pong");
+
+                                if let Err(err) = sink.send(Message { inner: protocol::Message::Pong(buf) }).await {
+                                    log::warn!("Failed to send frame: {:?}", err);
+                                    break;
+                                }
+                            }
+                            WebSocketMessage::Close => {
+                                log::debug!("Closing websocket connection");
+
+                                if let Err(err) = sink.send(Message::close_normal()).await {
+                                    log::warn!("Failed to send close frame: {:?}", err);
+                                    break;
+                                }
+                            }
+                        },
+                        None => break,
                     }
                 }
                 // Listen to messages from the subscriber.
@@ -151,20 +210,28 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                     let msg = msg.unwrap();
                     let bytes = msg.into_bytes();
 
-                    sink.send(Message::binary(bytes)).await.unwrap();
-
-                    if let websocket::Message::Close = msg {
-                        match sink.close().await {
-                            Err(err) => log::warn!("Failed to close sink: {:?}", err),
-                            _ => (),
-                        }
-
-                        return;
+                    if let Err(err) = sink.send(Message::binary(bytes)).await {
+                        log::warn!("Failed to send frame: {:?}", err);
+                        break;
                     }
                 }
             }
         }
+
+        // Always try to close the sink at the end.
+        if let Err(err) = sink.close().await {
+            log::warn!("Failed to close sink: {:?}", err);
+        }
+
+        let _ = close_tx.send(());
     });
+}
+
+#[derive(Debug)]
+enum WebSocketMessage {
+    Message(websocket::Message),
+    Pong(Vec<u8>),
+    Close,
 }
 
 pub struct WebSocket {
@@ -264,139 +331,144 @@ impl Message {
             inner: protocol::Message::Ping(msg),
         }
     }
+
+    pub fn close_normal() -> Self {
+        Self {
+            inner: protocol::Message::Close(Some(CloseFrame {
+                code: CloseCode::Normal,
+                reason: "CLOSE_NORMAL".into(),
+            })),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct LiveBracket {
-    id: TournamentId,
-    bracket: Arc<RwLock<TournamentBracket>>,
+    inner: Arc<RwLock<InnerLiveBracket>>,
+}
+
+#[derive(Debug)]
+struct InnerLiveBracket {
+    bracket: TournamentBracket,
+    // Note: This could be a spmc channel. tokio::sync::watch is not appropriate however since
+    // more than just the recent value is required.
     tx: broadcast::Sender<websocket::Message>,
 }
 
 impl LiveBracket {
-    pub fn load(
+    pub fn new(
         tournament: Tournament,
         bracket: Option<Bracket>,
-    ) -> (Self, broadcast::Receiver<websocket::Message>) {
-        let id = tournament.id;
-
+    ) -> Result<(Self, broadcast::Receiver<websocket::Message>), crate::Error> {
         let bracket = match tournament.bracket_type {
-            dynamic_tournament_api::tournament::BracketType::SingleElimination => {
-                TournamentBracket::SingleElimination(match bracket {
-                    Some(bracket) => SingleElimination::resume(
-                        tournament.entrants.unwrap_teams().into(),
-                        bracket.0,
-                    )
-                    .unwrap(),
+            BracketType::SingleElimination => {
+                let bracket = match bracket {
+                    Some(bracket) => {
+                        let entrants = tournament.entrants.unwrap_teams().into();
+
+                        SingleElimination::resume(entrants, bracket.0)?
+                    }
                     None => SingleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
-                })
+                };
+
+                TournamentBracket::SingleElimination(bracket)
             }
-            _ => unimplemented!(),
+            BracketType::DoubleElimination => unimplemented!(),
         };
 
-        let (tx, rx) = broadcast::channel(32);
+        let (tx, rx) = broadcast::channel(8);
 
-        (
-            Self {
-                id,
-                bracket: Arc::new(RwLock::new(bracket)),
-                tx,
-            },
-            rx,
-        )
+        let inner = Arc::new(RwLock::new(InnerLiveBracket { bracket, tx }));
+
+        Ok((Self { inner }, rx))
     }
 
-    pub async fn update(&self, state: &State, msg: websocket::Message) {
-        let bracket = {
-            let mut bracket = self.bracket.write();
+    /// Creates a new [`Receiver`] for updates of this `LiveBracket`.
+    ///
+    /// [`Receiver`]: broadcast::Receiver
+    pub fn subscribe(&self) -> broadcast::Receiver<websocket::Message> {
+        let inner = self.inner.read();
 
-            match msg {
-                websocket::Message::UpdateMatch { index, nodes } => {
-                    let (index, nodes) = (index.try_into().unwrap(), nodes);
+        inner.tx.subscribe()
+    }
 
-                    match *bracket {
-                        TournamentBracket::SingleElimination(ref mut b) => {
-                            b.update_match(index, |m, res| {
-                                let mut has_winner = false;
+    /// Updates the match at `index` using the given `nodes`.
+    pub fn update(&self, index: usize, nodes: [EntrantScore<u64>; 2]) {
+        let mut inner = self.inner.write();
 
-                                for (entrant, node) in m.entrants.iter_mut().zip(nodes.into_iter())
-                                {
-                                    if let EntrantSpot::Entrant(entrant) = entrant {
-                                        *entrant.deref_mut() = node;
-                                    }
+        match inner.bracket {
+            TournamentBracket::SingleElimination(ref mut bracket) => {
+                bracket.update_match(index, |m, res| {
+                    let mut loser_index = None;
 
-                                    if node.winner {
-                                        res.winner_default(entrant);
-                                        has_winner = true;
-                                        continue;
-                                    }
-
-                                    if has_winner {
-                                        res.loser_default(entrant);
-                                        break;
-                                    }
-                                }
-                            });
+                    for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate() {
+                        if let EntrantSpot::Entrant(entrant) = entrant {
+                            *entrant.deref_mut() = node;
                         }
-                        TournamentBracket::DoubleElimination(ref mut b) => {
-                            b.update_match(index, |m, res| {
-                                let mut has_winner = false;
 
-                                for (entrant, node) in m.entrants.iter_mut().zip(nodes.into_iter())
-                                {
-                                    if let EntrantSpot::Entrant(entrant) = entrant {
-                                        *entrant.deref_mut() = node;
-                                    }
-
-                                    if node.winner {
-                                        res.winner_default(entrant);
-                                        has_winner = true;
-                                        continue;
-                                    }
-
-                                    if has_winner {
-                                        res.loser_default(entrant);
-                                        break;
-                                    }
-                                }
+                        if node.winner {
+                            res.winner_default(entrant);
+                            loser_index = Some(match i {
+                                0 => 1,
+                                _ => 1,
                             });
                         }
                     }
-                }
-                websocket::Message::ResetMatch { index } => {
-                    let index = index.try_into().unwrap();
 
-                    match *bracket {
-                        TournamentBracket::SingleElimination(ref mut b) => {
-                            b.update_match(index, |_, res| {
-                                res.reset_default();
-                            });
-                        }
-                        TournamentBracket::DoubleElimination(ref mut b) => {
-                            b.update_match(index, |_, res| {
-                                res.reset_default();
-                            });
-                        }
+                    if let Some(loser_index) = loser_index {
+                        res.loser_default(&m.entrants[loser_index]);
                     }
-                }
-                _ => unreachable!(),
+                });
             }
+            TournamentBracket::DoubleElimination(ref mut bracket) => {
+                bracket.update_match(index, |m, res| {
+                    let mut loser_index = None;
 
-            bracket.clone()
-        };
+                    for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate() {
+                        if let EntrantSpot::Entrant(entrant) = entrant {
+                            *entrant.deref_mut() = node;
+                        }
 
-        state
-            .update_bracket(
-                self.id.0,
-                match bracket {
-                    TournamentBracket::SingleElimination(b) => Bracket(b.matches().clone()),
-                    TournamentBracket::DoubleElimination(b) => Bracket(b.matches().clone()),
-                },
-            )
-            .await
-            .unwrap();
+                        if node.winner {
+                            res.winner_default(entrant);
+                            loser_index = Some(match i {
+                                0 => 1,
+                                _ => 1,
+                            });
+                        }
+                    }
 
-        self.tx.send(msg).unwrap();
+                    if let Some(loser_index) = loser_index {
+                        res.loser_default(&m.entrants[loser_index]);
+                    }
+                });
+            }
+        }
+
+        let _ = inner.tx.send(websocket::Message::UpdateMatch {
+            index: index.try_into().unwrap(),
+            nodes,
+        });
+    }
+
+    /// Resets the match at `index`.
+    pub fn reset(&self, index: usize) {
+        let mut inner = self.inner.write();
+
+        match inner.bracket {
+            TournamentBracket::SingleElimination(ref mut bracket) => {
+                bracket.update_match(index, |_, res| {
+                    res.reset_default();
+                });
+            }
+            TournamentBracket::DoubleElimination(ref mut bracket) => {
+                bracket.update_match(index, |_, res| {
+                    res.reset_default();
+                });
+            }
+        }
+
+        let _ = inner.tx.send(websocket::Message::ResetMatch { index });
     }
 }
 
@@ -404,4 +476,23 @@ impl LiveBracket {
 pub enum TournamentBracket {
     SingleElimination(SingleElimination<Team, EntrantScore<u64>>),
     DoubleElimination(DoubleElimination<Team, EntrantScore<u64>>),
+}
+
+pub async fn store_bracket(bracket: &LiveBracket, state: &State, id: u64) {
+    let bracket = {
+        let inner = bracket.inner.read();
+
+        inner.bracket.clone()
+    };
+
+    state
+        .update_bracket(
+            id,
+            match bracket {
+                TournamentBracket::SingleElimination(b) => Bracket(b.matches().clone()),
+                TournamentBracket::DoubleElimination(b) => Bracket(b.matches().clone()),
+            },
+        )
+        .await
+        .unwrap();
 }

@@ -1,8 +1,9 @@
-use dynamic_tournament_generator::{Entrant, EntrantScore};
+use dynamic_tournament_generator::EntrantScore;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Message {
+    Reserved,
     Authorize(String),
     UpdateMatch {
         index: u64,
@@ -11,7 +12,6 @@ pub enum Message {
     ResetMatch {
         index: usize,
     },
-    Close,
 }
 
 impl Message {

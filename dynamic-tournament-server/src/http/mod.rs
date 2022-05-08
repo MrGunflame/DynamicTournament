@@ -8,15 +8,22 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
+use futures::Future;
 use hyper::header::HeaderValue;
+use hyper::server::conn::AddrStream;
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
+use tokio::sync::watch;
 use tokio::time::Instant;
 
 pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
-    let make_svc = make_service_fn(move |_conn| {
+    let mut shutdown_rx = state.shutdown_rx.clone();
+
+    let make_svc = make_service_fn(move |conn: &AddrStream| {
+        log::info!("Accepting new connection from {}", conn.remote_addr());
+
         let state = state.clone();
         async move {
             Ok::<_, Infallible>(service_fn({
@@ -30,13 +37,12 @@ pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
 
     let server = Server::bind(&addr)
         .serve(make_svc)
-        .with_graceful_shutdown(shutdown_signal());
+        .with_graceful_shutdown(async move {
+            let _ = shutdown_rx.changed().await;
+            log::info!("Stopping server");
+        });
 
     server.await
-}
-
-async fn shutdown_signal() {
-    tokio::signal::ctrl_c().await.unwrap()
 }
 
 async fn service_root(
@@ -91,6 +97,7 @@ async fn service_root(
 
     log::debug!("{:?}", uri);
 
+    let method = req.method();
     let origin = req.headers().get("Origin").cloned();
 
     let res = match uri.take_str() {

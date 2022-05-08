@@ -1,5 +1,4 @@
-use crate::http::{Request, RequestUri};
-use crate::{Error, State};
+use crate::Error;
 
 use hyper::{Body, Response, StatusCode};
 
