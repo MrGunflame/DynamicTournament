@@ -1,35 +1,32 @@
+use crate::State;
+
 use dynamic_tournament_api::tournament::{Bracket, BracketType, Team, Tournament};
+use dynamic_tournament_api::websocket;
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantScore, EntrantSpot, SingleElimination,
 };
-use futures::{future, ready, FutureExt, Sink, SinkExt, Stream};
+
+use futures::SinkExt;
+use futures::StreamExt;
 use hyper::upgrade::Upgraded;
+use parking_lot::lock_api::RwLockUpgradableReadGuard;
 use parking_lot::RwLock;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::MissedTickBehavior;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
-use tokio_tungstenite::tungstenite::protocol::{self, CloseFrame};
+use tokio_tungstenite::tungstenite::protocol::{self, CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
 
-use dynamic_tournament_api::websocket;
-
-use futures::StreamExt;
-use parking_lot::lock_api::RwLockUpgradableReadGuard;
-
+use std::borrow::Cow;
 use std::ops::DerefMut;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::Duration;
-
-use crate::State;
 
 pub async fn handle(conn: Upgraded, state: State, id: u64) {
     let mut shutdown_rx = state.shutdown_rx.clone();
 
-    // let stream = tokio_tungstenite::accept_async(conn).await.unwrap();
-    let stream = WebSocket::from_raw_socket(conn, protocol::Role::Server, None).await;
+    let stream = WebSocketStream::from_raw_socket(conn, Role::Server, None).await;
 
     let tournament = state.get_tournament(id).await.unwrap().unwrap();
     let bracket = state.get_bracket(id).await.unwrap();
@@ -75,7 +72,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                 msg = stream.next() => {
                     match msg {
                         Some(msg) => match msg {
-                            Ok(msg) => match msg.inner {
+                            Ok(msg) => match msg {
                                 // Text is not supported. Close the connection immediately if a frame text is
                                 // received.
                                 protocol::Message::Text(_) => {
@@ -169,7 +166,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                 _ = interval.tick() => {
                     log::debug!("Sending ping to client");
 
-                    if let Err(err) = sink.send(Message::ping(vec![0])).await {
+                    if let Err(err) = sink.send(protocol::Message::Ping(vec![0])).await {
                         log::warn!("Failed to send ping: {:?}", err);
                         break;
                     }
@@ -180,7 +177,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                             WebSocketMessage::Message(msg) => {
                                 let bytes = msg.into_bytes();
 
-                                if let Err(err) = sink.send(Message::binary(bytes)).await {
+                                if let Err(err) = sink.send(protocol::Message::Binary(bytes)).await {
                                     log::warn!("Failed to send frame: {:?}", err);
                                     break;
                                 }
@@ -188,7 +185,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                             WebSocketMessage::Pong(buf) => {
                                 log::debug!("Sending pong");
 
-                                if let Err(err) = sink.send(Message { inner: protocol::Message::Pong(buf) }).await {
+                                if let Err(err) = sink.send(protocol::Message::Pong(buf)).await {
                                     log::warn!("Failed to send frame: {:?}", err);
                                     break;
                                 }
@@ -196,7 +193,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                             WebSocketMessage::Close => {
                                 log::debug!("Closing websocket connection");
 
-                                if let Err(err) = sink.send(Message::close_normal()).await {
+                                if let Err(err) = sink.send(close_normal()).await {
                                     log::warn!("Failed to send close frame: {:?}", err);
                                     break;
                                 }
@@ -210,7 +207,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                     let msg = msg.unwrap();
                     let bytes = msg.into_bytes();
 
-                    if let Err(err) = sink.send(Message::binary(bytes)).await {
+                    if let Err(err) = sink.send(protocol::Message::Binary(bytes)).await {
                         log::warn!("Failed to send frame: {:?}", err);
                         break;
                     }
@@ -234,112 +231,11 @@ enum WebSocketMessage {
     Close,
 }
 
-pub struct WebSocket {
-    inner: WebSocketStream<hyper::upgrade::Upgraded>,
-}
-
-impl WebSocket {
-    pub async fn from_raw_socket(
-        upgraded: Upgraded,
-        role: protocol::Role,
-        config: Option<protocol::WebSocketConfig>,
-    ) -> Self {
-        WebSocketStream::from_raw_socket(upgraded, role, config)
-            .map(|inner| WebSocket { inner })
-            .await
-    }
-
-    pub async fn close(mut self) {
-        future::poll_fn(|cx| Pin::new(&mut self).poll_close(cx))
-            .await
-            .unwrap();
-    }
-}
-
-impl Stream for WebSocket {
-    type Item = Result<Message, crate::Error>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match ready!(Pin::new(&mut self.inner).poll_next(cx)) {
-            Some(Ok(item)) => Poll::Ready(Some(Ok(Message { inner: item }))),
-            Some(Err(e)) => {
-                log::debug!("websocket poll error: {}", e);
-                Poll::Ready(panic!("{}", e))
-            }
-            None => {
-                log::trace!("websocket closed");
-                Poll::Ready(None)
-            }
-        }
-    }
-}
-
-impl Sink<Message> for WebSocket {
-    type Error = crate::Error;
-
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        match ready!(Pin::new(&mut self.inner).poll_ready(cx)) {
-            Ok(()) => Poll::Ready(Ok(())),
-            Err(e) => Poll::Ready(panic!("{}", e)),
-        }
-    }
-
-    fn start_send(mut self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
-        match Pin::new(&mut self.inner).start_send(item.inner) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                log::debug!("websocket start_send error: {}", e);
-                Err(panic!("{}", e))
-            }
-        }
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        match ready!(Pin::new(&mut self.inner).poll_flush(cx)) {
-            Ok(()) => Poll::Ready(Ok(())),
-            Err(e) => Poll::Ready(panic!("{}", e)),
-        }
-    }
-
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        match ready!(Pin::new(&mut self.inner).poll_close(cx)) {
-            Ok(()) => Poll::Ready(Ok(())),
-            Err(err) => {
-                log::debug!("websocket close error: {}", err);
-                Poll::Ready(Err(panic!("{}", err)))
-            }
-        }
-    }
-}
-
-pub struct Message {
-    inner: protocol::Message,
-}
-
-impl Message {
-    pub fn binary<T>(msg: T) -> Self
-    where
-        T: Into<Vec<u8>>,
-    {
-        Self {
-            inner: protocol::Message::binary(msg),
-        }
-    }
-
-    pub fn ping(msg: Vec<u8>) -> Self {
-        Self {
-            inner: protocol::Message::Ping(msg),
-        }
-    }
-
-    pub fn close_normal() -> Self {
-        Self {
-            inner: protocol::Message::Close(Some(CloseFrame {
-                code: CloseCode::Normal,
-                reason: "CLOSE_NORMAL".into(),
-            })),
-        }
-    }
+pub fn close_normal() -> protocol::Message {
+    protocol::Message::Close(Some(CloseFrame {
+        code: CloseCode::Normal,
+        reason: Cow::Borrowed("CLOSE_NORMAL"),
+    }))
 }
 
 #[derive(Clone, Debug)]
