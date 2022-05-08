@@ -175,7 +175,7 @@ where
         &mut self.matches
     }
 
-    /// Retursn the matches from the tournament.
+    /// Returns the matches from the tournament.
     pub fn into_matches(self) -> Matches<Entrant<D>> {
         self.matches
     }
