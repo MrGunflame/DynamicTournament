@@ -385,7 +385,7 @@ pub async fn store_bracket(bracket: &LiveBracket, state: &State, id: u64) {
         .update_bracket(
             id,
             match bracket {
-                TournamentBracket::SingleElimination(b) => Bracket(b.matches().clone()),
+                TournamentBracket::SingleElimination(b) => Bracket(b.into_matches()),
                 TournamentBracket::DoubleElimination(b) => Bracket(b.matches().clone()),
             },
         )

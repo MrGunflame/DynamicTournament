@@ -131,12 +131,53 @@ where
         }
     }
 
+    /// Returns a reference to the entrants in the tournament.
     pub fn entrants(&self) -> &Entrants<T> {
         &self.entrants
     }
 
+    /// Returns a mutable reference to the entrants in the tournament.
+    ///
+    /// # Safety
+    ///
+    /// [`SingleElimination`] generally assumes that `entrants` has a correct length and capacity
+    /// compared to `matches`. Changing the length or capacity of the entrants may cause
+    /// undefined behavoir if the new entrants have an incorrect length or capacity compared to
+    /// the matches.
+    ///
+    /// Changing the `entrants` without resizing [`Entrants`] can never cause undefined behavoir.
+    pub unsafe fn entrants_mut(&mut self) -> &mut Entrants<T> {
+        &mut self.entrants
+    }
+
+    /// Returns the entrants from the tournament.
+    pub fn into_entrants(self) -> Entrants<T> {
+        self.entrants
+    }
+
+    /// Returns a reference to the matches in the tournament.
     pub fn matches(&self) -> &Matches<Entrant<D>> {
         &self.matches
+    }
+
+    /// Returns a mutable reference to the matches in the tournament.
+    ///
+    /// # Safety
+    ///
+    /// [`SingleElimination`] assumes that `matches` has a length of pow(2, n). Violating this
+    /// assumption may cause undefined behavoir. Further changing the index field of [`Entrant`]
+    /// to a value that is not in bounds of `entrants` causes undefined behavoir.
+    ///
+    /// Changing the data field of [`Entrant`] without changing the length of [`Matches`] or
+    /// changing the index field of [`Entrant`] is always safe, **but may cause the tournament to
+    /// be in an incorrect or inconsistent state**.
+    pub unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+        &mut self.matches
+    }
+
+    /// Retursn the matches from the tournament.
+    pub fn into_matches(self) -> Matches<Entrant<D>> {
+        self.matches
     }
 
     /// Returns the [`NextMatches`] of the match with the given `index`.
