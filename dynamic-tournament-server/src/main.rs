@@ -68,7 +68,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     http::bind(config.bind, state).await.unwrap();
 
     // Wait for all shutdown listeners to complete.
-    while let Some(_) = shutdown_responder_rx.recv().await {}
+    while (shutdown_responder_rx.recv().await).is_some() {}
 
     Ok(())
 }
@@ -200,7 +200,7 @@ impl State {
         }
     }
 
-    pub fn decode_token(&self, token: &String) -> Result<Claims, jsonwebtoken::errors::Error> {
+    pub fn decode_token(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let key = DecodingKey::from_secret(http::v2::auth::SECRET);
         let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 

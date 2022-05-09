@@ -6,9 +6,9 @@ use crate::{Error, State, StatusCodeError};
 
 use hyper::{Body, Response};
 
-pub async fn route<'a>(
+pub async fn route(
     req: Request,
-    mut uri: RequestUri<'a>,
+    mut uri: RequestUri<'_>,
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take_str() {

@@ -8,14 +8,12 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
-use futures::Future;
 use hyper::header::HeaderValue;
 use hyper::server::conn::AddrStream;
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
-use tokio::sync::watch;
 use tokio::time::Instant;
 
 pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
@@ -97,7 +95,6 @@ async fn service_root(
 
     log::debug!("{:?}", uri);
 
-    let method = req.method();
     let origin = req.headers().get("Origin").cloned();
 
     let res = match uri.take_str() {
@@ -232,7 +229,7 @@ pub struct RequestUri<'a> {
 
 impl<'a> RequestUri<'a> {
     pub fn new(mut path: &'a str) -> Self {
-        if path.starts_with("/") {
+        if path.starts_with('/') {
             path = &path[1..];
         }
 
@@ -242,7 +239,7 @@ impl<'a> RequestUri<'a> {
     pub fn take(&mut self) -> Option<UriPart> {
         let part = self.take_str()?;
 
-        let part = UriPart { part: part };
+        let part = UriPart { part };
 
         Some(part)
     }
@@ -251,7 +248,7 @@ impl<'a> RequestUri<'a> {
         if self.path.is_empty() {
             None
         } else {
-            Some(match self.path.split_once("/") {
+            Some(match self.path.split_once('/') {
                 Some((part, rem)) => {
                     self.path = rem;
                     part
@@ -293,6 +290,6 @@ impl<'a> UriPart<'a> {
 
 impl<'a> AsRef<str> for UriPart<'a> {
     fn as_ref(&self) -> &str {
-        &self.part
+        self.part
     }
 }

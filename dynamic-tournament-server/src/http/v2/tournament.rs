@@ -5,9 +5,9 @@ use hyper::header::{HeaderValue, CONNECTION, UPGRADE};
 use hyper::{Body, Method, Response, StatusCode};
 use sha1::{Digest, Sha1};
 
-pub async fn route<'a>(
+pub async fn route(
     req: Request,
-    mut uri: RequestUri<'a>,
+    mut uri: RequestUri<'_>,
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {

@@ -15,11 +15,11 @@ const AUTH_TOKEN_EXP: u64 = 60 * 60;
 /// Refresh token expiration time. Defaults to 24 hours.
 const REFRESH_TOKEN_EXPR: u64 = 60 * 60 * 24;
 
-pub const SECRET: &'static [u8] = include_bytes!("../../../jwt-secret");
+pub const SECRET: &[u8] = include_bytes!("../../../jwt-secret");
 
-pub async fn route<'a>(
+pub async fn route(
     req: Request,
-    uri: RequestUri<'a>,
+    uri: RequestUri<'_>,
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take_all() {
