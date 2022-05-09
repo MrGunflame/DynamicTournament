@@ -1,5 +1,6 @@
 use crate::routes::tournament::Route;
 use crate::{render_data, Data, DataResult, Title};
+use chrono::Local;
 use yew::prelude::*;
 
 use dynamic_tournament_api::tournament::{TournamentId, TournamentOverview};
@@ -9,6 +10,7 @@ use yew_router::prelude::RouterScopeExt;
 
 pub struct TournamentList {
     data: Data<Vec<TournamentOverview>>,
+    timezone: Local,
 }
 
 impl Component for TournamentList {
@@ -38,7 +40,10 @@ impl Component for TournamentList {
             Msg::Update(data)
         });
 
-        Self { data: None }
+        Self {
+            data: None,
+            timezone: Local::now().timezone(),
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -66,7 +71,10 @@ impl Component for TournamentList {
                     let id = tournament.id;
                     let name = tournament.name.clone();
                     let bracket_type = tournament.bracket_type.to_string();
-                    let date = tournament.date;
+                    let date = tournament
+                        .date
+                        .with_timezone(&self.timezone)
+                        .format("%B %d, %Y %H:%M");
                     let teams = tournament.entrants;
 
                     let on_click = ctx.link().callback(move |_| Msg::ClickTournament { id });
