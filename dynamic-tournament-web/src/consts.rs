@@ -18,4 +18,4 @@ use crate::Mountpoint;
 /// ```
 pub const MOUNTPOINT: Mountpoint = Mountpoint::Body;
 
-pub const TITLE_BASE: &'static str = "Hardstuck Tournaments";
+pub const TITLE_BASE: &str = "Hardstuck Tournaments";

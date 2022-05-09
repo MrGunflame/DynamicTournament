@@ -83,12 +83,7 @@ impl WebSocketService {
     }
 
     pub async fn send(&mut self, msg: websocket::Message) {
-        self.tx.send(msg).await;
-    }
-
-    /// Returns `true` is the websocket is closed.
-    pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
+        let _ = self.tx.send(msg).await;
     }
 }
 
@@ -115,9 +110,9 @@ impl Agent for EventBus {
         }
     }
 
-    fn update(&mut self, msg: Self::Message) {}
+    fn update(&mut self, _msg: Self::Message) {}
 
-    fn handle_input(&mut self, msg: Self::Input, id: HandlerId) {
+    fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
         match msg {
             Request::EventBusMsg(msg) => {
                 for sub in self.subscribers.iter() {

@@ -70,9 +70,7 @@ impl Component for SingleEliminationBracket {
                 let mut websocket = self.websocket.clone();
                 ctx.link().send_future_batch(async move {
                     websocket
-                        .send(dynamic_tournament_api::websocket::Message::ResetMatch {
-                            index: index.try_into().unwrap(),
-                        })
+                        .send(dynamic_tournament_api::websocket::Message::ResetMatch { index })
                         .await;
 
                     vec![Message::ClosePopup]
@@ -123,8 +121,6 @@ impl Component for SingleEliminationBracket {
                         });
                     }
                     websocket::Message::ResetMatch { index } => {
-                        let index = index.try_into().unwrap();
-
                         self.state.update_match(index, |_, res| {
                             res.reset_default();
                         });

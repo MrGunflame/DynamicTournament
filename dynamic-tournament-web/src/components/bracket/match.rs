@@ -7,8 +7,8 @@ use super::BracketTeam;
 use crate::components::button::Button;
 use crate::components::providers::{ClientProvider, Provider};
 
-const COLOR_RED: &'static str = "#a52423";
-const COLOR_BLUE: &'static str = "#193d6b";
+const COLOR_RED: &str = "#a52423";
+const COLOR_BLUE: &str = "#193d6b";
 
 pub struct BracketMatch;
 

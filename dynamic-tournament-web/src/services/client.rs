@@ -1,11 +1,6 @@
 use std::collections::HashSet;
 
-use futures::channel::mpsc;
 use yew_agent::{Agent, AgentLink, Context, HandlerId};
-
-pub struct ClientService {
-    tx: mpsc::Sender<()>,
-}
 
 pub struct ClientEventBus {
     link: AgentLink<Self>,
@@ -25,9 +20,9 @@ impl Agent for ClientEventBus {
         }
     }
 
-    fn update(&mut self, msg: Self::Message) {}
+    fn update(&mut self, _msg: Self::Message) {}
 
-    fn handle_input(&mut self, msg: Self::Input, id: HandlerId) {
+    fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
         for sub in self.subscribers.iter() {
             self.link.respond(*sub, msg);
         }
