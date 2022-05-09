@@ -226,6 +226,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
 
 #[derive(Debug)]
 enum WebSocketMessage {
+    #[allow(dead_code)]
     Message(websocket::Message),
     Pong(Vec<u8>),
     Close,
@@ -269,7 +270,18 @@ impl LiveBracket {
 
                 TournamentBracket::SingleElimination(bracket)
             }
-            BracketType::DoubleElimination => unimplemented!(),
+            BracketType::DoubleElimination => {
+                let bracket = match bracket {
+                    Some(bracket) => {
+                        let entrants = tournament.entrants.unwrap_teams().into();
+
+                        DoubleElimination::resume(entrants, bracket.0)?
+                    }
+                    None => DoubleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
+                };
+
+                TournamentBracket::DoubleElimination(bracket)
+            }
         };
 
         let (tx, rx) = broadcast::channel(8);
