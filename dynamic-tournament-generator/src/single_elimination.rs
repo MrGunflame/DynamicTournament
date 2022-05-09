@@ -98,16 +98,31 @@ where
     ///
     /// # Errors
     ///
-    /// Returns an error if `matches` has an invalid number of matches for `entrants` or an
+    /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
     /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
     pub fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
-        if found == expected {
-            unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
-        } else {
-            Err(Error::InvalidNumberOfMatches { expected, found })
+
+        if found != expected {
+            return Err(Error::InvalidNumberOfMatches { expected, found });
         }
+
+        for m in matches.iter() {
+            for entrant in m.entrants.iter() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    if entrant.index >= entrants.len() {
+                        return Err(Error::InvalidEntrant {
+                            index: entrant.index,
+                            length: entrants.len(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
+        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
     }
 
     /// Resumes the bracket from existing matches without validating the length of `matches`.
@@ -406,6 +421,66 @@ mod tests {
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_resume() {
+        let entrants = Entrants::from(vec![0, 1, 2, 3]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(0)),
+                EntrantSpot::Entrant(Entrant::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(1)),
+                EntrantSpot::Entrant(Entrant::new(3)),
+            ]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches).unwrap();
+
+        let entrants = Entrants::from(vec![0, 1, 2, 3, 4]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(0)),
+                EntrantSpot::Entrant(Entrant::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(1)),
+                EntrantSpot::Entrant(Entrant::new(3)),
+            ]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ]);
+
+        assert_eq!(
+            SingleElimination::<i32, u32>::resume(entrants, matches).unwrap_err(),
+            Error::InvalidNumberOfMatches {
+                expected: 7,
+                found: 3
+            }
+        );
+
+        let entrants = Entrants::from(vec![0, 1, 2, 3]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(0)),
+                EntrantSpot::Entrant(Entrant::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Entrant::new(1)),
+                EntrantSpot::Entrant(Entrant::new(4)),
+            ]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ]);
+
+        assert_eq!(
+            SingleElimination::<i32, u32>::resume(entrants, matches).unwrap_err(),
+            Error::InvalidEntrant {
+                index: 4,
+                length: 4
+            }
         );
     }
 

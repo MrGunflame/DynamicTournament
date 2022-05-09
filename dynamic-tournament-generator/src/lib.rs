@@ -210,7 +210,7 @@ impl<'a, T, D> DerefMut for EntrantRefMut<'a, T, D> {
 /// An `Result<T>` using [`enum@Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum Error {
     #[error("invalid number of matches: expected {expected}, found {found}")]
     InvalidNumberOfMatches { expected: usize, found: usize },
