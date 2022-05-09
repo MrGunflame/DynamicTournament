@@ -125,10 +125,7 @@ where
             matches.len()
         );
 
-        Self {
-            entrants: entrants.into(),
-            matches: matches.into(),
-        }
+        Self { entrants, matches }
     }
 
     /// Returns a reference to the entrants in the tournament.
@@ -191,9 +188,8 @@ where
         }
     }
 
-    /// Updates the match at `index` by applying `f` on it. If the function returns a value other
-    /// than [`MatchResult::None`], the next match is updating using the result. If `index` is
-    /// out-of-bounds the function is never called.
+    /// Updates the match at `index` by applying `f` on it. The next match is updating using the
+    /// result. If `index` is out-of-bounds the function is never called.
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),

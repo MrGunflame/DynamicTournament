@@ -16,7 +16,7 @@ use std::result;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -65,7 +65,7 @@ impl<T> From<Vec<T>> for Entrants<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -86,6 +86,11 @@ impl<T> Matches<T> {
         }
     }
 
+    /// Creates a `Matches<T>` from its raw parts.
+    ///
+    /// # Safety
+    ///
+    /// See [`Vec::from_raw_parts`]
     pub unsafe fn from_raw_parts(ptr: *mut Match<T>, length: usize, capacity: usize) -> Self {
         Self {
             matches: Vec::from_raw_parts(ptr, length, capacity),
@@ -124,7 +129,7 @@ impl<T> From<Vec<Match<T>>> for Matches<T> {
 }
 
 /// Some data that is stored within the bracket of the tournament. This is usually a score or
-/// something similar. See [`EntrantWithScore`] for an example.
+/// something similar. See [`EntrantScore`] for an example.
 pub trait EntrantData: Default {
     /// Sets the winner state of the data to `winner`.
     fn set_winner(&mut self, winner: bool);
@@ -166,37 +171,6 @@ impl<D> Entrant<D> {
 }
 
 #[derive(Debug)]
-pub struct EntrantRef<'a, T, D> {
-    index: usize,
-    entrant: &'a T,
-    data: &'a D,
-}
-
-impl<'a, T, D> EntrantRef<'a, T, D> {
-    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a D) -> Self {
-        Self {
-            index,
-            entrant,
-            data,
-        }
-    }
-}
-
-impl<'a, T, D> AsRef<T> for EntrantRef<'a, T, D> {
-    fn as_ref(&self) -> &T {
-        &self.entrant
-    }
-}
-
-impl<'a, T, D> Deref for EntrantRef<'a, T, D> {
-    type Target = D;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-#[derive(Debug)]
 pub struct EntrantRefMut<'a, T, D> {
     index: usize,
     entrant: &'a T,
@@ -215,7 +189,7 @@ impl<'a, T, D> EntrantRefMut<'a, T, D> {
 
 impl<'a, T, D> AsRef<T> for EntrantRefMut<'a, T, D> {
     fn as_ref(&self) -> &T {
-        &self.entrant
+        self.entrant
     }
 }
 
@@ -223,7 +197,7 @@ impl<'a, T, D> Deref for EntrantRefMut<'a, T, D> {
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
-        &self.data
+        self.data
     }
 }
 
@@ -233,7 +207,7 @@ impl<'a, T, D> DerefMut for EntrantRefMut<'a, T, D> {
     }
 }
 
-/// An `Result<T>` using [`Error`] as an error type.
+/// An `Result<T>` using [`enum@Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Clone, Debug, Error)]
@@ -397,37 +371,6 @@ impl<D> Match<Entrant<D>> {
                         e.index,
                         entrant,
                         &mut e.data,
-                    )));
-                }
-                EntrantSpot::Empty => {
-                    elem.write(EntrantSpot::Empty);
-                }
-                EntrantSpot::TBD => {
-                    elem.write(EntrantSpot::TBD);
-                }
-            }
-        }
-
-        Match {
-            // SAFETY: Every element in `array` has been initialized.
-            entrants: unsafe { std::mem::transmute(array) },
-        }
-    }
-
-    pub(crate) fn to_ref<'a, T>(
-        &'a self,
-        entrants: &'a Entrants<T>,
-    ) -> Match<EntrantRef<'a, T, D>> {
-        let mut array: [MaybeUninit<EntrantSpot<EntrantRef<'_, T, D>>>; 2] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-
-        for (elem, entrant) in array.iter_mut().zip(self.entrants.iter()) {
-            match entrant {
-                EntrantSpot::Entrant(ref e) => {
-                    let entrant = unsafe { entrants.get_unchecked(e.index) };
-
-                    elem.write(EntrantSpot::Entrant(EntrantRef::new(
-                        e.index, entrant, &e.data,
                     )));
                 }
                 EntrantSpot::Empty => {
