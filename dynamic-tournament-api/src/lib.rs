@@ -180,14 +180,12 @@ pub struct Authorization {
 
 impl Authorization {
     pub fn new() -> Self {
-        let mut this = Self { tokens: None };
-
         #[cfg(feature = "local-storage")]
-        if let Ok(new) = LocalStorage::get("dynamic-tournament-api-client") {
-            this = new;
+        if let Ok(this) = LocalStorage::get("dynamic-tournament-api-client") {
+            return this;
         }
 
-        this
+        Self { tokens: None }
     }
 
     /// Update the authorization tokens to the newly provided [`TokenPair`].

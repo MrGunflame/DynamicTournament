@@ -15,7 +15,7 @@ impl<'a> AuthClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] when the request fails. Returns [`Error::Unauthorized`] when the
+    /// Returns an [`enum@Error`] when the request fails. Returns [`Error::Unauthorized`] when the
     /// the given credentials are incorrect.
     pub async fn login(&self, username: &str, password: &str) -> Result<()> {
         let body = &LoginData {
@@ -52,7 +52,7 @@ impl<'a> AuthClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] when the request fails. Returns [`Error::Unauthorized`] if no
+    /// Returns an [`enum@Error`] when the request fails. Returns [`Error::Unauthorized`] if no
     /// refresh token is avaliable.
     pub async fn refresh(&self) -> Result<()> {
         let refresh_token = {
@@ -189,9 +189,9 @@ impl Token {
     }
 
     pub fn claims(&self) -> Claims {
-        let parts = self.token.split('.');
+        let mut parts = self.token.split('.');
 
-        let claims = parts.skip(1).next().unwrap();
+        let claims = parts.nth(1).unwrap();
 
         let claims = base64::decode(claims).unwrap();
 
