@@ -1,6 +1,7 @@
 use crate::{Entrant, EntrantRefMut, EntrantSpot, Error, MatchResult, Result};
-use crate::{EntrantData, Entrants, Match, Matches, NextMatches};
+use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
 
+use std::ops::Range;
 use std::ptr;
 
 /// A single elimination tournament.
@@ -277,6 +278,241 @@ where
     }
 }
 
+impl<T, D> Tournament for SingleElimination<T, D>
+where
+    D: EntrantData + Default,
+{
+    type Entrant = T;
+    type NodeData = D;
+
+    fn new<I>(entrants: I) -> Self
+    where
+        I: Iterator<Item = T>,
+    {
+        let entrants: Entrants<T> = entrants.collect();
+
+        log::debug!(
+            "Creating new SingleElimination bracket with {} entrants",
+            entrants.len()
+        );
+
+        let initial_matches = match entrants.len() {
+            1 | 2 => 1,
+            n => n.next_power_of_two() / 2,
+        };
+
+        let mut matches = Matches::with_capacity(initial_matches * 2 - 1);
+
+        // Push the first half entrants into matches. This already creates the minimum number of
+        // matches required.
+        let mut ptr = matches.as_mut_ptr();
+        for index in 0..initial_matches {
+            let first = EntrantSpot::Entrant(Entrant::new(index));
+            let second = EntrantSpot::Empty;
+
+            // SAFETY: `matches` has allocated enough memory for at least `initial_matches` items.
+            unsafe {
+                ptr::write(ptr, Match::new([first, second]));
+                ptr = ptr.add(1);
+            }
+        }
+
+        // SAFETY: The first `initial_matches` items in the buffer has been written to.
+        unsafe {
+            matches.set_len(initial_matches);
+        }
+
+        // Fill the second spots in the matches.
+        let mut index = initial_matches;
+        while index < entrants.len() {
+            // SAFETY: The matches have already been written to the buffer in the first iteration.
+            let spot = unsafe {
+                matches
+                    .get_unchecked_mut(index - initial_matches)
+                    .get_unchecked_mut(1)
+            };
+
+            *spot = EntrantSpot::Entrant(Entrant::new(index));
+            index += 1;
+        }
+
+        // Fill `matches` with `TBD` matches.
+        while matches.len() < matches.capacity() {
+            matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
+        }
+
+        // Forward all placeholder matches.
+        while index < entrants.len().next_power_of_two() {
+            let new_index = initial_matches + (index - initial_matches) / 2;
+            // SAFETY: `new_index` is in bounds of `matches`, `index % 2` never exceeds 1.
+            let spot = unsafe {
+                matches
+                    .get_unchecked_mut(new_index)
+                    .get_unchecked_mut(index % 2)
+            };
+
+            *spot = EntrantSpot::Entrant(Entrant::new(index - initial_matches));
+
+            index += 1;
+        }
+
+        log::debug!(
+            "Created new SingleElimination bracket with {} matches",
+            matches.len()
+        );
+
+        Self { entrants, matches }
+    }
+
+    fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
+        let expected = Self::calculate_matches(entrants.len());
+        let found = matches.len();
+
+        if found != expected {
+            return Err(Error::InvalidNumberOfMatches { expected, found });
+        }
+
+        for m in matches.iter() {
+            for entrant in m.entrants.iter() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    if entrant.index >= entrants.len() {
+                        return Err(Error::InvalidEntrant {
+                            index: entrant.index,
+                            length: entrants.len(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
+        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
+    }
+
+    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+        log::debug!(
+            "Resuming SingleElimination bracket with {} entrants and {} matches",
+            entrants.len(),
+            matches.len()
+        );
+
+        Self { entrants, matches }
+    }
+
+    fn entrants(&self) -> &Entrants<Self::Entrant> {
+        &self.entrants
+    }
+
+    unsafe fn entrants_mut(&mut self) -> &mut Entrants<T> {
+        &mut self.entrants
+    }
+
+    fn into_entrants(self) -> Entrants<T> {
+        self.entrants
+    }
+
+    fn matches(&self) -> &Matches<Entrant<Self::NodeData>> {
+        &self.matches
+    }
+
+    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+        &mut self.matches
+    }
+
+    fn into_matches(self) -> Matches<Entrant<D>> {
+        self.matches
+    }
+
+    fn update_match<F>(&mut self, index: usize, f: F)
+    where
+        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+    {
+        // Get the match at `index` or abort.
+        // Note: This will borrow `self.matches` mutably until the end of the scope. All
+        // operations that access `self.matches` at an index that is **not `index`** are still
+        // safe.
+
+        let mut r#match = match self.matches.get_mut(index) {
+            Some(r#match) => r#match.to_ref_mut(&self.entrants),
+            None => return,
+        };
+
+        let mut res = MatchResult::default();
+
+        f(&mut r#match, &mut res);
+
+        let next_matches = self.next_matches(index);
+
+        log::debug!(
+            "Got match results: winner: {:?}, loser: {:?}",
+            res.winner.as_ref().map(|(e, _)| e),
+            res.loser.as_ref().map(|(e, _)| e),
+        );
+
+        if let Some((entrant, data)) = res.winner {
+            // Only update the next match if it actually exists.
+            if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
+                log::debug!("Next winner match is {}", *next_matches.winner_index);
+
+                *spot = match entrant {
+                    EntrantSpot::Entrant(index) => {
+                        EntrantSpot::Entrant(Entrant::new_with_data(index, data))
+                    }
+                    EntrantSpot::Empty => EntrantSpot::Empty,
+                    EntrantSpot::TBD => EntrantSpot::TBD,
+                };
+            }
+        }
+
+        if res.reset {
+            let r#match = self.matches.get_mut(index).unwrap();
+
+            for entrant in r#match.entrants.iter_mut() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    entrant.data = D::default();
+                }
+            }
+        }
+    }
+
+    fn next_matches(&self, index: usize) -> NextMatches {
+        let winner_index = self.entrants.len().next_power_of_two() / 2 + index / 2;
+
+        if self.matches.len() > winner_index {
+            NextMatches::new(Some((winner_index, index % 2)), None)
+        } else {
+            NextMatches::default()
+        }
+    }
+
+    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize> {
+        // `range` is `self.matches().len()..self.matches().len()`. No other bracket rounds follow.
+        if range.is_empty() {
+            range
+        } else {
+            0..self.matches.len()
+        }
+    }
+
+    fn next_bracket(&self, range: Range<usize>) -> Range<usize> {
+        // `range` is `self.matches().len()..self.matches().len()`. No other brackets follow.
+        if range.is_empty() {
+            range
+        } else {
+            0..self.matches.len()
+        }
+    }
+
+    fn next_round(&self, range: Range<usize>) -> Range<usize> {
+        // Start from default.
+        if range.start == 0 {
+            0..self.entrants().len().next_power_of_two() / 2
+        } else {
+            range.start..self.entrants().len().next_power_of_two() / 2 + range.start / 2
+        }
+    }
+}
+
 impl<T, D> AsRef<Entrants<T>> for SingleElimination<T, D> {
     fn as_ref(&self) -> &Entrants<T> {
         &self.entrants
@@ -354,7 +590,7 @@ impl<'a, T> Iterator for RoundsIterIndex<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::entrants;
+    use crate::{entrants, tests::TestRenderer};
 
     use super::*;
 
@@ -572,6 +808,32 @@ mod tests {
                     EntrantSpot::Entrant(Entrant::new(3))
                 ]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_render() {
+        let entrants = entrants![0, 1, 2, 3];
+        let tournament = SingleElimination::<i32, u32>::new(entrants);
+
+        let mut renderer = TestRenderer::default();
+        tournament.render(&mut renderer);
+
+        assert_eq!(
+            renderer,
+            vec![vec![vec![
+                vec![
+                    Match::new([
+                        EntrantSpot::Entrant(Entrant::new(0)),
+                        EntrantSpot::Entrant(Entrant::new(2))
+                    ]),
+                    Match::new([
+                        EntrantSpot::Entrant(Entrant::new(1)),
+                        EntrantSpot::Entrant(Entrant::new(3))
+                    ]),
+                ],
+                vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
+            ]]]
         );
     }
 

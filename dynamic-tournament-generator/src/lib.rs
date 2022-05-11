@@ -1,16 +1,19 @@
 //! Bracket Generator
+pub mod render;
+
 mod double_elimination;
 mod single_elimination;
 mod utils;
 
 pub use double_elimination::DoubleElimination;
+use render::{BracketRounds, Renderer};
 pub use single_elimination::SingleElimination;
 use utils::SmallOption;
 
 use thiserror::Error;
 
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 use std::result;
 
 #[cfg(feature = "serde")]
@@ -855,9 +858,70 @@ impl Default for NextMatches {
     }
 }
 
+/// A tournament system.
+pub trait Tournament: Sized {
+    type Entrant;
+    type NodeData: EntrantData;
+
+    fn new<I>(entrants: I) -> Self
+    where
+        I: Iterator<Item = Self::Entrant>;
+
+    fn resume(
+        entrants: Entrants<Self::Entrant>,
+        matches: Matches<Entrant<Self::NodeData>>,
+    ) -> Result<Self>;
+
+    unsafe fn resume_unchecked(
+        entrants: Entrants<Self::Entrant>,
+        matches: Matches<Entrant<Self::NodeData>>,
+    ) -> Self;
+
+    fn entrants(&self) -> &Entrants<Self::Entrant>;
+
+    unsafe fn entrants_mut(&mut self) -> &mut Entrants<Self::Entrant>;
+
+    fn into_entrants(self) -> Entrants<Self::Entrant>;
+
+    fn matches(&self) -> &Matches<Entrant<Self::NodeData>>;
+
+    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<Self::NodeData>>;
+
+    fn into_matches(self) -> Matches<Entrant<Self::NodeData>>;
+
+    fn next_matches(&self, index: usize) -> NextMatches;
+
+    fn update_match<F>(&mut self, index: usize, f: F)
+    where
+        F: FnOnce(
+            &mut Match<EntrantRefMut<'_, Self::Entrant, Self::NodeData>>,
+            &mut MatchResult<Self::NodeData>,
+        );
+
+    /// Returns the next bracket round between `range`. If `range` is empty or no bracket rounds
+    /// are between `range`, `0..0` should be returned.
+    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize>;
+
+    /// Returns the next bracket between `range`.
+    fn next_bracket(&self, range: Range<usize>) -> Range<usize>;
+
+    /// Returns the next round between `range`.
+    fn next_round(&self, range: Range<usize>) -> Range<usize>;
+
+    /// Renders the tournament using the given [`Renderer`].
+    fn render<R>(&self, renderer: &mut R)
+    where
+        R: Renderer,
+    {
+        renderer.render(BracketRounds::new(self));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::EntrantData;
+    use crate::{render::Renderer, EntrantSpot};
+
+    use super::{BracketRounds, Entrant, EntrantData, Match, Tournament};
 
     #[macro_export]
     macro_rules! entrants {
@@ -869,5 +933,52 @@ mod tests {
     impl EntrantData for u32 {
         fn set_winner(&mut self, _winner: bool) {}
         fn reset(&mut self) {}
+    }
+
+    #[derive(Debug, Default)]
+    pub struct TestRenderer {
+        matches: Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>,
+    }
+
+    impl Renderer for TestRenderer {
+        fn render<T>(&mut self, input: BracketRounds<'_, T>)
+        where
+            T: Tournament,
+        {
+            for bracket_round in input {
+                let mut brackets = Vec::new();
+
+                for bracket in bracket_round {
+                    let mut rounds = Vec::new();
+
+                    for round in bracket {
+                        let mut matches = Vec::new();
+
+                        for r#match in round {
+                            let mut indexes = [EntrantSpot::Empty, EntrantSpot::Empty];
+
+                            for (index, entrant) in r#match.entrants.iter().enumerate() {
+                                indexes[index] =
+                                    entrant.as_ref().map(|entrant| Entrant::new(entrant.index));
+                            }
+
+                            matches.push(Match::new(indexes));
+                        }
+
+                        rounds.push(matches);
+                    }
+
+                    brackets.push(rounds);
+                }
+
+                self.matches.push(brackets);
+            }
+        }
+    }
+
+    impl PartialEq<Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>> for TestRenderer {
+        fn eq(&self, other: &Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>) -> bool {
+            &self.matches == other
+        }
     }
 }
