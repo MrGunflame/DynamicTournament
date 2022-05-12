@@ -1,23 +1,36 @@
 use yew::prelude::*;
 
-use dynamic_tournament_api::tournament::Team;
 use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
 
-use super::BracketTeam;
+use super::BracketEntrant;
 use crate::components::button::Button;
 use crate::components::providers::{ClientProvider, Provider};
+
+use std::fmt::Display;
+use std::marker::PhantomData;
 
 const COLOR_RED: &str = "#a52423";
 const COLOR_BLUE: &str = "#193d6b";
 
-pub struct BracketMatch;
+/// A single match of a tournament (also called tie, fixture or heat).
+pub struct BracketMatch<T>
+where
+    T: Clone + Display + 'static,
+{
+    _maker: PhantomData<T>,
+}
 
-impl Component for BracketMatch {
+impl<T> Component for BracketMatch<T>
+where
+    T: Clone + Display + 'static,
+{
     type Message = Message;
-    type Properties = Props;
+    type Properties = Props<T>;
 
     fn create(_ctx: &Context<Self>) -> Self {
-        Self
+        Self {
+            _maker: PhantomData,
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -44,7 +57,7 @@ impl Component for BracketMatch {
                 };
 
                 html! {
-                    <BracketTeam entrant={entrant.clone()} {node} {color} />
+                    <BracketEntrant<T> entrant={entrant.clone()} {node} {color} />
                 }
             })
             .collect();
@@ -107,14 +120,14 @@ impl Component for BracketMatch {
 }
 
 #[derive(Clone, Debug, Properties)]
-pub struct Props {
-    pub entrants: [EntrantSpot<Team>; 2],
+pub struct Props<T> {
+    pub entrants: [EntrantSpot<T>; 2],
     pub nodes: [EntrantSpot<EntrantScore<u64>>; 2],
     pub on_action: Callback<Action>,
     pub number: usize,
 }
 
-impl PartialEq for Props {
+impl<T> PartialEq for Props<T> {
     fn eq(&self, _other: &Self) -> bool {
         false
     }

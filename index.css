@@ -398,3 +398,28 @@ td {
 .winner-input-box {
   margin: 10px;
 }
+
+.dt-bracket {
+  display: flex;
+  flex-direction: row;
+}
+
+.dt-bracket-bracket-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.dt-bracket-bracket {
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  padding: 3px;
+  margin: 20px;
+}
+
+.dt-bracket-round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  margin: 10px;
+}
