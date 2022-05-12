@@ -259,16 +259,6 @@ where
         }
     }
 
-    pub fn rounds_iter(&self) -> RoundsIter<'_, Entrant<D>> {
-        RoundsIter::new(
-            self.matches.as_ref(),
-            match self.entrants.len() {
-                1 | 2 => 1,
-                n => n.next_power_of_two() / 2,
-            },
-        )
-    }
-
     /// Calculates the number of matches required to build a [`SingleElimination`] tournament
     /// using `entrants`-number of entrants.
     fn calculate_matches(entrants: usize) -> usize {
@@ -526,72 +516,10 @@ impl<T, D> Borrow<Matches<Entrant<D>>> for SingleElimination<T, D> {
     }
 }
 
-#[derive(Debug)]
-pub struct RoundsIter<'a, T> {
-    slice: &'a [Match<T>],
-    num_matches: usize,
-}
-
-impl<'a, T> RoundsIter<'a, T> {
-    fn new(slice: &'a [Match<T>], num_matches: usize) -> Self {
-        Self { slice, num_matches }
-    }
-
-    pub fn with_index(self) -> RoundsIterIndex<'a, T> {
-        RoundsIterIndex {
-            slice: self.slice,
-            num_matches: self.num_matches,
-            index: 0,
-        }
-    }
-}
-
-impl<'a, T> Iterator for RoundsIter<'a, T> {
-    type Item = &'a [Match<T>];
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.slice.is_empty() {
-            None
-        } else {
-            // TODO: This can be `split_at_unchecked` when it is stable.
-            let (slice, rem) = self.slice.split_at(self.num_matches);
-
-            self.slice = rem;
-            self.num_matches /= 2;
-
-            Some(slice)
-        }
-    }
-}
-
-pub struct RoundsIterIndex<'a, T> {
-    slice: &'a [Match<T>],
-    num_matches: usize,
-    index: usize,
-}
-
-impl<'a, T> Iterator for RoundsIterIndex<'a, T> {
-    type Item = (usize, &'a [Match<T>]);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.slice.is_empty() {
-            None
-        } else {
-            let (slice, rem) = self.slice.split_at(self.num_matches);
-            let index = self.index;
-
-            self.slice = rem;
-            self.index += slice.len();
-            self.num_matches /= 2;
-
-            Some((index, slice))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{entrants, tests::TestRenderer};
+    use crate::entrants;
+    use crate::tests::TestRenderer;
 
     use super::*;
 
@@ -836,33 +764,5 @@ mod tests {
                 vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
             ]]]
         );
-    }
-
-    #[test]
-    fn test_single_elimination_rounds_iter() {
-        let entrants = entrants![0, 1, 2, 3];
-        let tournament = SingleElimination::<i32, u32>::new(entrants);
-
-        let mut iter = tournament.rounds_iter();
-        assert_eq!(
-            iter.next().unwrap(),
-            [
-                Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
-                ]),
-                Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
-                ]),
-            ]
-        );
-
-        assert_eq!(
-            iter.next().unwrap(),
-            [Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),]
-        );
-
-        assert_eq!(iter.next(), None);
     }
 }
