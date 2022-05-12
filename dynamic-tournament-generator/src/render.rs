@@ -3,10 +3,11 @@ use crate::{Entrant, Match, Tournament};
 use std::ops::Range;
 
 /// A renderer used to render any [`Tournament`].
-pub trait Renderer {
-    fn render<T>(&mut self, input: BracketRounds<'_, T>)
-    where
-        T: Tournament;
+pub trait Renderer<T, E, D>
+where
+    T: Tournament<Entrant = E, NodeData = D>,
+{
+    fn render(&mut self, input: BracketRounds<'_, T>);
 }
 
 /// An [`Iterator`] over all [`BracketRound`]s within a [`Tournament`].
@@ -41,7 +42,7 @@ where
         // Get the next bracket round between `self.range`.
         let range = self.tournament.next_bracket_round(self.range.clone());
 
-        println!("Rendering next BracketRound: {:?}", range);
+        log::debug!("Rendering next BracketRound: {:?}", range);
 
         if range.is_empty() {
             None
@@ -83,7 +84,7 @@ where
         // Get the next bracket between `self.range`.
         let range = self.tournament.next_bracket(self.range.clone());
 
-        println!("Rendering next Bracket: {:?}", range);
+        log::debug!("Rendering next Bracket: {:?}", range);
 
         if range.is_empty() {
             None
@@ -125,7 +126,7 @@ where
         // Get the next round between `self.range`.
         let range = self.tournament.next_round(self.range.clone());
 
-        println!("Rendering next Round: {:?}", range);
+        log::debug!("Rendering next Round: {:?}", range);
 
         if range.is_empty() {
             None
@@ -160,6 +161,10 @@ where
             end: range.end,
         }
     }
+
+    pub fn indexed(self) -> Indexed<'a, T> {
+        Indexed { iter: self }
+    }
 }
 
 impl<'a, T> Iterator for Round<'a, T>
@@ -174,11 +179,32 @@ where
         } else {
             let m = &self.tournament.matches()[self.start];
 
-            println!("Rendering next Match: {:?}", self.start);
+            log::debug!("Rendering next Match: {:?}", self.start);
 
             self.start += 1;
 
             Some(m)
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Indexed<'a, T>
+where
+    T: Tournament,
+{
+    iter: Round<'a, T>,
+}
+
+impl<'a, T> Iterator for Indexed<'a, T>
+where
+    T: Tournament,
+{
+    type Item = (usize, &'a Match<Entrant<T::NodeData>>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.iter.start;
+
+        self.iter.next().map(|m| (index, m))
     }
 }

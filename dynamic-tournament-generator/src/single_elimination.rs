@@ -1,6 +1,7 @@
 use crate::{Entrant, EntrantRefMut, EntrantSpot, Error, MatchResult, Result};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
 
+use std::borrow::Borrow;
 use std::ops::Range;
 use std::ptr;
 
@@ -513,14 +514,14 @@ where
     }
 }
 
-impl<T, D> AsRef<Entrants<T>> for SingleElimination<T, D> {
-    fn as_ref(&self) -> &Entrants<T> {
+impl<T, D> Borrow<Entrants<T>> for SingleElimination<T, D> {
+    fn borrow(&self) -> &Entrants<T> {
         &self.entrants
     }
 }
 
-impl<T, D> AsRef<Matches<Entrant<D>>> for SingleElimination<T, D> {
-    fn as_ref(&self) -> &Matches<Entrant<D>> {
+impl<T, D> Borrow<Matches<Entrant<D>>> for SingleElimination<T, D> {
+    fn borrow(&self) -> &Matches<Entrant<D>> {
         &self.matches
     }
 }

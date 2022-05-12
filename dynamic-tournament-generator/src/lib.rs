@@ -12,6 +12,7 @@ use utils::SmallOption;
 
 use thiserror::Error;
 
+use std::borrow::Borrow;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 use std::result;
@@ -167,9 +168,9 @@ impl<D> Entrant<D> {
     /// Returns the entrant `T` associated with the current node.
     pub fn entrant<'a, T, U>(&self, entrants: &'a U) -> &'a T
     where
-        U: AsRef<Entrants<T>>,
+        U: Borrow<Entrants<T>>,
     {
-        unsafe { entrants.as_ref().get_unchecked(self.index) }
+        unsafe { entrants.borrow().get_unchecked(self.index) }
     }
 }
 
@@ -859,7 +860,7 @@ impl Default for NextMatches {
 }
 
 /// A tournament system.
-pub trait Tournament: Sized {
+pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     type Entrant;
     type NodeData: EntrantData;
 
@@ -911,7 +912,7 @@ pub trait Tournament: Sized {
     /// Renders the tournament using the given [`Renderer`].
     fn render<R>(&self, renderer: &mut R)
     where
-        R: Renderer,
+        R: Renderer<Self, Self::Entrant, Self::NodeData>,
     {
         renderer.render(BracketRounds::new(self));
     }
@@ -940,11 +941,11 @@ mod tests {
         matches: Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>,
     }
 
-    impl Renderer for TestRenderer {
-        fn render<T>(&mut self, input: BracketRounds<'_, T>)
-        where
-            T: Tournament,
-        {
+    impl<T, E, D> Renderer<T, E, D> for TestRenderer
+    where
+        T: Tournament<Entrant = E, NodeData = D>,
+    {
+        fn render(&mut self, input: BracketRounds<'_, T>) {
             for bracket_round in input {
                 let mut brackets = Vec::new();
 

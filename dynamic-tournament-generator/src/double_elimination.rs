@@ -3,7 +3,7 @@ use crate::{
     NextMatches, Result, Tournament,
 };
 
-use std::ops::Range;
+use std::{borrow::Borrow, ops::Range};
 
 /// A double elimination tournament.
 #[derive(Clone, Debug)]
@@ -763,20 +763,20 @@ where
     }
 }
 
-impl<T, D> AsRef<Entrants<T>> for DoubleElimination<T, D>
+impl<T, D> Borrow<Entrants<T>> for DoubleElimination<T, D>
 where
     D: EntrantData,
 {
-    fn as_ref(&self) -> &Entrants<T> {
+    fn borrow(&self) -> &Entrants<T> {
         self.entrants()
     }
 }
 
-impl<T, D> AsRef<Matches<Entrant<D>>> for DoubleElimination<T, D>
+impl<T, D> Borrow<Matches<Entrant<D>>> for DoubleElimination<T, D>
 where
     D: EntrantData,
 {
-    fn as_ref(&self) -> &Matches<Entrant<D>> {
+    fn borrow(&self) -> &Matches<Entrant<D>> {
         self.matches()
     }
 }
