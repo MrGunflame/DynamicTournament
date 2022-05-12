@@ -1,11 +1,6 @@
-// pub mod double_elimination;
-pub mod single_elimination;
-
 mod entrant;
 mod r#match;
-mod team;
 
-// use double_elimination::DoubleEliminationBracket;
 use dynamic_tournament_generator::{
     DoubleElimination, Entrant, EntrantScore, EntrantSpot, Match, Matches, SingleElimination,
     Tournament,
@@ -208,7 +203,7 @@ impl Component for Bracket {
                                     )
                                 };
 
-                                state.update_match(index.try_into().unwrap(), |_, res| {
+                                state.update_match(index, |_, res| {
                                     res.reset_default();
                                 });
 
@@ -225,7 +220,7 @@ impl Component for Bracket {
                                     )
                                 };
 
-                                state.update_match(index.try_into().unwrap(), |_, res| {
+                                state.update_match(index, |_, res| {
                                     res.reset_default();
                                 });
 
@@ -473,10 +468,10 @@ where
         index: usize,
         match_index: usize,
     ) -> Html {
-        let on_action = self.ctx.link().callback(move |action| Message::Action {
-            index: index,
-            action,
-        });
+        let on_action = self
+            .ctx
+            .link()
+            .callback(move |action| Message::Action { index, action });
 
         let entrants = input
             .entrants
