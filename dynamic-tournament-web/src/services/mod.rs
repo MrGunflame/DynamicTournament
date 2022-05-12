@@ -21,7 +21,7 @@ pub struct WebSocketService {
 }
 
 impl WebSocketService {
-    pub fn new(client: Client, id: u64) -> Self {
+    pub fn new(client: &Client, id: u64) -> Self {
         // Replace http with ws and https with wss.
         let uri = format!(
             "{}/v2/tournament/{}/bracket",

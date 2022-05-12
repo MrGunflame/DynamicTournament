@@ -24,6 +24,40 @@ impl<T> FetchData<T> {
         }
     }
 
+    /// Returns `true` if the `FetchData` has an initialized value.
+    pub fn has_value(&self) -> bool {
+        match self.inner {
+            Some(ref res) => res.is_ok(),
+            None => false,
+        }
+    }
+
+    /// Maps a `FetchData<T>` to an `FetchData<U>`.
+    pub fn map<U, F>(self, f: F) -> FetchData<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        FetchData::from(self.inner.map(|res| res.map(f)))
+    }
+
+    /// Unwraps the value `T` from `FetchData<T>`, panicking when it contains no `T` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` has no value `T`.
+    pub fn unwrap(self) -> T {
+        self.inner.unwrap().unwrap()
+    }
+
+    /// Unwraps the value `T` from `FetchData<T>` without checking if it contains `T`.
+    ///
+    /// # Safety
+    ///
+    /// This method causes undefined behavoir if called on a value that is not `T`.
+    pub unsafe fn unwrap_unchecked(self) -> T {
+        self.inner.unwrap_unchecked().unwrap_unchecked()
+    }
+
     pub fn render<F>(&self, f: F) -> Html
     where
         F: FnOnce(&T) -> Html,
