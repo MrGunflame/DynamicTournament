@@ -94,6 +94,12 @@ pub struct Team {
     pub players: Vec<Player>,
 }
 
+impl Display for Team {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
 /// A single player in a [`Team`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Player {
@@ -102,6 +108,12 @@ pub struct Player {
     /// Rating of the player.
     #[serde(default)]
     pub rating: Option<u64>,
+}
+
+impl Display for Player {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.name.fmt(f)
+    }
 }
 
 /// The role of a [`Player`].
