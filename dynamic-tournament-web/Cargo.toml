@@ -4,8 +4,8 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-dynamic-tournament-api = { version = "0.3.2", path = "../dynamic-tournament-api", features = ["local-storage"] }
-dynamic-tournament-generator = { version = "0.3.2", path = "../dynamic-tournament-generator", features = ["serde"] }
+dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api", features = ["local-storage"] }
+dynamic-tournament-generator = { version = "0.4.0", path = "../dynamic-tournament-generator", features = ["serde"] }
 
 wee_alloc = "0.4.5"
 yew = "0.19.3"
