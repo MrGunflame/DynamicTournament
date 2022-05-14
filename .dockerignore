@@ -1,3 +1,4 @@
 /target
 /dist
 /dynamic-tournament-server/jwt-secret
+/.git

@@ -1,17 +1,18 @@
-FROM rust:latest as builder
+FROM rust:alpine as builder
 
+RUN apk add musl-dev g++
 WORKDIR /app
 COPY . .
 RUN dd if=/dev/urandom of=/app/dynamic-tournament-server/jwt-secret bs=1 count=512
 
 RUN cargo build --bin dynamic-tournament-server --release
 
-FROM debian:stable-slim
+FROM scratch
 
-WORKDIR /app
+WORKDIR /
 
-COPY --from=builder /app/target/release/dynamic-tournament-server /app/bin
-COPY dynamic-tournament-server/config.toml /app
-COPY dynamic-tournament-server/users.json /app
+COPY --from=builder /app/target/release/dynamic-tournament-server /bin
+COPY dynamic-tournament-server/config.toml /
+COPY dynamic-tournament-server/users.json /
 
-ENTRYPOINT ["/app/bin"]
+ENTRYPOINT ["/bin"]
