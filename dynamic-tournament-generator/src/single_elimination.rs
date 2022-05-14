@@ -135,6 +135,7 @@ where
     /// `entrants` will create an [`SingleElimination`] object with false assumptions. Usage
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
+    #[inline]
     pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
@@ -146,6 +147,7 @@ where
     }
 
     /// Returns a reference to the entrants in the tournament.
+    #[inline]
     pub fn entrants(&self) -> &Entrants<T> {
         &self.entrants
     }
@@ -160,16 +162,19 @@ where
     /// the matches.
     ///
     /// Changing the `entrants` without resizing [`Entrants`] can never cause undefined behavoir.
+    #[inline]
     pub unsafe fn entrants_mut(&mut self) -> &mut Entrants<T> {
         &mut self.entrants
     }
 
     /// Returns the entrants from the tournament.
+    #[inline]
     pub fn into_entrants(self) -> Entrants<T> {
         self.entrants
     }
 
     /// Returns a reference to the matches in the tournament.
+    #[inline]
     pub fn matches(&self) -> &Matches<Entrant<D>> {
         &self.matches
     }
@@ -185,11 +190,13 @@ where
     /// Changing the data field of [`Entrant`] without changing the length of [`Matches`] or
     /// changing the index field of [`Entrant`] is always safe, **but may cause the tournament to
     /// be in an incorrect or inconsistent state**.
+    #[inline]
     pub unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
         &mut self.matches
     }
 
     /// Returns the matches from the tournament.
+    #[inline]
     pub fn into_matches(self) -> Matches<Entrant<D>> {
         self.matches
     }
@@ -380,6 +387,7 @@ where
         unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
     }
 
+    #[inline]
     unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
@@ -390,26 +398,32 @@ where
         Self { entrants, matches }
     }
 
+    #[inline]
     fn entrants(&self) -> &Entrants<Self::Entrant> {
         &self.entrants
     }
 
+    #[inline]
     unsafe fn entrants_mut(&mut self) -> &mut Entrants<T> {
         &mut self.entrants
     }
 
+    #[inline]
     fn into_entrants(self) -> Entrants<T> {
         self.entrants
     }
 
+    #[inline]
     fn matches(&self) -> &Matches<Entrant<Self::NodeData>> {
         &self.matches
     }
 
+    #[inline]
     unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
         &mut self.matches
     }
 
+    #[inline]
     fn into_matches(self) -> Matches<Entrant<D>> {
         self.matches
     }
@@ -476,6 +490,7 @@ where
         }
     }
 
+    #[inline]
     fn next_bracket_round(&self, range: Range<usize>) -> Range<usize> {
         // `range` is `self.matches().len()..self.matches().len()`. No other bracket rounds follow.
         if range.is_empty() {
@@ -485,6 +500,7 @@ where
         }
     }
 
+    #[inline]
     fn next_bracket(&self, range: Range<usize>) -> Range<usize> {
         // `range` is `self.matches().len()..self.matches().len()`. No other brackets follow.
         if range.is_empty() {
