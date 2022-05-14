@@ -45,6 +45,7 @@ impl<T> FetchData<T> {
     /// # Panics
     ///
     /// Panics if `self` has no value `T`.
+    #[allow(unused)]
     pub fn unwrap(self) -> T {
         self.inner.unwrap().unwrap()
     }
