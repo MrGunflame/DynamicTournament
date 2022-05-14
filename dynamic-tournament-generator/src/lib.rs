@@ -325,7 +325,7 @@ impl<T> Match<T> {
     ///
     /// # Safety
     ///
-    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &EntrantSpot<T> {
         self.entrants.get_unchecked(index)
@@ -335,7 +335,7 @@ impl<T> Match<T> {
     ///
     /// # Safety
     ///
-    /// Calling this method with an `index` that is out-of-bounds is unidentified behavoir.
+    /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntrantSpot<T> {
         self.entrants.get_unchecked_mut(index)
@@ -575,7 +575,7 @@ where
 /// The methods on `NextMatches` assume that the given indexes and positions are valid, as long as
 /// those values are not `None`.
 ///
-/// Calling methods with an value that is out-of-bounds for the given matches is unidentified
+/// Calling methods with an value that is out-of-bounds for the given matches is undefined
 /// behavoir.
 #[derive(Clone, Debug)]
 pub struct NextMatches {
@@ -660,34 +660,76 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     type Entrant;
     type NodeData: EntrantData;
 
+    /// Creates a new `Tournament` using the given `entrants`.
     fn new<I>(entrants: I) -> Self
     where
         I: Iterator<Item = Self::Entrant>;
 
+    /// Resumes a `Tournament` by providing the `entrants` and `matches` of the `Tournament`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] if `matches` does not have the correct length to fit with
+    /// `entrants` or a [`Entrant`] has an `index` value pointing to an out-of-bounds entrant.
+    /// The required length depends on the concrete `Tournament`.
     fn resume(
         entrants: Entrants<Self::Entrant>,
         matches: Matches<Entrant<Self::NodeData>>,
     ) -> Result<Self>;
 
+    /// Resumes a `Tournament` by providing the `entrants` and `matches` of the `Tournament`
+    /// without validating the length of `matches` or checking for out-of-bounds indexes on
+    /// [`Entrant`]s.
+    ///
+    /// # Safety
+    ///
+    /// Providing a `matches` value with a length that does not fit with `entrants` or having an
+    /// [`Entrant`] with an `index` value pointing to an out-of-bounds entrant is undefined
+    /// behavoir.
     unsafe fn resume_unchecked(
         entrants: Entrants<Self::Entrant>,
         matches: Matches<Entrant<Self::NodeData>>,
     ) -> Self;
 
+    /// Returns a reference to the [`Entrants`] of the `Tournament`.
     fn entrants(&self) -> &Entrants<Self::Entrant>;
 
+    /// Returns a mutable reference to the [`Entrants`] of the `Tournament`.
+    ///
+    /// # Safety
+    ///
+    /// Removing elements from [`Entrants`] while there are still [`Entrant`]s with an `index`
+    /// pointing to that element in the `Tournament` is undefined behavoir.
+    ///
+    /// Growing [`Entrants`] or modifying elements is always safe.
     unsafe fn entrants_mut(&mut self) -> &mut Entrants<Self::Entrant>;
 
+    /// Consumes the `Tournament`, returning the [`Entrants`] of the `Tournament`.
     fn into_entrants(self) -> Entrants<Self::Entrant>;
 
+    /// Returns a reference to the [`Matches`] of the `Tournament`.
     fn matches(&self) -> &Matches<Entrant<Self::NodeData>>;
 
+    /// Returns a mutable reference to the [`Matches`] of the `Tournament`.
+    ///
+    /// # Safety
+    ///
+    /// Changing the length of the [`Matches`] to a length that is invalid for the `Tournament`
+    /// is undefined behavoir. The exact requirements depend on the concrete `Tournament`. Changing
+    /// the `index` field [`Entrant`]s to an out-of-bounds of [`Entrants`] is undefined behavoir.
+    ///
+    /// Changing the `data` fields of [`Entrant`]s is always safe, but may cause the `Tournament`
+    /// to be in an incorrect or inconsistent state.
     unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<Self::NodeData>>;
 
+    /// Consumes the `Tournament`, returning the [`Matches`] of the `Tournament`.
     fn into_matches(self) -> Matches<Entrant<Self::NodeData>>;
 
+    /// Returns the [`NextMatches`] of the match with the given `index`.
     fn next_matches(&self, index: usize) -> NextMatches;
 
+    /// Updates the match at `index` by applying `f` on it. The next match is updated using the
+    /// returned [`MatchResult`]. If `index` is out-of-bounds, `f` is never called.
     fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(
