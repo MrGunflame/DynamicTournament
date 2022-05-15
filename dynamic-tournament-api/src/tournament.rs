@@ -222,9 +222,9 @@ impl<'a> TournamentClient<'a> {
     ///
     /// Returns an error if the request fails, or the returned data is invalid.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>> {
-        let req = self.client.request().url("/v2/tournament");
+        let req = self.client.request().uri("/v2/tournament").build();
 
-        let resp = req.build().send().await?.json().await?;
+        let resp = self.client.send(req).await?.json().await?;
 
         Ok(resp)
     }
@@ -238,9 +238,10 @@ impl<'a> TournamentClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v2/tournament/{}", id.0));
+            .uri(&format!("/v2/tournament/{}", id.0))
+            .build();
 
-        let resp = req.build().send().await?.json().await?;
+        let resp = self.client.send(req).await?.json().await?;
 
         Ok(resp)
     }
@@ -254,11 +255,12 @@ impl<'a> TournamentClient<'a> {
         let req = self
             .client
             .request()
-            .url("/v2/tournament")
+            .uri("/v2/tournament")
             .post()
-            .body(tournament);
+            .body(tournament)
+            .build();
 
-        req.build().send().await?;
+        self.client.send(req).await?;
         Ok(())
     }
 
@@ -298,9 +300,10 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v2/tournament/{}/bracket", self.tournament_id.0));
+            .uri(&format!("/v2/tournament/{}/bracket", self.tournament_id.0))
+            .build();
 
-        let resp = req.build().send().await?.json().await?;
+        let resp = self.client.send(req).await?.json().await?;
 
         Ok(resp)
     }
@@ -314,11 +317,12 @@ impl<'a> BracketClient<'a> {
         let req = self
             .client
             .request()
-            .url(format!("/v2/tournament/{}/bracket", self.tournament_id.0))
+            .uri(&format!("/v2/tournament/{}/bracket", self.tournament_id.0))
             .put()
-            .body(bracket);
+            .body(bracket)
+            .build();
 
-        req.build().send().await?;
+        self.client.send(req).await?;
         Ok(())
     }
 }

@@ -1,3 +1,4 @@
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::{Client, Error, Result};
@@ -27,12 +28,13 @@ impl<'a> AuthClient<'a> {
             .client
             .request()
             .post()
-            .url("/v2/auth/login")
-            .body(body);
+            .uri("/v2/auth/login")
+            .body(body)
+            .build();
 
-        let resp = req.build().send().await?;
+        let resp = self.client.send(req).await?;
 
-        if resp.ok() {
+        if resp.is_success() {
             let body = resp.json().await?;
 
             let mut inner = self.client.inner.write().unwrap();
@@ -42,7 +44,7 @@ impl<'a> AuthClient<'a> {
             Ok(())
         } else {
             match resp.status() {
-                401 => Err(Error::Unauthorized),
+                StatusCode::UNAUTHORIZED => Err(Error::Unauthorized),
                 status => Err(Error::BadStatusCode(status)),
             }
         }
@@ -70,13 +72,13 @@ impl<'a> AuthClient<'a> {
             .client
             .request()
             .post()
-            .url("/v2/auth/refresh")
+            .uri("/v2/auth/refresh")
             .body(&body)
             .build();
 
-        let resp = req.send().await?;
+        let resp = self.client.send(req).await?;
 
-        if resp.ok() {
+        if resp.is_success() {
             let body = resp.json().await?;
 
             let mut inner = self.client.inner.write().unwrap();
