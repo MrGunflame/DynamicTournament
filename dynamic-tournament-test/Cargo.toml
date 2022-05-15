@@ -1,0 +1,11 @@
+[package]
+name = "dynamic-tournament-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api" }
+
+chrono = "0.4.19"
+rand = "0.8.5"
+tokio = { version = "1.18.2", features = ["full"] }
