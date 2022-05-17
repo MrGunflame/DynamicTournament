@@ -16,8 +16,8 @@ impl TournamentGenerator {
     }
 
     pub fn generate(&self) -> Tournament {
-        let name = self.name.clone().unwrap_or("Test".to_owned());
-        let date = self.date.unwrap_or(Utc::now());
+        let name = self.name.clone().unwrap_or_else(|| "Test".to_owned());
+        let date = self.date.unwrap_or_else(Utc::now);
         let bracket_type = self.bracket_type.unwrap_or(BracketType::SingleElimination);
 
         let mut teams = Vec::new();
