@@ -3,6 +3,7 @@ pub mod button;
 pub mod config_provider;
 pub mod confirmation;
 pub mod error;
+pub mod errorlog;
 pub mod loader;
 pub mod movable_boxed;
 pub mod popup;

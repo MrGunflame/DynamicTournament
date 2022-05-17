@@ -1,4 +1,5 @@
 pub mod client;
+pub mod errorlog;
 
 use std::collections::HashSet;
 

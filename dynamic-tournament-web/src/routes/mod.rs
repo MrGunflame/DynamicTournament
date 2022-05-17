@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use crate::components::bracket::Bracket;
 use crate::components::config_provider::ConfigProvider;
+use crate::components::errorlog::ErrorLog;
 use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::{render_data, Data, DataResult};
@@ -53,6 +54,7 @@ impl Component for App {
                                     <Switch<Route> render={Switch::render(switch)} />
                                 </div>
                                 <div id="popup-host"></div>
+                                <ErrorLog />
                             </div>
                             <div class="footer">
                                 <p>

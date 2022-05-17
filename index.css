@@ -423,3 +423,36 @@ td {
   justify-content: space-around;
   margin: 10px;
 }
+
+.dt-errorlog {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 10px;
+  z-index: 100;
+}
+
+.dt-errorlog-msg {
+  border-radius: 3px;
+  margin: 10px;
+  padding: 9px;
+  background-color: #f43c0e;
+  min-width: 100px;
+  max-width: 500px;
+}
+
+.dt-errorlog-button {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dt-errorlog-button>button {
+  display: block;
+  margin: 0;
+  background: transparent;
+  border: none;
+  color: white;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
