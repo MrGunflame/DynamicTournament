@@ -267,7 +267,7 @@ mod wasm {
 
     impl InnerClient {
         pub async fn send(&self, request: Request) -> Result<Response> {
-            let req = reqwasm::http::Request::new(&request.uri).method(match request.method {
+            let mut req = reqwasm::http::Request::new(&request.uri).method(match request.method {
                 Method::OPTIONS => reqwasm::http::Method::OPTIONS,
                 Method::GET => reqwasm::http::Method::GET,
                 Method::POST => reqwasm::http::Method::POST,
@@ -276,6 +276,10 @@ mod wasm {
                 Method::PATCH => reqwasm::http::Method::PATCH,
                 _ => unreachable!(),
             });
+
+            if let Some(body) = request.body {
+                req = req.body(body);
+            }
 
             let resp = req.send().await.map_err(Error::from)?;
 
