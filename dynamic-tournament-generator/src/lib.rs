@@ -2,7 +2,9 @@
 pub mod render;
 
 mod double_elimination;
+mod options;
 mod single_elimination;
+mod tournament;
 mod utils;
 
 pub use double_elimination::DoubleElimination;
