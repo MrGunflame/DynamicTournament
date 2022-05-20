@@ -95,7 +95,8 @@ Log in using the provided credentials and returns a new JWT access and refresh t
 
 #### Errors
 
-`401`: Returned if the provided credentials are invalid.
+`401`: Returned if the provided credentials are invalid.  
+`411`: Returned if the `Content-Length` header is missing or contains a malformed value.
 
 ### POST /v2/auth/refresh
 
@@ -114,4 +115,5 @@ Acquire a new access and refresh token using a valid refresh_token. Returns the 
 
 #### Errors
 
-`401`: Returned if the provided refresh token is expired or otherwise invalid.
+`401`: Returned if the provided refresh token is expired or otherwise invalid.  
+`411`: Returned if the `Content-Length` header is missing or contains a malformed value.
