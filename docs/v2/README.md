@@ -76,3 +76,42 @@ Team fields:
 
 `400`: Returned if the request body is malformed or is missing required fields.  
 `401`: Returned if the credentials provided via the `Authorization` header are invalid.
+
+### POST /v2/auth/login
+
+Log in using the provided credentials and returns a new JWT access and refresh token if successful:   
+`access_token`: *string*, The access token used to make requests
+`refresh_token`: *string*, The refresh token used to acquire a new access and refresh token without loggin in again.
+
+#### Request Body
+
+`username`: *string*, The username to authorize  
+`password`: *string*, The password for the username
+
+#### Request Headers
+
+`Content-Type`: `application/json`  
+`Content-Length`: `<BODY_BYTES_LENGTH>`
+
+#### Errors
+
+`401`: Returned if the provided credentials are invalid.
+
+### POST /v2/auth/refresh
+
+Acquire a new access and refresh token using a valid refresh_token. Returns the new tokens on success:  
+`access_token`: *string*, The access token used to make requests
+`refresh_token`: *string*, The refresh token used to acquire a new access and refresh token without loggin in again.
+
+#### Request Body
+
+`refresh_token`: *string*, The refresh token
+
+#### Request Headers
+
+`Content-Type`: `application/json`  
+`Content-Length`: `<BODY_BYTES_LENGTH>`
+
+#### Errors
+
+`401`: Returned if the provided refresh token is expired or otherwise invalid.
