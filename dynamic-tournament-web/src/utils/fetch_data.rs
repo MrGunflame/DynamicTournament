@@ -3,7 +3,11 @@ use crate::components::loader::Loader;
 
 use yew::{html, Html};
 
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+use std::rc::Rc;
+
+// We use a `Rc` instead of a `Box` here so we can avoid cloning errors when going from
+// `FetchData<T>` to `FetchData<&T>` or `FetchData<&mut T>`.
+pub type BoxError = Rc<dyn std::error::Error + Send + Sync + 'static>;
 
 /// A wrapper around an `Option<Result<T>>`.
 #[derive(Debug)]
@@ -21,6 +25,26 @@ impl<T> FetchData<T> {
     pub fn new_with_value(value: T) -> Self {
         Self {
             inner: Some(Ok(value)),
+        }
+    }
+
+    pub fn as_ref(&self) -> FetchData<&T> {
+        match &self.inner {
+            Some(res) => match res {
+                Ok(ref value) => FetchData::from(value),
+                Err(err) => FetchData::from(Err(err.clone())),
+            },
+            None => FetchData::new(),
+        }
+    }
+
+    pub fn as_mut(&mut self) -> FetchData<&mut T> {
+        match self.inner {
+            Some(ref mut res) => match res {
+                Ok(ref mut value) => FetchData::from(value),
+                Err(err) => FetchData::from(Err(err.clone())),
+            },
+            None => FetchData::new(),
         }
     }
 
@@ -103,9 +127,35 @@ impl<T> From<Option<Result<T, BoxError>>> for FetchData<T> {
     }
 }
 
+impl<T> From<Option<Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>>>
+    for FetchData<T>
+{
+    fn from(opt: Option<Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>>) -> Self {
+        match opt {
+            Some(v) => Self::from(v),
+            None => Self::new(),
+        }
+    }
+}
+
 impl<T> From<Result<T, BoxError>> for FetchData<T> {
     fn from(res: Result<T, BoxError>) -> Self {
         Self { inner: Some(res) }
+    }
+}
+
+impl<T> From<Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>> for FetchData<T> {
+    fn from(res: Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
+        match res {
+            Ok(v) => Self::new_with_value(v),
+            Err(err) => {
+                let err: BoxError = Rc::from(err);
+
+                Self {
+                    inner: Some(Err(err)),
+                }
+            }
+        }
     }
 }
 
