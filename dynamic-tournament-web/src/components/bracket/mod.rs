@@ -1,16 +1,16 @@
 mod entrant;
 mod r#match;
 
+use dynamic_tournament_generator::tournament::TournamentKind;
 use dynamic_tournament_generator::{
-    DoubleElimination, Entrant, EntrantScore, EntrantSpot, Match, Matches, SingleElimination,
-    Tournament,
+    Entrant, EntrantScore, EntrantSpot, Entrants, Match, Tournament,
 };
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
 use dynamic_tournament_generator::render::{self, BracketRound, BracketRounds, Renderer, Round};
 
-use dynamic_tournament_api::tournament::{self, BracketType, TournamentId};
+use dynamic_tournament_api::tournament::{self, BracketType, Team, TournamentId};
 use dynamic_tournament_api::{websocket, Client};
 use yew_agent::{Bridge, Bridged};
 
@@ -28,11 +28,11 @@ use crate::services::{EventBus, WebSocketService};
 use crate::utils::FetchData;
 
 pub struct Bracket {
-    bracket: FetchData<Option<()>>,
     websocket: WebSocketService,
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
-    matches: Option<Matches<Entrant<EntrantScore<u64>>>>,
+    bracket:
+        FetchData<dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>>,
 }
 
 impl Component for Bracket {
@@ -45,20 +45,43 @@ impl Component for Bracket {
 
         let websocket = WebSocketService::new(&client, ctx.props().tournament.id.0);
 
+        let kind = match ctx.props().tournament.bracket_type {
+            BracketType::SingleElimination => TournamentKind::SingleElimination,
+            BracketType::DoubleElimination => TournamentKind::DoubleElimination,
+        };
+
+        let entrants = ctx.props().tournament.entrants.clone().unwrap_teams();
+
         ctx.link().send_future(async move {
             async fn fetch_data(
+                kind: TournamentKind,
+                entrants: Vec<Team>,
                 client: Client,
                 id: TournamentId,
-            ) -> FetchData<Option<tournament::Bracket>> {
+            ) -> FetchData<
+                dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>,
+            > {
                 let client = client.tournaments();
 
+                let entrants = Entrants::from(entrants);
+
                 match client.bracket(id).get().await {
-                    Ok(bracket) => FetchData::new_with_value(Some(bracket)),
-                    Err(_) => FetchData::new_with_value(None),
+                    Ok(bracket) => FetchData::new_with_value(
+                        dynamic_tournament_generator::tournament::Tournament::resume(
+                            kind, entrants, bracket.0,
+                        )
+                        .unwrap(),
+                    ),
+                    Err(_) => FetchData::new_with_value({
+                        let mut tournament =
+                            dynamic_tournament_generator::tournament::Tournament::new(kind);
+                        tournament.extend(entrants.into_iter());
+                        tournament
+                    }),
                 }
             }
 
-            let data = fetch_data(client, id).await;
+            let data = fetch_data(kind, entrants, client, id).await;
 
             Message::Update(data)
         });
@@ -68,165 +91,50 @@ impl Component for Bracket {
             websocket,
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleMessage)),
             popup: None,
-            matches: None,
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Update(data) => {
-                // Catch any `Err` values.
-                if !data.has_value() {
-                    self.bracket = data.map(|_| Some(()));
-                    return true;
-                }
-
-                // SAFETY: `has_value` checks whether data contains a value `T`.
-                let bracket = unsafe { data.unwrap_unchecked() };
-
-                let entrants = ctx.props().tournament.entrants.clone().unwrap_teams();
-
-                let matches = match ctx.props().tournament.bracket_type {
-                    BracketType::SingleElimination => match bracket {
-                        Some(bracket) => {
-                            SingleElimination::resume(entrants.into(), bracket.0).unwrap()
-                        }
-                        None => SingleElimination::new(entrants.into_iter()),
-                    }
-                    .into_matches(),
-                    BracketType::DoubleElimination => match bracket {
-                        Some(bracket) => {
-                            DoubleElimination::resume(entrants.into(), bracket.0).unwrap()
-                        }
-                        None => DoubleElimination::new(entrants.into_iter()),
-                    }
-                    .into_matches(),
-                };
-
-                self.bracket = FetchData::new_with_value(Some(()));
-                self.matches = Some(matches);
+            Message::Update(bracket) => {
+                self.bracket = bracket;
 
                 true
             }
             Message::HandleMessage(msg) => {
                 log::debug!("Received message: {:?}", msg);
 
+                let bracket = self.bracket.as_mut().unwrap();
+
                 match msg {
                     websocket::Message::UpdateMatch { index, nodes } => {
-                        match ctx.props().tournament.bracket_type {
-                            BracketType::SingleElimination => {
-                                let entrants =
-                                    ctx.props().tournament.entrants.clone().unwrap_teams();
+                        bracket.update_match(index.try_into().unwrap(), |m, res| {
+                            let mut loser_index = None;
 
-                                let mut state = unsafe {
-                                    SingleElimination::resume_unchecked(
-                                        entrants.into(),
-                                        self.matches.clone().unwrap(),
-                                    )
-                                };
+                            for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate()
+                            {
+                                if let EntrantSpot::Entrant(entrant) = entrant {
+                                    *entrant.deref_mut() = node;
+                                }
 
-                                state.update_match(index.try_into().unwrap(), |m, res| {
-                                    let mut loser_index = None;
-
-                                    for (i, (entrant, node)) in
-                                        m.entrants.iter_mut().zip(nodes).enumerate()
-                                    {
-                                        if let EntrantSpot::Entrant(entrant) = entrant {
-                                            *entrant.deref_mut() = node;
-                                        }
-
-                                        if node.winner {
-                                            res.winner_default(entrant);
-                                            loser_index = Some(match i {
-                                                0 => 1,
-                                                _ => 1,
-                                            });
-                                        }
-                                    }
-
-                                    if let Some(loser_index) = loser_index {
-                                        res.loser_default(&m.entrants[loser_index]);
-                                    }
-                                });
-
-                                self.matches = Some(state.into_matches());
+                                if node.winner {
+                                    res.winner_default(entrant);
+                                    loser_index = Some(match i {
+                                        0 => 1,
+                                        _ => 1,
+                                    });
+                                }
                             }
-                            BracketType::DoubleElimination => {
-                                let entrants =
-                                    ctx.props().tournament.entrants.clone().unwrap_teams();
 
-                                let mut state = unsafe {
-                                    DoubleElimination::resume_unchecked(
-                                        entrants.into(),
-                                        self.matches.clone().unwrap(),
-                                    )
-                                };
-
-                                state.update_match(index.try_into().unwrap(), |m, res| {
-                                    let mut loser_index = None;
-
-                                    for (i, (entrant, node)) in
-                                        m.entrants.iter_mut().zip(nodes).enumerate()
-                                    {
-                                        if let EntrantSpot::Entrant(entrant) = entrant {
-                                            *entrant.deref_mut() = node;
-                                        }
-
-                                        if node.winner {
-                                            res.winner_default(entrant);
-                                            loser_index = Some(match i {
-                                                0 => 1,
-                                                _ => 1,
-                                            });
-                                        }
-                                    }
-
-                                    if let Some(loser_index) = loser_index {
-                                        res.loser_default(&m.entrants[loser_index]);
-                                    }
-                                });
-
-                                self.matches = Some(state.into_matches());
+                            if let Some(loser_index) = loser_index {
+                                res.loser_default(&m.entrants[loser_index]);
                             }
-                        }
+                        });
                     }
                     websocket::Message::ResetMatch { index } => {
-                        match ctx.props().tournament.bracket_type {
-                            BracketType::SingleElimination => {
-                                let entrants =
-                                    ctx.props().tournament.entrants.clone().unwrap_teams();
-
-                                let mut state = unsafe {
-                                    SingleElimination::resume_unchecked(
-                                        entrants.into(),
-                                        self.matches.clone().unwrap(),
-                                    )
-                                };
-
-                                state.update_match(index, |_, res| {
-                                    res.reset_default();
-                                });
-
-                                self.matches = Some(state.into_matches());
-                            }
-                            BracketType::DoubleElimination => {
-                                let entrants =
-                                    ctx.props().tournament.entrants.clone().unwrap_teams();
-
-                                let mut state = unsafe {
-                                    SingleElimination::resume_unchecked(
-                                        entrants.into(),
-                                        self.matches.clone().unwrap(),
-                                    )
-                                };
-
-                                state.update_match(index, |_, res| {
-                                    res.reset_default();
-                                });
-
-                                self.matches = Some(state.into_matches());
-                            }
-                        }
+                        bracket.update_match(index, |_, res| {
+                            res.reset_default();
+                        });
                     }
                     _ => (),
                 }
@@ -283,12 +191,12 @@ impl Component for Bracket {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        self.bracket.render(|_| {
+        self.bracket.render(|bracket| {
             let popup = match self.popup {
                 Some(PopupState::UpdateScores(index)) => {
                     let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
-                    let m = &self.matches.clone().unwrap()[index];
+                    let m = &bracket.matches()[index];
 
                     let entrants = dynamic_tournament_generator::Entrants::from(
                         ctx.props().tournament.entrants.clone().unwrap_teams(),
@@ -322,32 +230,7 @@ impl Component for Bracket {
                 None => html! {},
             };
 
-            let bracket = match ctx.props().tournament.bracket_type {
-                BracketType::SingleElimination => {
-                    let entrants = ctx.props().tournament.entrants.clone().unwrap_teams();
-
-                    let state = unsafe {
-                        SingleElimination::resume_unchecked(
-                            entrants.into(),
-                            self.matches.clone().unwrap(),
-                        )
-                    };
-
-                    HtmlRenderer::new(&state, ctx).into_output()
-                }
-                BracketType::DoubleElimination => {
-                    let entrants = ctx.props().tournament.entrants.clone().unwrap_teams();
-
-                    let state = unsafe {
-                        DoubleElimination::resume_unchecked(
-                            entrants.into(),
-                            self.matches.clone().unwrap(),
-                        )
-                    };
-
-                    HtmlRenderer::new(&state, ctx).into_output()
-                }
-            };
+            let bracket = HtmlRenderer::new(bracket, ctx).into_output();
 
             html! {
                 <>
@@ -360,7 +243,9 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    Update(FetchData<Option<tournament::Bracket>>),
+    Update(
+        FetchData<dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>>,
+    ),
     HandleMessage(websocket::Message),
     Action {
         index: usize,
