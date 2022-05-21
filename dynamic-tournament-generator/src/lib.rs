@@ -4,7 +4,7 @@ pub mod render;
 mod double_elimination;
 mod options;
 mod single_elimination;
-mod tournament;
+pub mod tournament;
 mod utils;
 
 pub use double_elimination::DoubleElimination;
@@ -18,6 +18,7 @@ use std::borrow::Borrow;
 use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 use std::result;
+use std::vec::IntoIter;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,12 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Entrants<T> {
     entrants: Vec<T>,
+}
+
+impl<T> Entrants<T> {
+    pub fn into_iter(self) -> IntoIter<T> {
+        self.entrants.into_iter()
+    }
 }
 
 impl<T> FromIterator<T> for Entrants<T> {

@@ -33,7 +33,7 @@ where
             n => n.next_power_of_two() / 2,
         };
 
-        let mut matches = Matches::with_capacity(initial_matches * 2 - 1);
+        let mut matches = Matches::with_capacity((initial_matches * 2).saturating_sub(1));
 
         // Push the first half entrants into matches. This already creates the minimum number of
         // matches required.
@@ -513,7 +513,10 @@ where
     fn next_round(&self, range: Range<usize>) -> Range<usize> {
         // Start from default.
         if range.start == 0 {
-            0..self.entrants().len().next_power_of_two() / 2
+            match self.entrants.len() {
+                1 => 0..self.entrants().len().next_power_of_two(),
+                n => 0..n.next_power_of_two() / 2,
+            }
         } else {
             range.start..self.entrants().len().next_power_of_two() / 2 + range.start / 2
         }

@@ -65,6 +65,20 @@ where
         }
     }
 
+    pub fn entrants(&self) -> &Entrants<T> {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.entrants(),
+            InnerTournament::DoubleElimination(t) => t.entrants(),
+        }
+    }
+
+    pub fn matches(&self) -> &Matches<Entrant<D>> {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.matches(),
+            InnerTournament::DoubleElimination(t) => t.matches(),
+        }
+    }
+
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
@@ -75,11 +89,35 @@ where
         }
     }
 
-    pub fn render<R>(&self, renderer: &mut R)
+    pub fn render2<R>(&self, renderer: &mut R)
     where
         R: Renderer<Self, T, D>,
     {
         renderer.render(BracketRounds::new(self));
+    }
+}
+
+impl<T, D> Extend<T> for Tournament<T, D>
+where
+    T: Clone,
+    D: EntrantData + Clone,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = T>,
+    {
+        match &mut self.inner {
+            InnerTournament::SingleElimination(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.extend(iter);
+                *t = SingleElimination::new(entrants.entrants.into_iter());
+            }
+            InnerTournament::DoubleElimination(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.extend(iter);
+                *t = DoubleElimination::new(entrants.entrants.into_iter());
+            }
+        }
     }
 }
 
@@ -121,7 +159,7 @@ where
     }
 
     fn matches(&self) -> &Matches<Entrant<Self::NodeData>> {
-        unimplemented!()
+        self.matches()
     }
 
     unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<Self::NodeData>> {
@@ -164,13 +202,6 @@ where
         unimplemented!()
     }
 
-    fn render<R>(&self, renderer: &mut R)
-    where
-        R: Renderer<Self, Self::Entrant, Self::NodeData>,
-    {
-        unimplemented!()
-    }
-
     fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(
@@ -188,7 +219,7 @@ where
     D: EntrantData + Clone,
 {
     fn borrow(&self) -> &Entrants<T> {
-        unimplemented!()
+        self.entrants()
     }
 }
 
