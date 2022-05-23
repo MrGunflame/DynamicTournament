@@ -255,6 +255,7 @@ where
             }
         }
 
+        let mut next_index = index;
         if res.reset {
             let r#match = self.matches.get_mut(index).unwrap();
 
@@ -262,6 +263,20 @@ where
                 if let EntrantSpot::Entrant(entrant) = entrant {
                     entrant.data = D::default();
                 }
+            }
+
+            // Reset all following matches.
+            loop {
+                let next_matches = self.next_matches(next_index);
+                if next_matches.winner_index.is_none() {
+                    break;
+                }
+
+                next_index = *next_matches.winner_index;
+
+                let r#match = self.matches.get_mut(next_index).unwrap();
+
+                r#match[next_matches.winner_position] = EntrantSpot::TBD;
             }
         }
     }
