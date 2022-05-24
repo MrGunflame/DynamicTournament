@@ -1,6 +1,6 @@
 use crate::{
-    Entrant, EntrantData, EntrantRefMut, EntrantSpot, Entrants, Error, Match, MatchResult, Matches,
-    NextMatches, Result, Tournament,
+    Entrant, EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches,
+    Result, Tournament,
 };
 
 use std::{borrow::Borrow, ops::Range};
@@ -218,18 +218,18 @@ where
 
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
     {
         log::debug!("Updating match {}", index);
 
-        let mut match_ = match self.matches.get_mut(index) {
-            Some(match_) => match_.to_ref_mut(&self.entrants),
+        let mut r#match = match self.matches.get_mut(index) {
+            Some(r#match) => r#match,
             None => return,
         };
 
         let mut res = MatchResult::default();
 
-        f(&mut match_, &mut res);
+        f(&mut r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 
@@ -547,18 +547,18 @@ where
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
     {
         log::debug!("Updating match {}", index);
 
-        let mut match_ = match self.matches.get_mut(index) {
-            Some(match_) => match_.to_ref_mut(&self.entrants),
+        let mut r#match = match self.matches.get_mut(index) {
+            Some(r#match) => r#match,
             None => return,
         };
 
         let mut res = MatchResult::default();
 
-        f(&mut match_, &mut res);
+        f(&mut r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 

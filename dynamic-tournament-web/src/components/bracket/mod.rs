@@ -15,7 +15,6 @@ use dynamic_tournament_api::{websocket, Client};
 use yew_agent::{Bridge, Bridged};
 
 use std::fmt::Display;
-use std::ops::DerefMut;
 use std::rc::Rc;
 
 use yew::prelude::*;
@@ -114,7 +113,7 @@ impl Component for Bracket {
                             for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate()
                             {
                                 if let EntrantSpot::Entrant(entrant) = entrant {
-                                    *entrant.deref_mut() = node;
+                                    entrant.data = node;
                                 }
 
                                 if node.winner {

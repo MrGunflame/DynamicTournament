@@ -19,7 +19,6 @@ use tokio_tungstenite::tungstenite::protocol::{self, CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
 
 use std::borrow::Cow;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -311,7 +310,7 @@ impl LiveBracket {
 
                     for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate() {
                         if let EntrantSpot::Entrant(entrant) = entrant {
-                            *entrant.deref_mut() = node;
+                            entrant.data = node;
                         }
 
                         if node.winner {
@@ -334,7 +333,7 @@ impl LiveBracket {
 
                     for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate() {
                         if let EntrantSpot::Entrant(entrant) = entrant {
-                            *entrant.deref_mut() = node;
+                            entrant.data = node;
                         }
 
                         if node.winner {

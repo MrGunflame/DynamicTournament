@@ -1,4 +1,4 @@
-use crate::{Entrant, EntrantRefMut, EntrantSpot, Error, MatchResult, Result};
+use crate::{Entrant, EntrantSpot, Error, MatchResult, Result};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
 
 use std::borrow::Borrow;
@@ -216,7 +216,7 @@ where
     /// result. If `index` is out-of-bounds the function is never called.
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
     {
         // Get the match at `index` or abort.
         // Note: This will borrow `self.matches` mutably until the end of the scope. All
@@ -224,7 +224,7 @@ where
         // safe.
 
         let mut r#match = match self.matches.get_mut(index) {
-            Some(r#match) => r#match.to_ref_mut(&self.entrants),
+            Some(r#match) => r#match,
             None => return,
         };
 
@@ -445,7 +445,7 @@ where
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
     {
         // Get the match at `index` or abort.
         // Note: This will borrow `self.matches` mutably until the end of the scope. All
@@ -453,7 +453,7 @@ where
         // safe.
 
         let mut r#match = match self.matches.get_mut(index) {
-            Some(r#match) => r#match.to_ref_mut(&self.entrants),
+            Some(r#match) => r#match,
             None => return,
         };
 

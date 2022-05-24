@@ -15,7 +15,6 @@ use utils::SmallOption;
 use thiserror::Error;
 
 use std::borrow::Borrow;
-use std::mem::MaybeUninit;
 use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
 use std::result;
 use std::vec::IntoIter;
@@ -183,43 +182,6 @@ impl<D> Entrant<D> {
     }
 }
 
-#[derive(Debug)]
-pub struct EntrantRefMut<'a, T, D> {
-    index: usize,
-    entrant: &'a T,
-    data: &'a mut D,
-}
-
-impl<'a, T, D> EntrantRefMut<'a, T, D> {
-    pub(crate) fn new(index: usize, entrant: &'a T, data: &'a mut D) -> Self {
-        Self {
-            index,
-            entrant,
-            data,
-        }
-    }
-}
-
-impl<'a, T, D> AsRef<T> for EntrantRefMut<'a, T, D> {
-    fn as_ref(&self) -> &T {
-        self.entrant
-    }
-}
-
-impl<'a, T, D> Deref for EntrantRefMut<'a, T, D> {
-    type Target = D;
-
-    fn deref(&self) -> &Self::Target {
-        self.data
-    }
-}
-
-impl<'a, T, D> DerefMut for EntrantRefMut<'a, T, D> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
-    }
-}
-
 /// An `Result<T>` using [`enum@Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
 
@@ -262,38 +224,24 @@ impl<D> MatchResult<D> {
         self
     }
 
-    pub fn winner<'a, T>(
-        &mut self,
-        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
-        data: D,
-    ) -> &mut Self {
+    pub fn winner(&mut self, entrant: &EntrantSpot<Entrant<D>>, data: D) -> &mut Self {
         self.winner = Some((entrant.as_ref().map(|e| e.index), data));
         self
     }
 
-    pub fn winner_default<'a, T>(
-        &mut self,
-        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
-    ) -> &mut Self
+    pub fn winner_default(&mut self, entrant: &EntrantSpot<Entrant<D>>) -> &mut Self
     where
         D: Default,
     {
         self.winner(entrant, D::default())
     }
 
-    pub fn loser<'a, T>(
-        &mut self,
-        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
-        data: D,
-    ) -> &mut Self {
+    pub fn loser(&mut self, entrant: &EntrantSpot<Entrant<D>>, data: D) -> &mut Self {
         self.loser = Some((entrant.as_ref().map(|e| e.index), data));
         self
     }
 
-    pub fn loser_default<'a, T>(
-        &mut self,
-        entrant: &EntrantSpot<EntrantRefMut<'a, T, D>>,
-    ) -> &mut Self
+    pub fn loser_default(&mut self, entrant: &EntrantSpot<Entrant<D>>) -> &mut Self
     where
         D: Default,
     {
@@ -362,43 +310,6 @@ impl<T> Index<usize> for Match<T> {
 impl<T> IndexMut<usize> for Match<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.entrants[index]
-    }
-}
-
-impl<D> Match<Entrant<D>> {
-    /// Converts this `Match<Entrant<D>>` into a `Match<EntrantRef<'a, T, D>>` with the referenced
-    /// entrant `T` from `entrants`.
-    pub(crate) fn to_ref_mut<'a, T>(
-        &'a mut self,
-        entrants: &'a Entrants<T>,
-    ) -> Match<EntrantRefMut<'a, T, D>> {
-        let mut array: [MaybeUninit<EntrantSpot<EntrantRefMut<'_, T, D>>>; 2] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-
-        for (elem, entrant) in array.iter_mut().zip(self.entrants.iter_mut()) {
-            match entrant {
-                EntrantSpot::Entrant(ref mut e) => {
-                    let entrant = unsafe { entrants.get_unchecked(e.index) };
-
-                    elem.write(EntrantSpot::Entrant(EntrantRefMut::new(
-                        e.index,
-                        entrant,
-                        &mut e.data,
-                    )));
-                }
-                EntrantSpot::Empty => {
-                    elem.write(EntrantSpot::Empty);
-                }
-                EntrantSpot::TBD => {
-                    elem.write(EntrantSpot::TBD);
-                }
-            }
-        }
-
-        Match {
-            // SAFETY: Every element in `array` has been initialized.
-            entrants: unsafe { std::mem::transmute(array) },
-        }
     }
 }
 
@@ -741,10 +652,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     /// returned [`MatchResult`]. If `index` is out-of-bounds, `f` is never called.
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(
-            &mut Match<EntrantRefMut<'_, Self::Entrant, Self::NodeData>>,
-            &mut MatchResult<Self::NodeData>,
-        );
+        F: FnOnce(&mut Match<Entrant<Self::NodeData>>, &mut MatchResult<Self::NodeData>);
 
     /// Returns the next bracket round between `range`. If `range` is empty or no bracket rounds
     /// are between `range`, `0..0` should be returned.

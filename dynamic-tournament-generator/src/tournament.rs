@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
 
 use crate::{
-    render::{BracketRounds, Renderer},
-    DoubleElimination, Entrant, EntrantData, EntrantRefMut, Entrants, Match, MatchResult, Matches,
-    Result, SingleElimination,
+    DoubleElimination, Entrant, EntrantData, Entrants, Match, MatchResult, Matches, Result,
+    SingleElimination,
 };
 
 #[derive(Clone, Debug)]
@@ -81,19 +80,12 @@ where
 
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<EntrantRefMut<'_, T, D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
     {
         match &mut self.inner {
             InnerTournament::SingleElimination(t) => t.update_match(index, f),
             InnerTournament::DoubleElimination(t) => t.update_match(index, f),
         }
-    }
-
-    pub fn render2<R>(&self, renderer: &mut R)
-    where
-        R: Renderer<Self, T, D>,
-    {
-        renderer.render(BracketRounds::new(self));
     }
 }
 
@@ -204,10 +196,7 @@ where
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(
-            &mut Match<EntrantRefMut<'_, Self::Entrant, Self::NodeData>>,
-            &mut MatchResult<Self::NodeData>,
-        ),
+        F: FnOnce(&mut Match<Entrant<Self::NodeData>>, &mut MatchResult<Self::NodeData>),
     {
         unimplemented!()
     }
