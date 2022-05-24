@@ -1,5 +1,5 @@
-use crate::{Entrant, EntrantSpot, Error, MatchResult, Result};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
+use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
 use std::borrow::Borrow;
 use std::ops::Range;
@@ -9,7 +9,7 @@ use std::ptr;
 #[derive(Clone, Debug)]
 pub struct SingleElimination<T, D> {
     entrants: Entrants<T>,
-    matches: Matches<Entrant<D>>,
+    matches: Matches<D>,
 }
 
 impl<T, D> SingleElimination<T, D>
@@ -39,7 +39,7 @@ where
         // matches required.
         let mut ptr = matches.as_mut_ptr();
         for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Entrant::new(index));
+            let first = EntrantSpot::Entrant(Node::new(index));
             let second = EntrantSpot::Empty;
 
             // SAFETY: `matches` has allocated enough memory for at least `initial_matches` items.
@@ -64,7 +64,7 @@ where
                     .get_unchecked_mut(1)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index));
+            *spot = EntrantSpot::Entrant(Node::new(index));
             index += 1;
         }
 
@@ -83,7 +83,7 @@ where
                     .get_unchecked_mut(index % 2)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index - initial_matches));
+            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
 
             index += 1;
         }
@@ -102,7 +102,7 @@ where
     ///
     /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
     /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
-    pub fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
+    pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -136,7 +136,7 @@ where
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
     #[inline]
-    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
             entrants.len(),
@@ -175,7 +175,7 @@ where
 
     /// Returns a reference to the matches in the tournament.
     #[inline]
-    pub fn matches(&self) -> &Matches<Entrant<D>> {
+    pub fn matches(&self) -> &Matches<D> {
         &self.matches
     }
 
@@ -191,13 +191,13 @@ where
     /// changing the index field of [`Entrant`] is always safe, **but may cause the tournament to
     /// be in an incorrect or inconsistent state**.
     #[inline]
-    pub unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+    pub unsafe fn matches_mut(&mut self) -> &mut Matches<D> {
         &mut self.matches
     }
 
     /// Returns the matches from the tournament.
     #[inline]
-    pub fn into_matches(self) -> Matches<Entrant<D>> {
+    pub fn into_matches(self) -> Matches<D> {
         self.matches
     }
 
@@ -216,7 +216,7 @@ where
     /// result. If `index` is out-of-bounds the function is never called.
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
     {
         // Get the match at `index` or abort.
         // Note: This will borrow `self.matches` mutably until the end of the scope. All
@@ -230,7 +230,7 @@ where
 
         let mut res = MatchResult::default();
 
-        f(&mut r#match, &mut res);
+        f(r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 
@@ -247,7 +247,7 @@ where
 
                 *spot = match entrant {
                     EntrantSpot::Entrant(index) => {
-                        EntrantSpot::Entrant(Entrant::new_with_data(index, data))
+                        EntrantSpot::Entrant(Node::new_with_data(index, data))
                     }
                     EntrantSpot::Empty => EntrantSpot::Empty,
                     EntrantSpot::TBD => EntrantSpot::TBD,
@@ -320,7 +320,7 @@ where
         // matches required.
         let mut ptr = matches.as_mut_ptr();
         for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Entrant::new(index));
+            let first = EntrantSpot::Entrant(Node::new(index));
             let second = EntrantSpot::Empty;
 
             // SAFETY: `matches` has allocated enough memory for at least `initial_matches` items.
@@ -345,7 +345,7 @@ where
                     .get_unchecked_mut(1)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index));
+            *spot = EntrantSpot::Entrant(Node::new(index));
             index += 1;
         }
 
@@ -364,7 +364,7 @@ where
                     .get_unchecked_mut(index % 2)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index - initial_matches));
+            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
 
             index += 1;
         }
@@ -377,7 +377,7 @@ where
         Self { entrants, matches }
     }
 
-    fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
+    fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -403,7 +403,7 @@ where
     }
 
     #[inline]
-    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
             entrants.len(),
@@ -429,23 +429,23 @@ where
     }
 
     #[inline]
-    fn matches(&self) -> &Matches<Entrant<Self::NodeData>> {
+    fn matches(&self) -> &Matches<Self::NodeData> {
         &self.matches
     }
 
     #[inline]
-    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+    unsafe fn matches_mut(&mut self) -> &mut Matches<D> {
         &mut self.matches
     }
 
     #[inline]
-    fn into_matches(self) -> Matches<Entrant<D>> {
+    fn into_matches(self) -> Matches<D> {
         self.matches
     }
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
     {
         // Get the match at `index` or abort.
         // Note: This will borrow `self.matches` mutably until the end of the scope. All
@@ -476,7 +476,7 @@ where
 
                 *spot = match entrant {
                     EntrantSpot::Entrant(index) => {
-                        EntrantSpot::Entrant(Entrant::new_with_data(index, data))
+                        EntrantSpot::Entrant(Node::new_with_data(index, data))
                     }
                     EntrantSpot::Empty => EntrantSpot::Empty,
                     EntrantSpot::TBD => EntrantSpot::TBD,
@@ -544,8 +544,8 @@ impl<T, D> Borrow<Entrants<T>> for SingleElimination<T, D> {
     }
 }
 
-impl<T, D> Borrow<Matches<Entrant<D>>> for SingleElimination<T, D> {
-    fn borrow(&self) -> &Matches<Entrant<D>> {
+impl<T, D> Borrow<Matches<D>> for SingleElimination<T, D> {
+    fn borrow(&self) -> &Matches<D> {
         &self.matches
     }
 }
@@ -567,7 +567,7 @@ mod tests {
         assert_eq!(
             tournament.matches,
             vec![Match::new([
-                EntrantSpot::Entrant(Entrant { index: 0, data: 0 }),
+                EntrantSpot::Entrant(Node { index: 0, data: 0 }),
                 EntrantSpot::Empty
             ])]
         );
@@ -580,8 +580,8 @@ mod tests {
         assert_eq!(
             tournament.matches,
             vec![Match::new([
-                EntrantSpot::Entrant(Entrant { index: 0, data: 0 }),
-                EntrantSpot::Entrant(Entrant { index: 1, data: 0 })
+                EntrantSpot::Entrant(Node { index: 0, data: 0 }),
+                EntrantSpot::Entrant(Node { index: 1, data: 0 })
             ])]
         );
 
@@ -594,11 +594,11 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(1)), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Entrant::new(1))]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
             ]
         );
 
@@ -611,12 +611,12 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
@@ -628,12 +628,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(3)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
         ]);
@@ -643,12 +643,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3, 4]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(3)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
         ]);
@@ -664,12 +664,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(4)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(4)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
         ]);
@@ -693,12 +693,12 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
@@ -714,14 +714,14 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
             ]
         );
 
@@ -735,16 +735,16 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
             ]
         );
@@ -759,16 +759,16 @@ mod tests {
             tournament.matches,
             vec![
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
             ]
         );
@@ -787,12 +787,12 @@ mod tests {
             vec![vec![vec![
                 vec![
                     Match::new([
-                        EntrantSpot::Entrant(Entrant::new(0)),
-                        EntrantSpot::Entrant(Entrant::new(2))
+                        EntrantSpot::Entrant(Node::new(0)),
+                        EntrantSpot::Entrant(Node::new(2))
                     ]),
                     Match::new([
-                        EntrantSpot::Entrant(Entrant::new(1)),
-                        EntrantSpot::Entrant(Entrant::new(3))
+                        EntrantSpot::Entrant(Node::new(1)),
+                        EntrantSpot::Entrant(Node::new(3))
                     ]),
                 ],
                 vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]

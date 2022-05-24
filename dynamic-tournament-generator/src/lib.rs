@@ -82,7 +82,7 @@ impl<T> From<Vec<T>> for Entrants<T> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Matches<T> {
-    matches: Vec<Match<T>>,
+    matches: Vec<Match<Node<T>>>,
 }
 
 impl<T> Matches<T> {
@@ -103,7 +103,7 @@ impl<T> Matches<T> {
     /// # Safety
     ///
     /// See [`Vec::from_raw_parts`]
-    pub unsafe fn from_raw_parts(ptr: *mut Match<T>, length: usize, capacity: usize) -> Self {
+    pub unsafe fn from_raw_parts(ptr: *mut Match<Node<T>>, length: usize, capacity: usize) -> Self {
         Self {
             matches: Vec::from_raw_parts(ptr, length, capacity),
         }
@@ -111,7 +111,7 @@ impl<T> Matches<T> {
 }
 
 impl<T> Deref for Matches<T> {
-    type Target = Vec<Match<T>>;
+    type Target = Vec<Match<Node<T>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.matches
@@ -127,15 +127,15 @@ impl<T> DerefMut for Matches<T> {
 impl<T, U> PartialEq<U> for Matches<T>
 where
     T: PartialEq,
-    U: AsRef<[Match<T>]>,
+    U: AsRef<[Match<Node<T>>]>,
 {
     fn eq(&self, other: &U) -> bool {
         self.matches == other.as_ref()
     }
 }
 
-impl<T> From<Vec<Match<T>>> for Matches<T> {
-    fn from(matches: Vec<Match<T>>) -> Self {
+impl<T> From<Vec<Match<Node<T>>>> for Matches<T> {
+    fn from(matches: Vec<Match<Node<T>>>) -> Self {
         Self { matches }
     }
 }
@@ -152,13 +152,13 @@ pub trait EntrantData: Default {
 /// An entrant in a match.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Entrant<D> {
-    pub index: usize,
+pub struct Node<D> {
+    index: usize,
     #[cfg_attr(feature = "serde-flatten", serde(flatten))]
     pub data: D,
 }
 
-impl<D> Entrant<D> {
+impl<D> Node<D> {
     pub fn new(index: usize) -> Self
     where
         D: Default,
@@ -224,24 +224,24 @@ impl<D> MatchResult<D> {
         self
     }
 
-    pub fn winner(&mut self, entrant: &EntrantSpot<Entrant<D>>, data: D) -> &mut Self {
+    pub fn winner(&mut self, entrant: &EntrantSpot<Node<D>>, data: D) -> &mut Self {
         self.winner = Some((entrant.as_ref().map(|e| e.index), data));
         self
     }
 
-    pub fn winner_default(&mut self, entrant: &EntrantSpot<Entrant<D>>) -> &mut Self
+    pub fn winner_default(&mut self, entrant: &EntrantSpot<Node<D>>) -> &mut Self
     where
         D: Default,
     {
         self.winner(entrant, D::default())
     }
 
-    pub fn loser(&mut self, entrant: &EntrantSpot<Entrant<D>>, data: D) -> &mut Self {
+    pub fn loser(&mut self, entrant: &EntrantSpot<Node<D>>, data: D) -> &mut Self {
         self.loser = Some((entrant.as_ref().map(|e| e.index), data));
         self
     }
 
-    pub fn loser_default(&mut self, entrant: &EntrantSpot<Entrant<D>>) -> &mut Self
+    pub fn loser_default(&mut self, entrant: &EntrantSpot<Node<D>>) -> &mut Self
     where
         D: Default,
     {
@@ -506,7 +506,10 @@ pub struct NextMatches {
 }
 
 impl NextMatches {
-    pub fn winner_match_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut Match<T>> {
+    pub fn winner_match_mut<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut Match<Node<T>>> {
         if self.winner_index.is_some() {
             unsafe { Some(matches.get_unchecked_mut(*self.winner_index)) }
         } else {
@@ -514,7 +517,10 @@ impl NextMatches {
         }
     }
 
-    pub fn loser_match_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut Match<T>> {
+    pub fn loser_match_mut<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut Match<Node<T>>> {
         if self.loser_index.is_some() {
             unsafe { Some(matches.get_unchecked_mut(*self.loser_index)) }
         } else {
@@ -539,7 +545,10 @@ impl NextMatches {
         }
     }
 
-    pub fn winner_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut EntrantSpot<T>> {
+    pub fn winner_mut<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut EntrantSpot<Node<T>>> {
         if self.winner_index.is_some() {
             unsafe {
                 let r#match = matches.get_unchecked_mut(*self.winner_index);
@@ -551,7 +560,10 @@ impl NextMatches {
         }
     }
 
-    pub fn loser_mut<'a, T>(&self, matches: &'a mut Matches<T>) -> Option<&'a mut EntrantSpot<T>> {
+    pub fn loser_mut<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut EntrantSpot<Node<T>>> {
         if self.loser_index.is_some() {
             unsafe {
                 let r#match = matches.get_unchecked_mut(*self.loser_index);
@@ -592,10 +604,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     /// Returns an [`enum@Error`] if `matches` does not have the correct length to fit with
     /// `entrants` or a [`Entrant`] has an `index` value pointing to an out-of-bounds entrant.
     /// The required length depends on the concrete `Tournament`.
-    fn resume(
-        entrants: Entrants<Self::Entrant>,
-        matches: Matches<Entrant<Self::NodeData>>,
-    ) -> Result<Self>;
+    fn resume(entrants: Entrants<Self::Entrant>, matches: Matches<Self::NodeData>) -> Result<Self>;
 
     /// Resumes a `Tournament` by providing the `entrants` and `matches` of the `Tournament`
     /// without validating the length of `matches` or checking for out-of-bounds indexes on
@@ -608,7 +617,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     /// behavoir.
     unsafe fn resume_unchecked(
         entrants: Entrants<Self::Entrant>,
-        matches: Matches<Entrant<Self::NodeData>>,
+        matches: Matches<Self::NodeData>,
     ) -> Self;
 
     /// Returns a reference to the [`Entrants`] of the `Tournament`.
@@ -628,7 +637,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     fn into_entrants(self) -> Entrants<Self::Entrant>;
 
     /// Returns a reference to the [`Matches`] of the `Tournament`.
-    fn matches(&self) -> &Matches<Entrant<Self::NodeData>>;
+    fn matches(&self) -> &Matches<Self::NodeData>;
 
     /// Returns a mutable reference to the [`Matches`] of the `Tournament`.
     ///
@@ -640,10 +649,10 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     ///
     /// Changing the `data` fields of [`Entrant`]s is always safe, but may cause the `Tournament`
     /// to be in an incorrect or inconsistent state.
-    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<Self::NodeData>>;
+    unsafe fn matches_mut(&mut self) -> &mut Matches<Self::NodeData>;
 
     /// Consumes the `Tournament`, returning the [`Matches`] of the `Tournament`.
-    fn into_matches(self) -> Matches<Entrant<Self::NodeData>>;
+    fn into_matches(self) -> Matches<Self::NodeData>;
 
     /// Returns the [`NextMatches`] of the match with the given `index`.
     fn next_matches(&self, index: usize) -> NextMatches;
@@ -652,7 +661,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     /// returned [`MatchResult`]. If `index` is out-of-bounds, `f` is never called.
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<Self::NodeData>>, &mut MatchResult<Self::NodeData>);
+        F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>);
 
     /// Returns the next bracket round between `range`. If `range` is empty or no bracket rounds
     /// are between `range`, `0..0` should be returned.
@@ -677,7 +686,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
 mod tests {
     use crate::{render::Renderer, EntrantSpot};
 
-    use super::{BracketRounds, Entrant, EntrantData, Match, Tournament};
+    use super::{BracketRounds, EntrantData, Match, Node, Tournament};
 
     #[macro_export]
     macro_rules! entrants {
@@ -693,7 +702,7 @@ mod tests {
 
     #[derive(Debug, Default)]
     pub struct TestRenderer {
-        matches: Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>,
+        matches: Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>,
     }
 
     impl<T, E, D> Renderer<T, E, D> for TestRenderer
@@ -715,7 +724,7 @@ mod tests {
 
                             for (index, entrant) in r#match.entrants.iter().enumerate() {
                                 indexes[index] =
-                                    entrant.as_ref().map(|entrant| Entrant::new(entrant.index));
+                                    entrant.as_ref().map(|entrant| Node::new(entrant.index));
                             }
 
                             matches.push(Match::new(indexes));
@@ -732,8 +741,8 @@ mod tests {
         }
     }
 
-    impl PartialEq<Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>> for TestRenderer {
-        fn eq(&self, other: &Vec<Vec<Vec<Vec<Match<Entrant<u32>>>>>>) -> bool {
+    impl PartialEq<Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>> for TestRenderer {
+        fn eq(&self, other: &Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>) -> bool {
             &self.matches == other
         }
     }

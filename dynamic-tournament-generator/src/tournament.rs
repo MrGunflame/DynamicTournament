@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 
 use crate::{
-    DoubleElimination, Entrant, EntrantData, Entrants, Match, MatchResult, Matches, Result,
+    DoubleElimination, EntrantData, Entrants, Match, MatchResult, Matches, Node, Result,
     SingleElimination,
 };
 
@@ -35,7 +35,7 @@ where
     pub fn resume(
         kind: TournamentKind,
         entrants: Entrants<T>,
-        matches: Matches<Entrant<D>>,
+        matches: Matches<D>,
     ) -> Result<Self> {
         let inner = match kind {
             TournamentKind::SingleElimination => {
@@ -71,7 +71,7 @@ where
         }
     }
 
-    pub fn matches(&self) -> &Matches<Entrant<D>> {
+    pub fn matches(&self) -> &Matches<D> {
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.matches(),
             InnerTournament::DoubleElimination(t) => t.matches(),
@@ -80,7 +80,7 @@ where
 
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
     {
         match &mut self.inner {
             InnerTournament::SingleElimination(t) => t.update_match(index, f),
@@ -128,16 +128,13 @@ where
         unimplemented!()
     }
 
-    fn resume(
-        entrants: Entrants<Self::Entrant>,
-        matches: Matches<Entrant<Self::NodeData>>,
-    ) -> Result<Self> {
+    fn resume(entrants: Entrants<Self::Entrant>, matches: Matches<Self::NodeData>) -> Result<Self> {
         unimplemented!()
     }
 
     unsafe fn resume_unchecked(
         entrants: Entrants<Self::Entrant>,
-        matches: Matches<Entrant<Self::NodeData>>,
+        matches: Matches<Self::NodeData>,
     ) -> Self {
         unimplemented!()
     }
@@ -150,15 +147,15 @@ where
         unimplemented!()
     }
 
-    fn matches(&self) -> &Matches<Entrant<Self::NodeData>> {
+    fn matches(&self) -> &Matches<Self::NodeData> {
         self.matches()
     }
 
-    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<Self::NodeData>> {
+    unsafe fn matches_mut(&mut self) -> &mut Matches<Self::NodeData> {
         unimplemented!()
     }
 
-    fn into_matches(self) -> Matches<Entrant<Self::NodeData>> {
+    fn into_matches(self) -> Matches<Self::NodeData> {
         unimplemented!()
     }
 
@@ -196,7 +193,7 @@ where
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<Self::NodeData>>, &mut MatchResult<Self::NodeData>),
+        F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>),
     {
         unimplemented!()
     }

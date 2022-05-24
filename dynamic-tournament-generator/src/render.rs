@@ -1,4 +1,4 @@
-use crate::{Entrant, Match, Tournament};
+use crate::{Match, Node, Tournament};
 
 use std::ops::Range;
 
@@ -171,7 +171,7 @@ impl<'a, T> Iterator for Round<'a, T>
 where
     T: Tournament,
 {
-    type Item = &'a Match<Entrant<T::NodeData>>;
+    type Item = &'a Match<Node<T::NodeData>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start >= self.end {
@@ -200,7 +200,7 @@ impl<'a, T> Iterator for Indexed<'a, T>
 where
     T: Tournament,
 {
-    type Item = (usize, &'a Match<Entrant<T::NodeData>>);
+    type Item = (usize, &'a Match<Node<T::NodeData>>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.iter.start;

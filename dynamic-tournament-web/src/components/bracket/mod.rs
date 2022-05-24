@@ -2,9 +2,7 @@ mod entrant;
 mod r#match;
 
 use dynamic_tournament_generator::tournament::TournamentKind;
-use dynamic_tournament_generator::{
-    Entrant, EntrantScore, EntrantSpot, Entrants, Match, Tournament,
-};
+use dynamic_tournament_generator::{EntrantScore, EntrantSpot, Entrants, Match, Node, Tournament};
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
@@ -348,7 +346,7 @@ where
 
     fn render_match(
         &self,
-        input: &Match<Entrant<EntrantScore<u64>>>,
+        input: &Match<Node<EntrantScore<u64>>>,
         index: usize,
         match_index: usize,
     ) -> Html {

@@ -1,5 +1,5 @@
 use crate::{
-    Entrant, EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches,
+    EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
     Result, Tournament,
 };
 
@@ -12,7 +12,7 @@ where
     D: EntrantData,
 {
     entrants: Entrants<T>,
-    matches: Matches<Entrant<D>>,
+    matches: Matches<D>,
     lower_bracket_index: usize,
 }
 
@@ -50,7 +50,7 @@ where
         let lower_bracket_index = initial_matches * 2 - 1;
 
         for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Entrant::new(index));
+            let first = EntrantSpot::Entrant(Node::new(index));
             let second = EntrantSpot::Empty;
 
             matches.push(Match::new([first, second]));
@@ -64,7 +64,7 @@ where
                 .get_mut(1)
                 .unwrap();
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index));
+            *spot = EntrantSpot::Entrant(Node::new(index));
             index += 1;
         }
 
@@ -83,7 +83,7 @@ where
                     .get_unchecked_mut(index % 2)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index - initial_matches));
+            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
 
             // Lower bracket
             let new_index = (index - initial_matches) / 2 + lower_bracket_index;
@@ -117,7 +117,7 @@ where
     ///
     /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
     /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
-    pub fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
+    pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -150,7 +150,7 @@ where
     /// `entrants` will create an [`DoubleElimination`] object with false assumptions. Usage
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
-    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
         log::debug!(
             "Resuming DoubleElimination bracket with {} entrants and {} matches",
             entrants.len(),
@@ -191,7 +191,7 @@ where
     }
 
     /// Returns a reference to the matches in the tournament.
-    pub fn matches(&self) -> &Matches<Entrant<D>> {
+    pub fn matches(&self) -> &Matches<D> {
         &self.matches
     }
 
@@ -207,18 +207,18 @@ where
     /// Changing the data field of [`Entrant`] without changing the length of [`Matches`] or
     /// changing the index field of [`Entrant`] is always safe, **but may cause the tournament to
     /// be in an incorrect or inconsistent state**.
-    pub unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+    pub unsafe fn matches_mut(&mut self) -> &mut Matches<D> {
         &mut self.matches
     }
 
     /// Returns the matches from the tournament.
-    pub fn into_matches(self) -> Matches<Entrant<D>> {
+    pub fn into_matches(self) -> Matches<D> {
         self.matches
     }
 
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
     {
         log::debug!("Updating match {}", index);
 
@@ -243,7 +243,7 @@ where
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
                 log::debug!("Next winner match is {}", *next_matches.winner_index);
 
-                *spot = entrant.map(|index| Entrant::new_with_data(index, data));
+                *spot = entrant.map(|index| Node::new_with_data(index, data));
             }
         }
 
@@ -254,7 +254,7 @@ where
                 let mut index = 0;
                 let entrant = entrant.map(|i| {
                     index = i;
-                    Entrant::new_with_data(index, data)
+                    Node::new_with_data(index, data)
                 });
 
                 unsafe {
@@ -273,7 +273,7 @@ where
                     let next_matches = self.next_matches(*next_matches.loser_index);
 
                     if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                        *spot = EntrantSpot::Entrant(Entrant::new(index));
+                        *spot = EntrantSpot::Entrant(Node::new(index));
                     }
                 }
             }
@@ -419,7 +419,7 @@ where
         let lower_bracket_index = initial_matches * 2 - 1;
 
         for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Entrant::new(index));
+            let first = EntrantSpot::Entrant(Node::new(index));
             let second = EntrantSpot::Empty;
 
             matches.push(Match::new([first, second]));
@@ -433,7 +433,7 @@ where
                 .get_mut(1)
                 .unwrap();
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index));
+            *spot = EntrantSpot::Entrant(Node::new(index));
             index += 1;
         }
 
@@ -452,7 +452,7 @@ where
                     .get_unchecked_mut(index % 2)
             };
 
-            *spot = EntrantSpot::Entrant(Entrant::new(index - initial_matches));
+            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
 
             // Lower bracket
             let new_index = (index - initial_matches) / 2 + lower_bracket_index;
@@ -480,7 +480,7 @@ where
         }
     }
 
-    fn resume(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Result<Self> {
+    fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -505,7 +505,7 @@ where
         unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
     }
 
-    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<Entrant<D>>) -> Self {
+    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
         log::debug!(
             "Resuming DoubleElimination bracket with {} entrants and {} matches",
             entrants.len(),
@@ -533,21 +533,21 @@ where
         self.entrants
     }
 
-    fn matches(&self) -> &Matches<Entrant<D>> {
+    fn matches(&self) -> &Matches<D> {
         &self.matches
     }
 
-    unsafe fn matches_mut(&mut self) -> &mut Matches<Entrant<D>> {
+    unsafe fn matches_mut(&mut self) -> &mut Matches<D> {
         &mut self.matches
     }
 
-    fn into_matches(self) -> Matches<Entrant<D>> {
+    fn into_matches(self) -> Matches<D> {
         self.matches
     }
 
     fn update_match<F>(&mut self, index: usize, f: F)
     where
-        F: FnOnce(&mut Match<Entrant<D>>, &mut MatchResult<D>),
+        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
     {
         log::debug!("Updating match {}", index);
 
@@ -572,7 +572,7 @@ where
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
                 log::debug!("Next winner match is {}", *next_matches.winner_index);
 
-                *spot = entrant.map(|index| Entrant::new_with_data(index, data));
+                *spot = entrant.map(|index| Node::new_with_data(index, data));
             }
         }
 
@@ -583,7 +583,7 @@ where
                 let mut index = 0;
                 let entrant = entrant.map(|i| {
                     index = i;
-                    Entrant::new_with_data(index, data)
+                    Node::new_with_data(index, data)
                 });
 
                 unsafe {
@@ -602,7 +602,7 @@ where
                     let next_matches = self.next_matches(*next_matches.loser_index);
 
                     if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                        *spot = EntrantSpot::Entrant(Entrant::new(index));
+                        *spot = EntrantSpot::Entrant(Node::new(index));
                     }
                 }
             }
@@ -749,11 +749,11 @@ where
     }
 }
 
-impl<T, D> Borrow<Matches<Entrant<D>>> for DoubleElimination<T, D>
+impl<T, D> Borrow<Matches<D>> for DoubleElimination<T, D>
 where
     D: EntrantData,
 {
-    fn borrow(&self) -> &Matches<Entrant<D>> {
+    fn borrow(&self) -> &Matches<D> {
         self.matches()
     }
 }
@@ -774,7 +774,7 @@ mod tests {
         assert_eq!(
             tournament.matches,
             [Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
+                EntrantSpot::Entrant(Node::new(0)),
                 EntrantSpot::Empty,
             ])]
         );
@@ -787,8 +787,8 @@ mod tests {
         assert_eq!(
             tournament.matches,
             [Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(1))
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(1))
             ])]
         );
 
@@ -801,11 +801,11 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(1)), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Entrant::new(1))]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -821,12 +821,12 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -844,16 +844,16 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(4))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(1)), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(2)), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(3)), EntrantSpot::Empty]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Entrant::new(1))]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
@@ -872,12 +872,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(3)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -890,12 +890,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3, 4]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(3)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -914,12 +914,12 @@ mod tests {
         let entrants = Entrants::from(vec![0, 1, 2, 3]);
         let matches = Matches::from(vec![
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(0)),
-                EntrantSpot::Entrant(Entrant::new(2)),
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
             ]),
             Match::new([
-                EntrantSpot::Entrant(Entrant::new(1)),
-                EntrantSpot::Entrant(Entrant::new(4)),
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(4)),
             ]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -945,12 +945,12 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -967,15 +967,15 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(2)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
@@ -989,20 +989,20 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(1))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1))
                 ]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
@@ -1017,23 +1017,23 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(1))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1))
                 ]),
-                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Entrant::new(3))]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(3))]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
             ]
         );
 
@@ -1045,26 +1045,26 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(1))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
-                Match::new([EntrantSpot::Entrant(Entrant::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
             ]
         );
 
@@ -1076,28 +1076,28 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(1))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
             ]
         );
@@ -1110,28 +1110,28 @@ mod tests {
             tournament.matches,
             [
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(2))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(1)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(1))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(2)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Entrant::new(0)),
-                    EntrantSpot::Entrant(Entrant::new(3))
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
                 ]),
             ]
         );
@@ -1188,12 +1188,12 @@ mod tests {
                     vec![
                         vec![
                             Match::new([
-                                EntrantSpot::Entrant(Entrant::new(0)),
-                                EntrantSpot::Entrant(Entrant::new(2))
+                                EntrantSpot::Entrant(Node::new(0)),
+                                EntrantSpot::Entrant(Node::new(2))
                             ]),
                             Match::new([
-                                EntrantSpot::Entrant(Entrant::new(1)),
-                                EntrantSpot::Entrant(Entrant::new(3))
+                                EntrantSpot::Entrant(Node::new(1)),
+                                EntrantSpot::Entrant(Node::new(3))
                             ]),
                         ],
                         vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),]

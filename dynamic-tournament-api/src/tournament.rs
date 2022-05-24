@@ -1,6 +1,6 @@
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::{Entrant as Node, EntrantScore, Matches};
+use dynamic_tournament_generator::{EntrantScore, Matches, Node};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -282,7 +282,7 @@ impl<'a> TournamentClient<'a> {
 // ///////////////////////////////////
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Bracket(pub Matches<Node<EntrantScore<u64>>>);
+pub struct Bracket(pub Matches<EntrantScore<u64>>);
 
 #[derive(Copy, Clone, Debug)]
 pub struct BracketClient<'a> {
