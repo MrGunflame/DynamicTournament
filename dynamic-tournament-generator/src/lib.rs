@@ -22,6 +22,9 @@ use std::vec::IntoIter;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// A wrapper around a `Vec<T>` where `T` should be considered an entrant for a tournament.
+///
+/// This is a wrapper around a `Vec<T>` and has the same layout as a `Vec<T>`.
 #[derive(Clone, Debug, Default)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -77,6 +80,11 @@ impl<T> From<Vec<T>> for Entrants<T> {
     }
 }
 
+/// A wrapper around a `Vec<Match<Node<T>>>` where `T` should be considered a [`EntrantData`] value
+/// stored which is stored in each [`Node`].
+///
+/// This is a wrapper around a `Vec<Match<Node<T>>>` and has the same layout as a
+/// `Vec<Match<Node<T>>>`.
 #[derive(Clone, Debug, Default)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -149,8 +157,12 @@ pub trait EntrantData: Default {
     fn reset(&mut self);
 }
 
-/// An entrant in a match.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A data value which is stored for each spot in a match that contains an entrant.
+///
+/// Since `Node` is stored a lot of times for a single tournament `D` should either implement
+/// [`Copy`] or should be cheaply clonable. `D` should also never contain any data directly related
+/// to the entrant (like the entrants name).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Node<D> {
     index: usize,
@@ -159,7 +171,9 @@ pub struct Node<D> {
 }
 
 impl<D> Node<D> {
-    pub fn new(index: usize) -> Self
+    /// Creates a new `Node` using the given `index` and the default value for `D`.
+    #[inline]
+    pub(crate) fn new(index: usize) -> Self
     where
         D: Default,
     {
@@ -169,16 +183,36 @@ impl<D> Node<D> {
         }
     }
 
-    pub fn new_with_data(index: usize, data: D) -> Self {
+    #[inline]
+    pub(crate) fn new_with_data(index: usize, data: D) -> Self {
         Self { index, data }
     }
 
     /// Returns the entrant `T` associated with the current node.
-    pub fn entrant<'a, T, U>(&self, entrants: &'a U) -> &'a T
+    #[inline]
+    pub fn entrant<'a, T, U>(&self, entrants: &'a U) -> Option<&'a T>
     where
         U: Borrow<Entrants<T>>,
     {
-        unsafe { entrants.borrow().get_unchecked(self.index) }
+        entrants.borrow().get(self.index)
+    }
+
+    /// Returns the entrant `T` associated with the current node without checking the bounds of
+    /// `entrants`.
+    ///
+    /// This method is useful and safe to use if you are certain that the [`Entrants`] come from
+    /// the same tournament as the `Node`.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method with an [`Entrants`] value with a length equal to or smaller than the
+    /// index stored in the `Node` causes undefined behavoir.
+    #[inline]
+    pub unsafe fn entrant_unchecked<'a, T, U>(&self, entrants: &'a U) -> &'a T
+    where
+        U: Borrow<Entrants<T>>,
+    {
+        entrants.borrow().get_unchecked(self.index)
     }
 }
 
@@ -406,6 +440,7 @@ impl<T> EntrantSpot<T> {
         }
     }
 
+    /// Converts from `&EntrantSpot<T>` to `EntrantSpot<&T>`.
     pub fn as_ref(&self) -> EntrantSpot<&T> {
         match *self {
             Self::Entrant(ref entrant) => EntrantSpot::Entrant(entrant),
@@ -414,6 +449,7 @@ impl<T> EntrantSpot<T> {
         }
     }
 
+    /// Converts from `&mut EntrantSpot<T>` to `EntrantSpot<&mut T>`.
     pub fn as_mut(&mut self) -> EntrantSpot<&mut T> {
         match *self {
             Self::Entrant(ref mut entrant) => EntrantSpot::Entrant(entrant),
