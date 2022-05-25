@@ -1,10 +1,15 @@
 use yew::prelude::*;
 
-use web_sys::MouseEvent;
+use gloo_events::{EventListener, EventListenerOptions};
+use wasm_bindgen::JsCast;
+use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 
 use crate::components::button::Button;
 
 pub struct MovableBoxed {
+    element: NodeRef,
+    listeners: Option<[EventListener; 3]>,
+
     translate: Coordinates,
     last_move: Coordinates,
     is_mouse_down: bool,
@@ -19,6 +24,9 @@ impl Component for MovableBoxed {
 
     fn create(_ctx: &Context<Self>) -> Self {
         Self {
+            element: NodeRef::default(),
+            listeners: None,
+
             translate: Coordinates::default(),
             last_move: Coordinates::default(),
             is_mouse_down: false,
@@ -58,6 +66,66 @@ impl Component for MovableBoxed {
         }
 
         true
+    }
+
+    fn rendered(&mut self, ctx: &Context<Self>, first_render: bool) {
+        if !first_render {
+            return;
+        }
+
+        if let Some(element) = self.element.cast::<HtmlElement>() {
+            let is_locked = self.is_locked;
+
+            let ontouchstart = ctx.link().batch_callback(move |event: TouchEvent| {
+                if is_locked {
+                    return None;
+                }
+
+                event.prevent_default();
+
+                let touch = event.touches().get(0).unwrap();
+
+                Some(Message::MouseDown(Coordinates {
+                    x: touch.client_x(),
+                    y: touch.client_y(),
+                }))
+            });
+
+            let ontouchmove = ctx.link().batch_callback(move |event: TouchEvent| {
+                if is_locked {
+                    return None;
+                }
+
+                event.prevent_default();
+
+                let touch = event.touches().get(0).unwrap();
+
+                Some(Message::Move(Coordinates {
+                    x: touch.client_x(),
+                    y: touch.client_y(),
+                }))
+            });
+
+            let ontouchend = ctx.link().callback(move |_: ()| Message::MouseUp);
+
+            let options = EventListenerOptions::enable_prevent_default();
+
+            let touchstart =
+                EventListener::new_with_options(&element, "touchstart", options, move |event| {
+                    ontouchstart.emit(event.dyn_ref::<TouchEvent>().unwrap().clone());
+                });
+
+            let touchmove =
+                EventListener::new_with_options(&element, "touchmove", options, move |event| {
+                    ontouchmove.emit(event.dyn_ref::<TouchEvent>().unwrap().clone());
+                });
+
+            let touchend = EventListener::new(&element, "touchend", move |_| {
+                ontouchend.emit(());
+            });
+
+            self.listeners = Some([touchstart, touchmove, touchend]);
+        }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
@@ -141,7 +209,7 @@ impl Component for MovableBoxed {
         };
 
         html! {
-            <div class={classes} onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
+            <div ref={self.element.clone()} class={classes} onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
                 <div class="movable-boxed-buttons">
                     <Button onclick={on_reposition} title="Reposition">
                         <i aria-hidden="true" class="fa-solid fa-compress"></i>
