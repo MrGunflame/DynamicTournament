@@ -1,4 +1,5 @@
 use yew::prelude::*;
+use yew_router::components::Link;
 
 use dynamic_tournament_api::tournament as api;
 
@@ -46,6 +47,10 @@ impl Component for TeamDetails {
 
         html! {
             <div>
+                <Link<super::Route> classes="link-inline link-back h-center" to={super::Route::Teams { id: ctx.props().teams.id.0 }}>
+                    <i area-hidden="true" class="fa-solid fa-angle-left"></i>
+                    { "Back to Teams" }
+                </Link<super::Route>>
                 <h2 class="title-label h-center">{team.name}</h2>
                 <table class="table-center">
                     <tbody>
