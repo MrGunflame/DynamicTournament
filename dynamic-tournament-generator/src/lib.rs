@@ -1,14 +1,14 @@
 //! Bracket Generator
+pub mod options;
 pub mod render;
 
 mod double_elimination;
-mod options;
 mod single_elimination;
 pub mod tournament;
 mod utils;
 
 pub use double_elimination::DoubleElimination;
-use render::{BracketRounds, Renderer};
+use render::{BracketRounds, Position, Renderer};
 pub use single_elimination::SingleElimination;
 use utils::SmallOption;
 
@@ -709,6 +709,10 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
     /// Returns the next round between `range`.
     fn next_round(&self, range: Range<usize>) -> Range<usize>;
 
+    fn render_match_position(&self, _index: usize) -> Position {
+        Position::default()
+    }
+
     /// Renders the tournament using the given [`Renderer`].
     fn render<R>(&self, renderer: &mut R)
     where
@@ -758,7 +762,7 @@ mod tests {
                         for r#match in round {
                             let mut indexes = [EntrantSpot::Empty, EntrantSpot::Empty];
 
-                            for (index, entrant) in r#match.entrants.iter().enumerate() {
+                            for (index, entrant) in r#match.0.entrants.iter().enumerate() {
                                 indexes[index] =
                                     entrant.as_ref().map(|entrant| Node::new(entrant.index));
                             }

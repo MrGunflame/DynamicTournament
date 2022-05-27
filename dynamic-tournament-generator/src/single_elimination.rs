@@ -1,3 +1,5 @@
+use crate::options::TournamentOptions;
+use crate::render::Position;
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
@@ -10,14 +12,22 @@ use std::ptr;
 pub struct SingleElimination<T, D> {
     entrants: Entrants<T>,
     matches: Matches<D>,
+    options: TournamentOptions,
 }
 
 impl<T, D> SingleElimination<T, D>
 where
     D: EntrantData + Default,
 {
-    /// Creates a new `SingleElimination`.
     pub fn new<I>(entrants: I) -> Self
+    where
+        I: Iterator<Item = T>,
+    {
+        Self::new_with_options(entrants, Self::options())
+    }
+
+    /// Creates a new `SingleElimination`.
+    pub fn new_with_options<I>(entrants: I, options: TournamentOptions) -> Self
     where
         I: Iterator<Item = T>,
     {
@@ -33,7 +43,14 @@ where
             n => n.next_power_of_two() / 2,
         };
 
-        let mut matches = Matches::with_capacity((initial_matches * 2).saturating_sub(1));
+        let mut num_matches = (initial_matches * 2).saturating_sub(1);
+        if let Some(opt) = options.get("third_place_match") {
+            if opt.value.unwrap_bool() {
+                num_matches += 1;
+            }
+        }
+
+        let mut matches = Matches::with_capacity(num_matches);
 
         // Push the first half entrants into matches. This already creates the minimum number of
         // matches required.
@@ -93,7 +110,21 @@ where
             matches.len()
         );
 
-        Self { entrants, matches }
+        Self {
+            entrants,
+            matches,
+            options,
+        }
+    }
+
+    pub fn options() -> TournamentOptions {
+        TournamentOptions::builder()
+            .option(
+                "third_place_match",
+                "Include a match for the third place",
+                false,
+            )
+            .build()
     }
 
     /// Resumes the bracket from existing matches.
@@ -102,7 +133,11 @@ where
     ///
     /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
     /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
-    pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
+    pub fn resume(
+        entrants: Entrants<T>,
+        matches: Matches<D>,
+        options: TournamentOptions,
+    ) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -124,7 +159,7 @@ where
         }
 
         // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
-        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
+        unsafe { Ok(Self::resume_unchecked(entrants, matches, options)) }
     }
 
     /// Resumes the bracket from existing matches without validating the length of `matches`.
@@ -136,14 +171,22 @@ where
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
     #[inline]
-    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
+    pub unsafe fn resume_unchecked(
+        entrants: Entrants<T>,
+        matches: Matches<D>,
+        options: TournamentOptions,
+    ) -> Self {
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
             entrants.len(),
             matches.len()
         );
 
-        Self { entrants, matches }
+        Self {
+            entrants,
+            matches,
+            options,
+        }
     }
 
     /// Returns a reference to the entrants in the tournament.
@@ -223,7 +266,7 @@ where
         // operations that access `self.matches` at an index that is **not `index`** are still
         // safe.
 
-        let mut r#match = match self.matches.get_mut(index) {
+        let r#match = match self.matches.get_mut(index) {
             Some(r#match) => r#match,
             None => return,
         };
@@ -374,7 +417,11 @@ where
             matches.len()
         );
 
-        Self { entrants, matches }
+        Self {
+            entrants,
+            matches,
+            options: TournamentOptions::default(),
+        }
     }
 
     fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
@@ -399,7 +446,13 @@ where
         }
 
         // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
-        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
+        unsafe {
+            Ok(Self::resume_unchecked(
+                entrants,
+                matches,
+                TournamentOptions::default(),
+            ))
+        }
     }
 
     #[inline]
@@ -410,7 +463,11 @@ where
             matches.len()
         );
 
-        Self { entrants, matches }
+        Self {
+            entrants,
+            matches,
+            options: TournamentOptions::default(),
+        }
     }
 
     #[inline]
@@ -536,6 +593,14 @@ where
             range.start..self.entrants().len().next_power_of_two() / 2 + range.start / 2
         }
     }
+
+    fn render_match_position(&self, index: usize) -> Position {
+        if index == self.matches().len() - 1 {
+            Position::bottom(0)
+        } else {
+            Position::default()
+        }
+    }
 }
 
 impl<T, D> Borrow<Entrants<T>> for SingleElimination<T, D> {
@@ -638,7 +703,8 @@ mod tests {
             Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
         ]);
 
-        SingleElimination::<i32, u32>::resume(entrants, matches).unwrap();
+        SingleElimination::<i32, u32>::resume(entrants, matches, TournamentOptions::default())
+            .unwrap();
 
         let entrants = Entrants::from(vec![0, 1, 2, 3, 4]);
         let matches = Matches::from(vec![
@@ -654,7 +720,8 @@ mod tests {
         ]);
 
         assert_eq!(
-            SingleElimination::<i32, u32>::resume(entrants, matches).unwrap_err(),
+            SingleElimination::<i32, u32>::resume(entrants, matches, TournamentOptions::default())
+                .unwrap_err(),
             Error::InvalidNumberOfMatches {
                 expected: 7,
                 found: 3
@@ -675,7 +742,8 @@ mod tests {
         ]);
 
         assert_eq!(
-            SingleElimination::<i32, u32>::resume(entrants, matches).unwrap_err(),
+            SingleElimination::<i32, u32>::resume(entrants, matches, TournamentOptions::default())
+                .unwrap_err(),
             Error::InvalidEntrant {
                 index: 4,
                 length: 4

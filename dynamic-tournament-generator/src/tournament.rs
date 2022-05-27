@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 
+use crate::options::TournamentOptions;
 use crate::{
     DoubleElimination, EntrantData, Entrants, Match, MatchResult, Matches, Node, Result,
     SingleElimination,
@@ -19,11 +20,11 @@ where
     T: Clone,
     D: EntrantData + Clone,
 {
-    pub fn new(kind: TournamentKind) -> Self {
+    pub fn new(kind: TournamentKind, options: TournamentOptions) -> Self {
         let inner = match kind {
-            TournamentKind::SingleElimination => {
-                InnerTournament::SingleElimination(SingleElimination::new(vec![].into_iter()))
-            }
+            TournamentKind::SingleElimination => InnerTournament::SingleElimination(
+                SingleElimination::new_with_options(vec![].into_iter(), options),
+            ),
             TournamentKind::DoubleElimination => {
                 InnerTournament::DoubleElimination(DoubleElimination::new(vec![].into_iter()))
             }
@@ -32,15 +33,23 @@ where
         Self { inner }
     }
 
+    pub fn options(kind: TournamentKind) -> TournamentOptions {
+        match kind {
+            TournamentKind::SingleElimination => SingleElimination::<T, D>::options(),
+            TournamentKind::DoubleElimination => TournamentOptions::default(),
+        }
+    }
+
     pub fn resume(
         kind: TournamentKind,
         entrants: Entrants<T>,
         matches: Matches<D>,
+        options: TournamentOptions,
     ) -> Result<Self> {
         let inner = match kind {
-            TournamentKind::SingleElimination => {
-                InnerTournament::SingleElimination(SingleElimination::resume(entrants, matches)?)
-            }
+            TournamentKind::SingleElimination => InnerTournament::SingleElimination(
+                SingleElimination::resume(entrants, matches, options)?,
+            ),
             TournamentKind::DoubleElimination => {
                 InnerTournament::DoubleElimination(DoubleElimination::resume(entrants, matches)?)
             }
@@ -184,6 +193,13 @@ where
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.next_matches(index),
             InnerTournament::DoubleElimination(t) => t.next_matches(index),
+        }
+    }
+
+    fn render_match_position(&self, index: usize) -> crate::render::Position {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.render_match_position(index),
+            InnerTournament::DoubleElimination(t) => t.render_match_position(index),
         }
     }
 
