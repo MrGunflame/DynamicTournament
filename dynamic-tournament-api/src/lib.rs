@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod http;
 pub mod tournament;
+pub mod v3;
 pub mod websocket;
 
 use crate::auth::AuthClient;
