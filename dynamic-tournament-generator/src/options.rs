@@ -26,7 +26,7 @@ impl TournamentOptions {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TournamentOption {
-    pub name: &'static str,
+    pub name: String,
     pub value: OptionValue,
 }
 
@@ -95,14 +95,15 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn option<V>(mut self, key: &'static str, name: &'static str, value: V) -> Self
+    pub fn option<T, V>(mut self, key: &'static str, name: T, value: V) -> Self
     where
+        T: ToString,
         V: Into<OptionValue>,
     {
         self.options.insert(
             key,
             TournamentOption {
-                name,
+                name: name.to_string(),
                 value: value.into(),
             },
         );
