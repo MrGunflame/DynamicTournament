@@ -1,3 +1,4 @@
+use dynamic_tournament_generator::render::Position;
 use yew::prelude::*;
 
 use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
@@ -105,8 +106,13 @@ where
 
         let number = ctx.props().number;
 
+        let style = match ctx.props().position.unwrap_or_default() {
+            Position::SpaceAround => String::from(""),
+            Position::Bottom(value) => format!("position:absolute;bottom:{}%;", value),
+        };
+
         html! {
-            <div class="match">
+            <div class="match" {style}>
                 <span>{ number }</span>
                 <div>
                     <div class="match-teams">
@@ -125,6 +131,7 @@ pub struct Props<T> {
     pub nodes: [EntrantSpot<EntrantScore<u64>>; 2],
     pub on_action: Callback<Action>,
     pub number: usize,
+    pub position: Option<Position>,
 }
 
 impl<T> PartialEq for Props<T> {

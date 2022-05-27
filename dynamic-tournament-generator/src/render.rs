@@ -171,19 +171,20 @@ impl<'a, T> Iterator for Round<'a, T>
 where
     T: Tournament,
 {
-    type Item = &'a Match<Node<T::NodeData>>;
+    type Item = (&'a Match<Node<T::NodeData>>, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.start >= self.end {
             None
         } else {
             let m = &self.tournament.matches()[self.start];
+            let position = self.tournament.render_match_position(self.start);
 
-            log::debug!("Rendering next Match: {:?}", self.start);
+            log::debug!("Rendering next Match {} with {:?}", self.start, position);
 
             self.start += 1;
 
-            Some(m)
+            Some((m, position))
         }
     }
 }
@@ -200,11 +201,30 @@ impl<'a, T> Iterator for Indexed<'a, T>
 where
     T: Tournament,
 {
-    type Item = (usize, &'a Match<Node<T::NodeData>>);
+    type Item = (usize, &'a Match<Node<T::NodeData>>, Position);
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.iter.start;
 
-        self.iter.next().map(|m| (index, m))
+        self.iter.next().map(|(m, pos)| (index, m, pos))
+    }
+}
+
+/// The rendering position of a match within a round. The default value is `SpaceAround`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Position {
+    SpaceAround,
+    Bottom(i32),
+}
+
+impl Position {
+    pub fn bottom(value: i32) -> Self {
+        Self::Bottom(value)
+    }
+}
+
+impl Default for Position {
+    fn default() -> Self {
+        Self::SpaceAround
     }
 }

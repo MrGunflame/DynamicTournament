@@ -6,7 +6,9 @@ use dynamic_tournament_generator::{EntrantScore, EntrantSpot, Entrants, Match, N
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
-use dynamic_tournament_generator::render::{self, BracketRound, BracketRounds, Renderer, Round};
+use dynamic_tournament_generator::render::{
+    self, BracketRound, BracketRounds, Position, Renderer, Round,
+};
 
 use dynamic_tournament_api::tournament::{self, BracketType, Team, TournamentId};
 use dynamic_tournament_api::{websocket, Client};
@@ -65,13 +67,25 @@ impl Component for Bracket {
                 match client.bracket(id).get().await {
                     Ok(bracket) => FetchData::new_with_value(
                         dynamic_tournament_generator::tournament::Tournament::resume(
-                            kind, entrants, bracket.0,
+                            kind,
+                            entrants,
+                            bracket.0,
+                            dynamic_tournament_generator::tournament::Tournament::<
+                                Team,
+                                EntrantScore<u64>,
+                            >::options(kind),
                         )
                         .unwrap(),
                     ),
                     Err(_) => FetchData::new_with_value({
                         let mut tournament =
-                            dynamic_tournament_generator::tournament::Tournament::new(kind);
+                            dynamic_tournament_generator::tournament::Tournament::new(
+                                kind,
+                                dynamic_tournament_generator::tournament::Tournament::<
+                                    Team,
+                                    EntrantScore<u64>,
+                                >::options(kind),
+                            );
                         tournament.extend(entrants.into_iter());
                         tournament
                     }),
@@ -202,7 +216,7 @@ impl Component for Bracket {
                     let teams = m
                         .entrants
                         .clone()
-                        .map(|e| e.map(|e| e.entrant(&entrants).clone()));
+                        .map(|e| e.map(|e| e.entrant(&entrants).unwrap().clone()));
                     let nodes = m.entrants.clone().map(|e| e.unwrap().data);
 
                     let on_submit = ctx
@@ -330,9 +344,9 @@ where
         let round: Html = input
             .indexed()
             .enumerate()
-            .map(|(match_index, (index, m))| {
+            .map(|(match_index, (index, m, pos))| {
                 html! {
-                    { self.render_match(m, index, match_index.saturating_add(1)) }
+                    { self.render_match(m, index, match_index.saturating_add(1), pos) }
                 }
             })
             .collect();
@@ -349,6 +363,7 @@ where
         input: &Match<Node<EntrantScore<u64>>>,
         index: usize,
         match_index: usize,
+        position: Position,
     ) -> Html {
         let on_action = self
             .ctx
@@ -358,12 +373,12 @@ where
         let entrants = input
             .entrants
             .clone()
-            .map(|e| e.map(|e| e.entrant(&self.tournament.borrow()).clone()));
+            .map(|e| e.map(|e| e.entrant(&self.tournament.borrow()).unwrap().clone()));
 
         let nodes = input.entrants.clone().map(|e| e.map(|e| e.data));
 
         html! {
-            <BracketMatch<E> {entrants} {nodes} {on_action} number={match_index} />
+            <BracketMatch<E> {entrants} {nodes} {on_action} number={match_index} {position} />
         }
     }
 }
