@@ -1,7 +1,10 @@
-use super::systems::System;
+use super::systems::SystemId;
 use crate::{Client, Result};
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Formatter},
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -27,8 +30,10 @@ pub struct Tournament {
     pub id: TournamentId,
     pub name: String,
     pub description: String,
+    /// RFC3339
     pub date: DateTime<Utc>,
-    pub system: System,
+    #[serde(default)]
+    pub brackets: Vec<Bracket>,
     pub entrants: Entrants,
 }
 
@@ -54,6 +59,38 @@ impl Entrants {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent)]
+pub struct BracketId(pub u64);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Bracket {
+    pub id: BracketId,
+    pub system: SystemId,
+    /// The list of entrants playing in this bracket. All entrants must exist in the tournament.
+    pub entrants: Vec<u64>,
+    /// A list of optional key-value pairs for the bracket nodes.
+    pub nodes: HashMap<String, NodeKind>,
+}
+
+/// All types avaliable to use for custom node values. For the value variant see [`NodeValue`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeKind {
+    Bool,
+    I64,
+    U64,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum NodeValue {
+    Bool(bool),
+    I64(i64),
+    U64(u64),
 }
 
 /// A single player in a tournament, either alone or as part of a [`Team`].
