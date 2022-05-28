@@ -2,6 +2,7 @@ use crate::{Client, Result};
 
 use std::fmt::{self, Display, Formatter};
 
+use dynamic_tournament_generator::options::TournamentOption;
 use serde::{Deserialize, Serialize};
 
 /// A unique identifier for a [`System`].
@@ -22,6 +23,7 @@ impl Display for SystemId {
 pub struct System {
     pub id: SystemId,
     pub name: String,
+    pub options: Vec<TournamentOption>,
 }
 
 #[derive(Copy, Clone)]

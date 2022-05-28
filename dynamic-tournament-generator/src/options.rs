@@ -21,11 +21,16 @@ impl TournamentOptions {
     pub fn insert(&mut self, key: &'static str, option: TournamentOption) {
         self.0.insert(key, option);
     }
+
+    pub fn into_values(self) -> impl Iterator<Item = TournamentOption> {
+        self.0.into_values()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TournamentOption {
+    pub key: String,
     pub name: String,
     pub value: OptionValue,
 }
@@ -103,6 +108,7 @@ impl Builder {
         self.options.insert(
             key,
             TournamentOption {
+                key: key.to_string(),
                 name: name.to_string(),
                 value: value.into(),
             },
