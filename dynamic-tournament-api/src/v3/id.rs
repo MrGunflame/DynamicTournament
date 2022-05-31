@@ -1,4 +1,5 @@
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
@@ -48,9 +49,19 @@ macro_rules! id {
                 Self(id)
             }
         }
+
+        impl FromStr for $name {
+            type Err = <$id as FromStr>::Err;
+
+            #[inline]
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self(s.parse::<$id>()?))
+            }
+        }
     };
 }
 
 id!(TournamentId, u64);
 id!(RoleId, u64);
 id!(SystemId, u64);
+id!(EntrantId, u64);
