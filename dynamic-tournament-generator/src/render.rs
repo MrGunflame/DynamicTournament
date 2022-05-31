@@ -1,11 +1,11 @@
-use crate::{Match, Node, Tournament};
+use crate::{Match, Node, System};
 
 use std::ops::Range;
 
 /// A renderer used to render any [`Tournament`].
 pub trait Renderer<T, E, D>
 where
-    T: Tournament<Entrant = E, NodeData = D>,
+    T: System<Entrant = E, NodeData = D>,
 {
     fn render(&mut self, input: BracketRounds<'_, T>);
 }
@@ -14,7 +14,7 @@ where
 #[derive(Clone, Debug)]
 pub struct BracketRounds<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     tournament: &'a T,
     range: Range<usize>,
@@ -22,7 +22,7 @@ where
 
 impl<'a, T> BracketRounds<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     pub(crate) fn new(tournament: &'a T) -> Self {
         Self {
@@ -34,7 +34,7 @@ where
 
 impl<'a, T> Iterator for BracketRounds<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     type Item = BracketRound<'a, T>;
 
@@ -59,7 +59,7 @@ where
 #[derive(Clone, Debug)]
 pub struct BracketRound<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     tournament: &'a T,
     range: Range<usize>,
@@ -67,7 +67,7 @@ where
 
 impl<'a, T> BracketRound<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     fn new(tournament: &'a T, range: Range<usize>) -> Self {
         Self { tournament, range }
@@ -76,7 +76,7 @@ where
 
 impl<'a, T> Iterator for BracketRound<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     type Item = Bracket<'a, T>;
 
@@ -101,7 +101,7 @@ where
 #[derive(Clone, Debug)]
 pub struct Bracket<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     tournament: &'a T,
     range: Range<usize>,
@@ -109,7 +109,7 @@ where
 
 impl<'a, T> Bracket<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     fn new(tournament: &'a T, range: Range<usize>) -> Self {
         Self { tournament, range }
@@ -118,7 +118,7 @@ where
 
 impl<'a, T> Iterator for Bracket<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     type Item = Round<'a, T>;
 
@@ -143,7 +143,7 @@ where
 #[derive(Clone, Debug)]
 pub struct Round<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     tournament: &'a T,
     start: usize,
@@ -152,7 +152,7 @@ where
 
 impl<'a, T> Round<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     fn new(tournament: &'a T, range: Range<usize>) -> Self {
         Self {
@@ -169,7 +169,7 @@ where
 
 impl<'a, T> Iterator for Round<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     type Item = (&'a Match<Node<T::NodeData>>, Position);
 
@@ -192,14 +192,14 @@ where
 #[derive(Clone, Debug)]
 pub struct Indexed<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     iter: Round<'a, T>,
 }
 
 impl<'a, T> Iterator for Indexed<'a, T>
 where
-    T: Tournament,
+    T: System,
 {
     type Item = (usize, &'a Match<Node<T::NodeData>>, Position);
 

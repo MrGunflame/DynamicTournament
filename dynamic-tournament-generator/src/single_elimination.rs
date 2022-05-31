@@ -1,6 +1,6 @@
 use crate::options::TournamentOptions;
 use crate::render::Position;
-use crate::{EntrantData, Entrants, Match, Matches, NextMatches, Tournament};
+use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
 use std::borrow::Borrow;
@@ -334,141 +334,12 @@ where
     }
 }
 
-impl<T, D> Tournament for SingleElimination<T, D>
+impl<T, D> System for SingleElimination<T, D>
 where
     D: EntrantData + Default,
 {
     type Entrant = T;
     type NodeData = D;
-
-    fn new<I>(entrants: I) -> Self
-    where
-        I: Iterator<Item = T>,
-    {
-        let entrants: Entrants<T> = entrants.collect();
-
-        log::debug!(
-            "Creating new SingleElimination bracket with {} entrants",
-            entrants.len()
-        );
-
-        let initial_matches = match entrants.len() {
-            1 | 2 => 1,
-            n => n.next_power_of_two() / 2,
-        };
-
-        let mut matches = Matches::with_capacity(initial_matches * 2 - 1);
-
-        // Push the first half entrants into matches. This already creates the minimum number of
-        // matches required.
-        let mut ptr = matches.as_mut_ptr();
-        for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Node::new(index));
-            let second = EntrantSpot::Empty;
-
-            // SAFETY: `matches` has allocated enough memory for at least `initial_matches` items.
-            unsafe {
-                ptr::write(ptr, Match::new([first, second]));
-                ptr = ptr.add(1);
-            }
-        }
-
-        // SAFETY: The first `initial_matches` items in the buffer has been written to.
-        unsafe {
-            matches.set_len(initial_matches);
-        }
-
-        // Fill the second spots in the matches.
-        let mut index = initial_matches;
-        while index < entrants.len() {
-            // SAFETY: The matches have already been written to the buffer in the first iteration.
-            let spot = unsafe {
-                matches
-                    .get_unchecked_mut(index - initial_matches)
-                    .get_unchecked_mut(1)
-            };
-
-            *spot = EntrantSpot::Entrant(Node::new(index));
-            index += 1;
-        }
-
-        // Fill `matches` with `TBD` matches.
-        while matches.len() < matches.capacity() {
-            matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
-        }
-
-        // Forward all placeholder matches.
-        while index < entrants.len().next_power_of_two() {
-            let new_index = initial_matches + (index - initial_matches) / 2;
-            // SAFETY: `new_index` is in bounds of `matches`, `index % 2` never exceeds 1.
-            let spot = unsafe {
-                matches
-                    .get_unchecked_mut(new_index)
-                    .get_unchecked_mut(index % 2)
-            };
-
-            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
-
-            index += 1;
-        }
-
-        log::debug!(
-            "Created new SingleElimination bracket with {} matches",
-            matches.len()
-        );
-
-        Self {
-            entrants,
-            matches,
-            options: TournamentOptions::default(),
-        }
-    }
-
-    fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
-        let expected = Self::calculate_matches(entrants.len());
-        let found = matches.len();
-
-        if found != expected {
-            return Err(Error::InvalidNumberOfMatches { expected, found });
-        }
-
-        for m in matches.iter() {
-            for entrant in m.entrants.iter() {
-                if let EntrantSpot::Entrant(entrant) = entrant {
-                    if entrant.index >= entrants.len() {
-                        return Err(Error::InvalidEntrant {
-                            index: entrant.index,
-                            length: entrants.len(),
-                        });
-                    }
-                }
-            }
-        }
-
-        // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
-        unsafe {
-            Ok(Self::resume_unchecked(
-                entrants,
-                matches,
-                TournamentOptions::default(),
-            ))
-        }
-    }
-
-    #[inline]
-    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
-        log::debug!(
-            "Resuming SingleElimination bracket with {} entrants and {} matches",
-            entrants.len(),
-            matches.len()
-        );
-
-        Self {
-            entrants,
-            matches,
-            options: TournamentOptions::default(),
-        }
-    }
 
     #[inline]
     fn entrants(&self) -> &Entrants<Self::Entrant> {
@@ -595,11 +466,13 @@ where
     }
 
     fn render_match_position(&self, index: usize) -> Position {
-        if index == self.matches().len() - 1 {
-            Position::bottom(0)
-        } else {
-            Position::default()
+        if let Some(opt) = self.options.get("third_place_match") {
+            if opt.value.unwrap_bool() && index == self.matches().len() - 1 {
+                return Position::bottom(0);
+            }
         }
+
+        Position::default()
     }
 }
 

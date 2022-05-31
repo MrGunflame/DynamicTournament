@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use crate::options::TournamentOptions;
 use crate::{
     DoubleElimination, EntrantData, Entrants, Match, MatchResult, Matches, Node, Result,
-    SingleElimination,
+    SingleElimination, System,
 };
 
 #[derive(Clone, Debug)]
@@ -73,20 +73,6 @@ where
         }
     }
 
-    pub fn entrants(&self) -> &Entrants<T> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.entrants(),
-            InnerTournament::DoubleElimination(t) => t.entrants(),
-        }
-    }
-
-    pub fn matches(&self) -> &Matches<D> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.matches(),
-            InnerTournament::DoubleElimination(t) => t.matches(),
-        }
-    }
-
     pub fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
@@ -122,7 +108,7 @@ where
     }
 }
 
-impl<T, D> crate::Tournament for Tournament<T, D>
+impl<T, D> System for Tournament<T, D>
 where
     T: Clone,
     D: EntrantData + Clone,
@@ -130,42 +116,46 @@ where
     type Entrant = T;
     type NodeData = D;
 
-    fn new<I>(entrants: I) -> Self
-    where
-        I: Iterator<Item = Self::Entrant>,
-    {
-        unimplemented!()
-    }
-
-    fn resume(entrants: Entrants<Self::Entrant>, matches: Matches<Self::NodeData>) -> Result<Self> {
-        unimplemented!()
-    }
-
-    unsafe fn resume_unchecked(
-        entrants: Entrants<Self::Entrant>,
-        matches: Matches<Self::NodeData>,
-    ) -> Self {
-        unimplemented!()
+    fn entrants(&self) -> &Entrants<Self::Entrant> {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.entrants(),
+            InnerTournament::DoubleElimination(t) => t.entrants(),
+        }
     }
 
     unsafe fn entrants_mut(&mut self) -> &mut Entrants<Self::Entrant> {
-        unimplemented!()
+        match &mut self.inner {
+            InnerTournament::SingleElimination(t) => t.entrants_mut(),
+            InnerTournament::DoubleElimination(t) => t.entrants_mut(),
+        }
     }
 
     fn into_entrants(self) -> Entrants<Self::Entrant> {
-        unimplemented!()
+        match self.inner {
+            InnerTournament::SingleElimination(t) => t.into_entrants(),
+            InnerTournament::DoubleElimination(t) => t.into_entrants(),
+        }
     }
 
     fn matches(&self) -> &Matches<Self::NodeData> {
-        self.matches()
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.matches(),
+            InnerTournament::DoubleElimination(t) => t.matches(),
+        }
     }
 
     unsafe fn matches_mut(&mut self) -> &mut Matches<Self::NodeData> {
-        unimplemented!()
+        match &mut self.inner {
+            InnerTournament::SingleElimination(t) => t.matches_mut(),
+            InnerTournament::DoubleElimination(t) => t.matches_mut(),
+        }
     }
 
     fn into_matches(self) -> Matches<Self::NodeData> {
-        unimplemented!()
+        match self.inner {
+            InnerTournament::SingleElimination(t) => t.into_matches(),
+            InnerTournament::DoubleElimination(t) => t.into_matches(),
+        }
     }
 
     fn next_bracket_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
@@ -203,15 +193,14 @@ where
         }
     }
 
-    fn entrants(&self) -> &Entrants<Self::Entrant> {
-        unimplemented!()
-    }
-
     fn update_match<F>(&mut self, index: usize, f: F)
     where
         F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>),
     {
-        unimplemented!()
+        match &mut self.inner {
+            InnerTournament::SingleElimination(t) => t.update_match(index, f),
+            InnerTournament::DoubleElimination(t) => t.update_match(index, f),
+        }
     }
 }
 

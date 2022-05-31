@@ -1,6 +1,6 @@
 use crate::{
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
-    Result, Tournament,
+    Result, System,
 };
 
 use std::{borrow::Borrow, ops::Range};
@@ -382,144 +382,12 @@ where
     }
 }
 
-impl<T, D> Tournament for DoubleElimination<T, D>
+impl<T, D> System for DoubleElimination<T, D>
 where
     D: EntrantData + Default,
 {
     type Entrant = T;
     type NodeData = D;
-
-    fn new<I>(entrants: I) -> Self
-    where
-        I: Iterator<Item = T>,
-    {
-        let entrants: Entrants<T> = entrants.collect();
-
-        log::debug!(
-            "Creating a new DoubleElimination bracket with {} entrants",
-            entrants.len()
-        );
-
-        let initial_matches = match entrants.len() {
-            1 | 2 => 1,
-            n => n.next_power_of_two() / 2,
-        };
-
-        // The upper bracket has exactly initial_matches * 2 - 1 matches, the lower bracket has
-        // exactly the matches of the upper bracket - 1 matches (or initial_matches * 2 - 2).
-        // Plus one additional match for the final bracket: `(initial_matches * 2 - 1) +
-        // (initial_matches * 2 - 2) + 1 = initial_matches * 4 - 2`.
-        let mut matches = Matches::with_capacity(match entrants.len() {
-            1 | 2 => 1,
-            _ => initial_matches * 4 - 2,
-        });
-
-        // This is out-of-bounds for brackets with one match, but it doesn't matter as it's never
-        // used in that case.
-        let lower_bracket_index = initial_matches * 2 - 1;
-
-        for index in 0..initial_matches {
-            let first = EntrantSpot::Entrant(Node::new(index));
-            let second = EntrantSpot::Empty;
-
-            matches.push(Match::new([first, second]));
-        }
-
-        let mut index = initial_matches;
-        while index < entrants.len() {
-            let spot = matches
-                .get_mut(index - initial_matches)
-                .unwrap()
-                .get_mut(1)
-                .unwrap();
-
-            *spot = EntrantSpot::Entrant(Node::new(index));
-            index += 1;
-        }
-
-        while matches.len() < matches.capacity() {
-            matches.push(Match::new([EntrantSpot::TBD, EntrantSpot::TBD]));
-        }
-
-        // Forward all placeholder matches.
-        while index < entrants.len().next_power_of_two() {
-            // Upper bracket:
-            let new_index = initial_matches + (index - initial_matches) / 2;
-
-            let spot = unsafe {
-                matches
-                    .get_unchecked_mut(new_index)
-                    .get_unchecked_mut(index % 2)
-            };
-
-            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
-
-            // Lower bracket
-            let new_index = (index - initial_matches) / 2 + lower_bracket_index;
-
-            let spot = unsafe {
-                matches
-                    .get_unchecked_mut(new_index)
-                    .get_unchecked_mut(index % 2)
-            };
-
-            *spot = EntrantSpot::Empty;
-
-            index += 1;
-        }
-
-        log::debug!(
-            "Created a new DoubleElimination bracket with {} matches",
-            matches.len()
-        );
-
-        Self {
-            entrants,
-            matches,
-            lower_bracket_index,
-        }
-    }
-
-    fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
-        let expected = Self::calculate_matches(entrants.len());
-        let found = matches.len();
-
-        if found != expected {
-            return Err(Error::InvalidNumberOfMatches { expected, found });
-        }
-
-        for m in matches.iter() {
-            for entrant in m.entrants.iter() {
-                if let EntrantSpot::Entrant(entrant) = entrant {
-                    if entrant.index >= entrants.len() {
-                        return Err(Error::InvalidEntrant {
-                            index: entrant.index,
-                            length: entrants.len(),
-                        });
-                    }
-                }
-            }
-        }
-
-        // SAFETY: `matches` has a valid length for `entrants` and all indexes are within bounds.
-        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
-    }
-
-    unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
-        log::debug!(
-            "Resuming DoubleElimination bracket with {} entrants and {} matches",
-            entrants.len(),
-            matches.len()
-        );
-
-        let lower_bracket_index = matches.len() / 2;
-
-        Self {
-            entrants,
-            matches,
-            lower_bracket_index,
-        }
-    }
 
     fn entrants(&self) -> &Entrants<T> {
         &self.entrants

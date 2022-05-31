@@ -75,6 +75,7 @@ where
 }
 
 impl<T> From<Vec<T>> for Entrants<T> {
+    #[inline]
     fn from(entrants: Vec<T>) -> Self {
         Self { entrants }
     }
@@ -624,37 +625,9 @@ impl Default for NextMatches {
 }
 
 /// A tournament system.
-pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
+pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     type Entrant;
     type NodeData: EntrantData;
-
-    /// Creates a new `Tournament` using the given `entrants`.
-    fn new<I>(entrants: I) -> Self
-    where
-        I: Iterator<Item = Self::Entrant>;
-
-    /// Resumes a `Tournament` by providing the `entrants` and `matches` of the `Tournament`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`enum@Error`] if `matches` does not have the correct length to fit with
-    /// `entrants` or a [`Entrant`] has an `index` value pointing to an out-of-bounds entrant.
-    /// The required length depends on the concrete `Tournament`.
-    fn resume(entrants: Entrants<Self::Entrant>, matches: Matches<Self::NodeData>) -> Result<Self>;
-
-    /// Resumes a `Tournament` by providing the `entrants` and `matches` of the `Tournament`
-    /// without validating the length of `matches` or checking for out-of-bounds indexes on
-    /// [`Entrant`]s.
-    ///
-    /// # Safety
-    ///
-    /// Providing a `matches` value with a length that does not fit with `entrants` or having an
-    /// [`Entrant`] with an `index` value pointing to an out-of-bounds entrant is undefined
-    /// behavoir.
-    unsafe fn resume_unchecked(
-        entrants: Entrants<Self::Entrant>,
-        matches: Matches<Self::NodeData>,
-    ) -> Self;
 
     /// Returns a reference to the [`Entrants`] of the `Tournament`.
     fn entrants(&self) -> &Entrants<Self::Entrant>;
@@ -726,7 +699,7 @@ pub trait Tournament: Sized + Borrow<Entrants<Self::Entrant>> {
 mod tests {
     use crate::{render::Renderer, EntrantSpot};
 
-    use super::{BracketRounds, EntrantData, Match, Node, Tournament};
+    use super::{BracketRounds, EntrantData, Match, Node, System};
 
     #[macro_export]
     macro_rules! entrants {
@@ -747,7 +720,7 @@ mod tests {
 
     impl<T, E, D> Renderer<T, E, D> for TestRenderer
     where
-        T: Tournament<Entrant = E, NodeData = D>,
+        T: System<Entrant = E, NodeData = D>,
     {
         fn render(&mut self, input: BracketRounds<'_, T>) {
             for bracket_round in input {

@@ -2,7 +2,7 @@ mod entrant;
 mod r#match;
 
 use dynamic_tournament_generator::tournament::TournamentKind;
-use dynamic_tournament_generator::{EntrantScore, EntrantSpot, Entrants, Match, Node, Tournament};
+use dynamic_tournament_generator::{EntrantScore, EntrantSpot, Entrants, Match, Node, System};
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
@@ -283,7 +283,7 @@ impl PartialEq for Properties {
 
 pub struct HtmlRenderer<'a, T, E>
 where
-    T: Tournament<Entrant = E, NodeData = EntrantScore<u64>>,
+    T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
     output: Html,
@@ -293,7 +293,7 @@ where
 
 impl<'a, T, E> HtmlRenderer<'a, T, E>
 where
-    T: Tournament<Entrant = E, NodeData = EntrantScore<u64>>,
+    T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
     pub fn new(tournament: &'a T, ctx: &'a Context<Bracket>) -> Self {
@@ -317,7 +317,7 @@ where
 
 impl<'a, T, E> HtmlRenderer<'a, T, E>
 where
-    T: Tournament<Entrant = E, NodeData = EntrantScore<u64>>,
+    T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
     fn render_bracket_round(&self, input: BracketRound<'_, T>) -> Html {
@@ -385,7 +385,7 @@ where
 
 impl<'a, T, E> Renderer<T, E, EntrantScore<u64>> for HtmlRenderer<'a, T, E>
 where
-    T: Tournament<Entrant = E, NodeData = EntrantScore<u64>>,
+    T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
     fn render(&mut self, input: BracketRounds<'_, T>) {
