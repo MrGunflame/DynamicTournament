@@ -1,22 +1,8 @@
+use super::id::SystemId;
 use crate::{Client, Result};
-
-use std::fmt::{self, Display, Formatter};
 
 use dynamic_tournament_generator::options::TournamentOption;
 use serde::{Deserialize, Serialize};
-
-/// A unique identifier for a [`System`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct SystemId(pub u64);
-
-impl Display for SystemId {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 /// A `System` defines the behavoir of a tournament bracket.
 #[derive(Clone, Debug, Serialize, Deserialize)]

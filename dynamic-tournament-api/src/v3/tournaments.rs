@@ -1,29 +1,10 @@
-use super::systems::SystemId;
+use super::id::{RoleId, SystemId, TournamentId};
 use crate::{Client, Result};
 
-use std::{
-    collections::HashMap,
-    fmt::{self, Display, Formatter},
-};
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
-/// A unique identifier for a [`Tournament`].
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct TournamentId(pub u64);
-
-impl Display for TournamentId {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct RoleId(pub u64);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tournament {
@@ -32,9 +13,17 @@ pub struct Tournament {
     pub description: String,
     /// RFC3339
     pub date: DateTime<Utc>,
+    pub kind: EntrantKind,
     #[serde(default)]
-    pub brackets: Vec<Bracket>,
-    pub entrants: Entrants,
+    #[cfg_attr(feature = "server", serde(skip_deserializing))]
+    pub brackets: Vec<BracketId>,
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntrantKind {
+    Player,
+    Team,
 }
 
 /// A list of entrants in a [`Tournament`]. `Entrants` can either be a list of [`Player`]s or a
