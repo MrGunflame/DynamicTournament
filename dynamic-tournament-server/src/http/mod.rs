@@ -1,5 +1,6 @@
 mod v1;
 pub mod v2;
+mod v3;
 
 use crate::{Error, State, StatusCodeError};
 
@@ -100,6 +101,7 @@ async fn service_root(
     let res = match uri.take_str() {
         Some("v1") => v1::route().await,
         Some("v2") => v2::route(req, uri, state).await,
+        Some("v3") => v3::route(req, uri, state).await,
         _ => Err(Error::NotFound),
     };
 
