@@ -4,6 +4,12 @@ use crate::{Client, Result};
 use dynamic_tournament_generator::options::TournamentOption;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SystemOverview {
+    pub id: SystemId,
+    pub name: String,
+}
+
 /// A `System` defines the behavoir of a tournament bracket.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct System {
@@ -23,8 +29,8 @@ impl<'a> SystemsClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<System>> {
-        let req = self.client.request().uri("/v2/systems").build();
+    pub async fn list(&self) -> Result<Vec<SystemOverview>> {
+        let req = self.client.request().uri("/v3/systems").build();
 
         self.client.send(req).await?.json().await
     }
@@ -38,7 +44,7 @@ impl<'a> SystemsClient<'a> {
         let req = self
             .client
             .request()
-            .uri(&format!("/v2/systems/{}", id))
+            .uri(&format!("/v3/systems/{}", id))
             .build();
 
         self.client.send(req).await?.json().await
