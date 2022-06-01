@@ -1,16 +1,22 @@
 mod entrant;
 mod r#match;
 
+use dynamic_tournament_api::tournament::Entrants as EntrantsVar;
+use dynamic_tournament_generator::options::TournamentOptions;
 use dynamic_tournament_generator::tournament::TournamentKind;
-use dynamic_tournament_generator::{EntrantScore, EntrantSpot, Entrants, Match, Node, System};
+use dynamic_tournament_generator::{
+    EntrantScore, EntrantSpot, Entrants, Match, MatchResult, Matches, Node, SingleElimination,
+    System,
+};
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
 use dynamic_tournament_generator::render::{
     self, BracketRound, BracketRounds, Position, Renderer, Round,
 };
+use dynamic_tournament_generator::tournament::Tournament;
 
-use dynamic_tournament_api::tournament::{self, BracketType, Team, TournamentId};
+use dynamic_tournament_api::tournament::{self, BracketType, Player, Team, TournamentId};
 use dynamic_tournament_api::{websocket, Client};
 use yew_agent::{Bridge, Bridged};
 
@@ -30,8 +36,7 @@ pub struct Bracket {
     websocket: WebSocketService,
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
-    bracket:
-        FetchData<dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>>,
+    bracket: FetchData<AnyTournament>,
 }
 
 impl Component for Bracket {
@@ -49,50 +54,66 @@ impl Component for Bracket {
             BracketType::DoubleElimination => TournamentKind::DoubleElimination,
         };
 
-        let entrants = ctx.props().tournament.entrants.clone().unwrap_teams();
+        let options = match kind {
+            TournamentKind::SingleElimination => {
+                SingleElimination::<u8, EntrantScore<u8>>::options()
+            }
+            TournamentKind::DoubleElimination => TournamentOptions::default(),
+        };
+
+        let entrants = ctx.props().tournament.entrants.clone();
 
         ctx.link().send_future(async move {
             async fn fetch_data(
                 kind: TournamentKind,
-                entrants: Vec<Team>,
+                entrants: EntrantsVar,
                 client: Client,
                 id: TournamentId,
-            ) -> FetchData<
-                dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>,
-            > {
+                options: TournamentOptions,
+            ) -> FetchData<AnyTournament> {
                 let client = client.tournaments();
 
-                let entrants = Entrants::from(entrants);
-
                 match client.bracket(id).get().await {
-                    Ok(bracket) => FetchData::new_with_value(
-                        dynamic_tournament_generator::tournament::Tournament::resume(
-                            kind,
-                            entrants,
-                            bracket.0,
-                            dynamic_tournament_generator::tournament::Tournament::<
-                                Team,
-                                EntrantScore<u64>,
-                            >::options(kind),
-                        )
-                        .unwrap(),
-                    ),
-                    Err(_) => FetchData::new_with_value({
-                        let mut tournament =
-                            dynamic_tournament_generator::tournament::Tournament::new(
+                    Ok(bracket) => match entrants {
+                        EntrantsVar::Players(entrants) => {
+                            let tournament = Tournament::resume(
                                 kind,
-                                dynamic_tournament_generator::tournament::Tournament::<
-                                    Team,
-                                    EntrantScore<u64>,
-                                >::options(kind),
-                            );
-                        tournament.extend(entrants.into_iter());
-                        tournament
-                    }),
+                                Entrants::from(entrants),
+                                bracket.0,
+                                options,
+                            )
+                            .unwrap();
+
+                            FetchData::new_with_value(AnyTournament::Players(tournament))
+                        }
+                        EntrantsVar::Teams(entrants) => {
+                            let tournament = Tournament::resume(
+                                kind,
+                                Entrants::from(entrants),
+                                bracket.0,
+                                options,
+                            )
+                            .unwrap();
+
+                            FetchData::from(AnyTournament::Teams(tournament))
+                        }
+                    },
+                    Err(_) => match entrants {
+                        EntrantsVar::Players(entrants) => {
+                            let mut tournament = Tournament::new(kind, options);
+                            tournament.extend(Entrants::from(entrants));
+                            FetchData::new_with_value(AnyTournament::Players(tournament))
+                        }
+                        EntrantsVar::Teams(entrants) => {
+                            let mut tournament = Tournament::new(kind, options);
+                            tournament.extend(Entrants::from(entrants));
+                            FetchData::new_with_value(AnyTournament::Teams(tournament))
+                        }
+                    },
                 }
             }
 
-            let data = fetch_data(kind, entrants, client, id).await;
+            let data = fetch_data(kind, entrants, client, id, options).await;
 
             Message::Update(data)
         });
@@ -241,7 +262,14 @@ impl Component for Bracket {
                 None => html! {},
             };
 
-            let bracket = HtmlRenderer::new(bracket, ctx).into_output();
+            let bracket = match bracket {
+                AnyTournament::Players(tournament) => {
+                    HtmlRenderer::new(tournament, ctx).into_output()
+                }
+                AnyTournament::Teams(tournament) => {
+                    HtmlRenderer::new(tournament, ctx).into_output()
+                }
+            };
 
             html! {
                 <>
@@ -254,9 +282,7 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    Update(
-        FetchData<dynamic_tournament_generator::tournament::Tournament<Team, EntrantScore<u64>>>,
-    ),
+    Update(FetchData<AnyTournament>),
     HandleMessage(websocket::Message),
     Action {
         index: usize,
@@ -398,4 +424,32 @@ where
 enum PopupState {
     UpdateScores(usize),
     ResetMatch(usize),
+}
+
+/// A [`Tournament`] with either [`Player`]s or [`Team`]s as the entrants.
+#[derive(Clone, Debug)]
+pub enum AnyTournament {
+    Players(Tournament<Player, EntrantScore<u64>>),
+    Teams(Tournament<Team, EntrantScore<u64>>),
+}
+
+impl AnyTournament {
+    #[inline]
+    pub fn matches(&self) -> &Matches<EntrantScore<u64>> {
+        match self {
+            Self::Players(ref tournament) => tournament.matches(),
+            Self::Teams(ref tournament) => tournament.matches(),
+        }
+    }
+
+    #[inline]
+    pub fn update_match<F>(&mut self, index: usize, f: F)
+    where
+        F: FnOnce(&mut Match<Node<EntrantScore<u64>>>, &mut MatchResult<EntrantScore<u64>>),
+    {
+        match self {
+            Self::Players(ref mut tournament) => tournament.update_match(index, f),
+            Self::Teams(ref mut tournament) => tournament.update_match(index, f),
+        }
+    }
 }
