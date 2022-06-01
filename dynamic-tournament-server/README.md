@@ -31,7 +31,7 @@ config file still needs to be present currently.
 | -------- | ------ | --------------- | -------------------- |
 | driver   | string | `mysql`         | DT_DB_DRIVER       |
 | host     | string | any             | DT_DB_HOST         |
-| port     | uint   | any             | DT_DB_PORT         |
+| port     | u16    | any             | DT_DB_PORT         |
 | user     | string | any             | DT_DB_USER         |
 | password | string | any             | DT_DB_PASSWORD     |
 | database | string | any             | DT_DB_DATABASE     |
