@@ -1,5 +1,10 @@
-use super::id::{EntrantId, RoleId, SystemId, TournamentId};
+pub mod brackets;
+pub mod entrants;
+
+use super::id::{SystemId, TournamentId};
 use crate::{Client, Result};
+
+use entrants::{Player, Team};
 
 use std::collections::HashMap;
 
@@ -16,6 +21,7 @@ pub struct TournamentOverview {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Tournament {
+    #[cfg_attr(feature = "server", serde(skip_deserializing))]
     pub id: TournamentId,
     pub name: String,
     pub description: String,
@@ -27,6 +33,9 @@ pub struct Tournament {
     pub brackets: Vec<BracketId>,
 }
 
+/// The type of [`Entrant`]s accepted by the tournament.
+///
+/// [`Entrant`]: entrants::Entrant
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntrantKind {
@@ -73,13 +82,6 @@ pub struct Bracket {
     pub nodes: HashMap<String, NodeKind>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Entrant {
-    Player(Player),
-    Team(Team),
-}
-
 /// All types avaliable to use for custom node values. For the value variant see [`NodeValue`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -95,21 +97,6 @@ pub enum NodeValue {
     Bool(bool),
     I64(i64),
     U64(u64),
-}
-
-/// A single player in a tournament, either alone or as part of a [`Team`].
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Player {
-    pub name: String,
-    pub role: RoleId,
-    pub rating: Option<u64>,
-}
-
-/// A single entrant for Team tournaments.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Team {
-    pub name: String,
-    pub players: Vec<Player>,
 }
 
 pub struct TournamentsClient<'a> {
@@ -159,64 +146,5 @@ impl<'a> TournamentsClient<'a> {
 
         self.client.send(req).await?;
         Ok(())
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct EntrantsClient<'a> {
-    client: &'a Client,
-    tournament_id: TournamentId,
-}
-
-impl<'a> EntrantsClient<'a> {
-    /// Returns a list of all entrant in the tournament.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails.
-    pub async fn list(&self) -> Result<Vec<Entrant>> {
-        let req = self
-            .client
-            .request()
-            .uri(&format!("/v3/tournaments/{}/entrants", self.tournament_id))
-            .build();
-
-        self.client.send(req).await?.json().await
-    }
-
-    /// Returns the [`Entrant`] with the given `id`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails.
-    pub async fn get(&self, id: EntrantId) -> Result<Entrant> {
-        let req = self
-            .client
-            .request()
-            .uri(&format!(
-                "/v3/tournaments/{}/entrants/{}",
-                self.tournament_id, id
-            ))
-            .build();
-
-        self.client.send(req).await?.json().await
-    }
-
-    /// Creates a new [`Entrant`] for the tournament. Note that this returns an error if the
-    /// incorrect [`Entrant`] variant is provided for the [`EntrantKind`] value of the tournaemnt.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails.
-    pub async fn create(&self, entrant: &Entrant) -> Result<()> {
-        let req = self
-            .client
-            .request()
-            .uri(&format!("/v3/tournaments/{}/entrants", self.tournament_id))
-            .post()
-            .body(entrant)
-            .build();
-
-        self.client.send(req).await?.json().await
     }
 }
