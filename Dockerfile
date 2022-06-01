@@ -12,7 +12,6 @@ FROM scratch
 WORKDIR /
 
 COPY --from=builder /app/target/release/dynamic-tournament-server /bin
-COPY dynamic-tournament-server/config.toml /
 COPY dynamic-tournament-server/users.json /
 
 ENTRYPOINT ["/bin"]
