@@ -4,7 +4,7 @@ use crate::http::{Request, RequestUri};
 use crate::{Error, State, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::SystemId;
-use dynamic_tournament_api::v3::systems::System;
+use dynamic_tournament_api::v3::systems::{System, SystemOverview};
 use dynamic_tournament_generator::{EntrantScore, SingleElimination};
 
 pub async fn route(
@@ -30,17 +30,13 @@ pub async fn route(
 async fn list(_req: Request, _state: State) -> Result<Response<Body>, Error> {
     // Hardcoded for now.
     let systems = [
-        System {
+        SystemOverview {
             id: SystemId(1),
             name: "Single Elimination".into(),
-            options: SingleElimination::<u8, EntrantScore<u8>>::options()
-                .into_values()
-                .collect(),
         },
-        System {
+        SystemOverview {
             id: SystemId(2),
             name: "Double Elimination".into(),
-            options: vec![],
         },
     ];
 
