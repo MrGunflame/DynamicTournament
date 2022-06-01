@@ -2,7 +2,7 @@ use chrono::Local;
 use log::{set_logger, set_max_level, Level, LevelFilter, Log, Metadata, Record};
 
 pub fn init(level: LevelFilter) {
-    set_logger(&Logger).unwrap();
+    let _ = set_logger(&Logger);
     set_max_level(level);
 }
 

@@ -1,3 +1,4 @@
+mod config;
 mod http;
 mod logger;
 mod websocket;
@@ -24,13 +25,25 @@ use websocket::LiveBracket;
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let config = read_config("config.toml");
+    logger::init(LevelFilter::Error);
+
+    let config = match config::Config::from_file("config.toml").await {
+        Ok(config) => config.with_environment(),
+        Err(file_err) => match config::Config::from_environment() {
+            Ok(config) => config,
+            Err(env_err) => {
+                log::error!("Failed to load configuration, exiting");
+                log::error!("Failed to load config file: {}", file_err);
+                log::error!("Failed to load config from environment: {}", env_err);
+                return Ok(());
+            }
+        },
+    };
+
     logger::init(config.loglevel);
 
     log::info!("Using config: {:?}", config);
@@ -291,58 +304,6 @@ impl State {
     }
 }
 
-pub fn read_config<P>(path: P) -> Config
-where
-    P: AsRef<std::path::Path>,
-{
-    let mut file = std::fs::File::open(path).unwrap();
-
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).unwrap();
-
-    let mut config: Config = toml::from_slice(&buf).unwrap();
-
-    if let Ok(val) = std::env::var("DYNT_LOGLEVEL") {
-        let val = LevelFilter::from_str(&val).unwrap();
-
-        config.loglevel = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_BIND") {
-        let val = SocketAddr::from_str(&val).unwrap();
-
-        config.bind = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_DRIVER") {
-        config.database.driver = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_HOST") {
-        config.database.host = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_PORT") {
-        let val = u16::from_str(&val).unwrap();
-
-        config.database.port = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_USER") {
-        config.database.user = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_PASSWORD") {
-        config.database.password = val;
-    }
-
-    if let Ok(val) = std::env::var("DYNT_DB_DATABASE") {
-        config.database.database = val;
-    }
-
-    config
-}
-
 pub fn read_users<P>(path: P) -> Vec<LoginData>
 where
     P: AsRef<std::path::Path>,
@@ -353,32 +314,6 @@ where
     file.read_to_end(&mut buf).unwrap();
 
     serde_json::from_slice(&buf).unwrap()
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Config {
-    pub database: Database,
-    pub loglevel: LevelFilter,
-    pub bind: SocketAddr,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Database {
-    pub driver: String,
-    pub host: String,
-    pub port: u16,
-    pub user: String,
-    pub password: String,
-    pub database: String,
-}
-
-impl Database {
-    pub fn connect_string(&self) -> String {
-        format!(
-            "{}://{}:{}@{}:{}/{}?ssl-mode=DISABLED",
-            self.driver, self.user, self.password, self.host, self.port, self.database
-        )
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
