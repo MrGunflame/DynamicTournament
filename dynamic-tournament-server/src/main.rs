@@ -1,6 +1,7 @@
 mod config;
 mod http;
 mod logger;
+mod store;
 mod websocket;
 
 use dynamic_tournament_api::auth::Claims;
