@@ -33,12 +33,6 @@ pub struct Entrants<T> {
     entrants: Vec<T>,
 }
 
-impl<T> Entrants<T> {
-    pub fn into_iter(self) -> IntoIter<T> {
-        self.entrants.into_iter()
-    }
-}
-
 impl<T> FromIterator<T> for Entrants<T> {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -47,6 +41,15 @@ impl<T> FromIterator<T> for Entrants<T> {
         let entrants = iter.into_iter().collect();
 
         Self { entrants }
+    }
+}
+
+impl<T> IntoIterator for Entrants<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entrants.into_iter()
     }
 }
 
