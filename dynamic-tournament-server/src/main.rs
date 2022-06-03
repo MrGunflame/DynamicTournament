@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sqlx::mysql::MySqlPool;
 
+use store::Store;
 use thiserror::Error;
 
 use dynamic_tournament_api::tournament::{Tournament, TournamentId};
@@ -28,11 +29,22 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Arc;
 
+use clap::Parser;
+
+#[derive(Clone, Debug, Parser)]
+#[clap(author, version, about)]
+pub struct Args {
+    #[clap(short, long, value_name = "FILE", default_value = "config.toml")]
+    config: String,
+}
+
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     logger::init(LevelFilter::Error);
 
-    let config = match config::Config::from_file("config.toml").await {
+    let args = Args::parse();
+
+    let config = match config::Config::from_file(&args.config).await {
         Ok(config) => config.with_environment(),
         Err(file_err) => match config::Config::from_environment() {
             Ok(config) => config,
@@ -63,6 +75,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let _ = shutdown_tx.send(Some(shutdown_responder_tx));
     });
 
+    let store = Store { pool: store };
+
     let state = State {
         store,
         users,
@@ -76,7 +90,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     ];
 
     for t in tables {
-        sqlx::query(t).execute(&state.store).await?;
+        sqlx::query(t).execute(&state.store.pool).await?;
     }
 
     http::bind(config.bind, state).await.unwrap();
@@ -89,7 +103,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
 #[derive(Clone, Debug)]
 pub struct State {
-    store: MySqlPool,
+    pub store: Store,
     users: Vec<LoginData>,
     pub subscribers: Arc<RwLock<HashMap<u64, LiveBracket>>>,
     // Note: Clone before polling.
@@ -224,7 +238,7 @@ impl State {
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows = sqlx::query("SELECT id, data FROM tournaments").fetch(&self.store);
+        let mut rows = sqlx::query("SELECT id, data FROM tournaments").fetch(&self.store.pool);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -248,7 +262,7 @@ impl State {
     pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
         let row = match sqlx::query("SELECT data FROM tournaments WHERE id = ?")
             .bind(id)
-            .fetch_one(&self.store)
+            .fetch_one(&self.store.pool)
             .await
         {
             Ok(v) => v,
@@ -266,7 +280,7 @@ impl State {
     pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
         let res = sqlx::query("INSERT INTO tournaments (data) VALUES (?)")
             .bind(serde_json::to_vec(&tournament).unwrap())
-            .execute(&self.store)
+            .execute(&self.store.pool)
             .await?;
 
         let id = res.last_insert_id();
@@ -280,7 +294,7 @@ impl State {
         sqlx::query("INSERT INTO tournaments_brackets (tournament_id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data=VALUES(data)")
             .bind(tournament_id)
             .bind(data)
-            .execute(&self.store)
+            .execute(&self.store.pool)
             .await?;
 
         Ok(())
@@ -289,7 +303,7 @@ impl State {
     pub async fn get_bracket(&self, tournament_id: u64) -> Result<Option<Bracket>, Error> {
         let row = match sqlx::query("SELECT data FROM tournaments_brackets WHERE tournament_id = ?")
             .bind(tournament_id)
-            .fetch_one(&self.store)
+            .fetch_one(&self.store.pool)
             .await
         {
             Ok(v) => v,
