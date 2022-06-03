@@ -22,19 +22,19 @@ config file still needs to be present currently.
 
 | Option   | Type   | Possible Values                           | Environment Variable |
 | -------- | ------ | ----------------------------------------- | -------------------- |
-| loglevel | string | `error`, `warn`, `info`, `debug`, `trace` | DYNT_LOGLEVEL        |
-| bind     | string | \<address\>:\<port\>                      | DYNT_BIND            |
+| loglevel | string | `error`, `warn`, `info`, `debug`, `trace` | DT_LOGLEVEL        |
+| bind     | string | \<address\>:\<port\>                      | DT_BIND            |
   
 ### Database Options
 
 | Option   | Type   | Possible Values | Environment Variable |
 | -------- | ------ | --------------- | -------------------- |
-| driver   | string | `mysql`         | DYNT_DB_DRIVER       |
-| host     | string | any             | DYNT_DB_HOST         |
-| port     | uint   | any             | DYNT_DB_PORT         |
-| user     | string | any             | DYNT_DB_USER         |
-| password | string | any             | DYNT_DB_PASSWORD     |
-| database | string | any             | DYNT_DB_DATABASE     |
+| driver   | string | `mysql`         | DT_DB_DRIVER       |
+| host     | string | any             | DT_DB_HOST         |
+| port     | u16    | any             | DT_DB_PORT         |
+| user     | string | any             | DT_DB_USER         |
+| password | string | any             | DT_DB_PASSWORD     |
+| database | string | any             | DT_DB_DATABASE     |
 
 ### User configuration
 
