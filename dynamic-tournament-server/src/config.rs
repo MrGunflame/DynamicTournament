@@ -2,6 +2,7 @@ use std::env;
 use std::net::SocketAddr;
 use std::{io, path::Path};
 
+use jsonwebtoken::Algorithm;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -36,6 +37,8 @@ pub struct Config {
     pub database: Database,
     pub loglevel: LevelFilter,
     pub bind: SocketAddr,
+
+    pub authorization: Authorization,
 }
 
 impl Config {
@@ -58,6 +61,7 @@ impl Config {
         from_environment_error!(this, "DT_LOGLEVEL", loglevel, "DT_BIND", bind);
 
         this.database = Database::from_environment()?;
+        this.authorization = Authorization::from_environment()?;
 
         Ok(this)
     }
@@ -65,6 +69,7 @@ impl Config {
     pub fn with_environment(mut self) -> Self {
         from_environment!(self, "DT_LOGLEVEL", loglevel, "DT_BIND", bind);
         self.database = self.database.with_environment();
+        self.authorization = self.authorization.with_environment();
 
         self
     }
@@ -76,6 +81,7 @@ impl Default for Config {
             database: Database::default(),
             loglevel: LevelFilter::Info,
             bind: SocketAddr::new([0, 0, 0, 0].into(), 3000),
+            authorization: Authorization::default(),
         }
     }
 }
@@ -123,7 +129,7 @@ impl Database {
     pub fn with_environment(mut self) -> Self {
         from_environment!(
             self,
-            "DYNT_DB_DRIVER",
+            "DT_DB_DRIVER",
             driver,
             "DT_DB_HOST",
             host,
@@ -136,6 +142,27 @@ impl Database {
             "DT_DB_DATABASE",
             database,
         );
+
+        self
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Authorization {
+    pub algorithm: Algorithm,
+}
+
+impl Authorization {
+    pub fn from_environment() -> Result<Self, ConfigError> {
+        let mut this = Self::default();
+
+        from_environment_error!(this, "DT_AUTH_ALGORITHM", algorithm);
+
+        Ok(this)
+    }
+
+    pub fn with_environment(mut self) -> Self {
+        from_environment!(self, "DT_AUTH_ALGORITHM", algorithm);
 
         self
     }

@@ -4,6 +4,8 @@ mod logger;
 mod store;
 mod websocket;
 
+use config::Config;
+
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
 use hyper::StatusCode;
@@ -82,6 +84,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         users,
         subscribers: Arc::new(RwLock::new(HashMap::new())),
         shutdown_rx,
+        config: Arc::new(config.clone()),
     };
 
     let tables = [
@@ -123,6 +126,7 @@ pub struct State {
     pub subscribers: Arc<RwLock<HashMap<u64, LiveBracket>>>,
     // Note: Clone before polling.
     pub shutdown_rx: watch::Receiver<Option<mpsc::Sender<bool>>>,
+    pub config: Arc<Config>,
 }
 
 #[derive(Debug, Error)]
@@ -245,7 +249,7 @@ impl State {
 
     pub fn decode_token(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let key = DecodingKey::from_secret(http::v2::auth::SECRET);
-        let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+        let validation = Validation::new(self.config.authorization.algorithm);
 
         let data = jsonwebtoken::decode(token, &key, &validation)?;
 
