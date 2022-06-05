@@ -236,9 +236,8 @@ impl Component for Bracket {
 
                     let teams = m
                         .entrants
-                        .clone()
                         .map(|e| e.map(|e| e.entrant(&entrants).unwrap().clone()));
-                    let nodes = m.entrants.clone().map(|e| e.unwrap().data);
+                    let nodes = m.entrants.map(|e| e.unwrap().data);
 
                     let on_submit = ctx
                         .link()
@@ -398,10 +397,9 @@ where
 
         let entrants = input
             .entrants
-            .clone()
             .map(|e| e.map(|e| e.entrant(&self.tournament.borrow()).unwrap().clone()));
 
-        let nodes = input.entrants.clone().map(|e| e.map(|e| e.data));
+        let nodes = input.entrants.map(|e| e.map(|e| e.data));
 
         html! {
             <BracketMatch<E> {entrants} {nodes} {on_action} number={match_index} {position} />

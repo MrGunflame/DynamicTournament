@@ -380,14 +380,14 @@ where
         // operations that access `self.matches` at an index that is **not `index`** are still
         // safe.
 
-        let mut r#match = match self.matches.get_mut(index) {
+        let r#match = match self.matches.get_mut(index) {
             Some(r#match) => r#match,
             None => return,
         };
 
         let mut res = MatchResult::default();
 
-        f(&mut r#match, &mut res);
+        f(r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 

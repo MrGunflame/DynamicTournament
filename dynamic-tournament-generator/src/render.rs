@@ -1,3 +1,6 @@
+//! # Tournament Rendering
+//!
+//! The `render` module provides types to generically render tournament [`System`]s.
 use crate::{Match, Node, System};
 
 use std::ops::Range;
@@ -10,7 +13,7 @@ where
     fn render(&mut self, input: BracketRounds<'_, T>);
 }
 
-/// An [`Iterator`] over all [`BracketRound`]s within a [`Tournament`].
+/// An [`Iterator`] over all [`BracketRound`]s within a tournament [`System`].
 #[derive(Clone, Debug)]
 pub struct BracketRounds<'a, T>
 where

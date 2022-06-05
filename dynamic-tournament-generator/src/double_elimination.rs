@@ -222,14 +222,14 @@ where
     {
         log::debug!("Updating match {}", index);
 
-        let mut r#match = match self.matches.get_mut(index) {
+        let r#match = match self.matches.get_mut(index) {
             Some(r#match) => r#match,
             None => return,
         };
 
         let mut res = MatchResult::default();
 
-        f(&mut r#match, &mut res);
+        f(r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 
@@ -323,7 +323,6 @@ where
                 }
                 // The first round of matches. All matches in the lower bracket need to be filled.
                 i if i < initial_matches => {
-                    log::debug!("ok");
                     let winner_index = initial_matches + i / 2;
                     let loser_index = self.lower_bracket_index + (i / 2);
 
@@ -419,14 +418,14 @@ where
     {
         log::debug!("Updating match {}", index);
 
-        let mut r#match = match self.matches.get_mut(index) {
+        let r#match = match self.matches.get_mut(index) {
             Some(r#match) => r#match,
             None => return,
         };
 
         let mut res = MatchResult::default();
 
-        f(&mut r#match, &mut res);
+        f(r#match, &mut res);
 
         let next_matches = self.next_matches(index);
 
@@ -520,7 +519,6 @@ where
                 }
                 // The first round of matches. All matches in the lower bracket need to be filled.
                 i if i < initial_matches => {
-                    log::debug!("ok");
                     let winner_index = initial_matches + i / 2;
                     let loser_index = self.lower_bracket_index + (i / 2);
 

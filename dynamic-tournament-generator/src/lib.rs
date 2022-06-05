@@ -718,6 +718,7 @@ mod tests {
 
     #[derive(Debug, Default)]
     pub struct TestRenderer {
+        #[allow(clippy::type_complexity)]
         matches: Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>,
     }
 

@@ -1,3 +1,13 @@
+//! # Tournament Options
+//!
+//! Some tournament [`System`]s may require additional and/or optional configuration that change
+//! the behavoir of the [`System`]. An example would be including a match for the third place in a
+//! single elimination tournament, or defining the rounds played in a swiss tournament.
+//!
+//! This module provides this kind of configuration via [`TournamentOption`] using a key-value map.
+//! [`OptionValue`] contains all types supported.
+//!
+//! [`System`]: crate::System
 use std::collections::HashMap;
 
 #[cfg(feature = "serde")]
