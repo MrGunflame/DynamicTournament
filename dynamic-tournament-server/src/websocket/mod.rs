@@ -262,7 +262,11 @@ impl LiveBracket {
                     Some(bracket) => {
                         let entrants = tournament.entrants.unwrap_teams().into();
 
-                        SingleElimination::resume(entrants, bracket.0)?
+                        SingleElimination::resume(
+                            entrants,
+                            bracket.0,
+                            SingleElimination::<Team, EntrantScore<u64>>::options(),
+                        )?
                     }
                     None => SingleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
                 };

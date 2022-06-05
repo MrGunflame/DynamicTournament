@@ -3,6 +3,8 @@ use crate::{Client, Result};
 
 use serde::{Deserialize, Serialize};
 
+use super::EntrantKind;
+
 /// A single entrant. Depending on the [`EntrantKind`] of the tournament this is either
 /// a [`Player`] or a [`Team`].
 ///
@@ -11,9 +13,26 @@ use serde::{Deserialize, Serialize};
 /// [`EntrantKind`]: super::EntrantKind
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum Entrant {
+pub enum EntrantVariant {
     Player(Player),
     Team(Team),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Entrant {
+    #[cfg_attr(feature = "server", serde(skip_deserializing))]
+    pub id: EntrantId,
+    #[serde(flatten)]
+    pub inner: EntrantVariant,
+}
+
+impl Entrant {
+    pub fn kind(&self) -> EntrantKind {
+        match self.inner {
+            EntrantVariant::Player(_) => EntrantKind::Player,
+            EntrantVariant::Team(_) => EntrantKind::Team,
+        }
+    }
 }
 
 /// A single player in a tournament, either alone or as part of a [`Team`].

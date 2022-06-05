@@ -62,6 +62,7 @@ macro_rules! id {
 }
 
 id!(TournamentId, u64);
+id!(BracketId, u64);
 id!(RoleId, u64);
 id!(SystemId, u64);
 id!(EntrantId, u64);

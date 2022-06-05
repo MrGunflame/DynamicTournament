@@ -85,8 +85,23 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
 
     let tables = [
-        "CREATE TABLE IF NOT EXISTS tournaments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, data BLOB NOT NULL)",
-        "CREATE TABLE IF NOT EXISTS tournaments_brackets (tournament_id BIGINT UNSIGNED PRIMARY KEY, data BLOB NOT NULL)"
+        "CREATE TABLE IF NOT EXISTS tournaments (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            date TIMESTAMP NOT NULL,
+            kind TINYINT UNSIGNED NOT NULL
+        )",
+        "CREATE TABLE IF NOT EXISTS entrants (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tournament_id BIGINT UNSIGNED NOT NULL,
+            data BLOB NOT NULL
+        )",
+        "CREATE TABLE IF NOT EXISTS brackets (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tournament_id BIGINT UNSIGNED NOT NULL,
+            data BLOB NOT NULL
+        )",
     ];
 
     for t in tables {

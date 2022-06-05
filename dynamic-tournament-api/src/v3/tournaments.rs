@@ -28,19 +28,35 @@ pub struct Tournament {
     /// RFC3339
     pub date: DateTime<Utc>,
     pub kind: EntrantKind,
-    #[serde(default)]
-    #[cfg_attr(feature = "server", serde(skip_deserializing))]
-    pub brackets: Vec<BracketId>,
 }
 
 /// The type of [`Entrant`]s accepted by the tournament.
 ///
 /// [`Entrant`]: entrants::Entrant
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntrantKind {
     Player,
     Team,
+}
+
+impl EntrantKind {
+    #[inline]
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Self::Player => 0,
+            Self::Team => 1,
+        }
+    }
+
+    #[inline]
+    pub fn from_u8(byte: u8) -> Option<Self> {
+        match byte {
+            0 => Some(Self::Player),
+            1 => Some(Self::Team),
+            _ => None,
+        }
+    }
 }
 
 /// A list of entrants in a [`Tournament`]. `Entrants` can either be a list of [`Player`]s or a

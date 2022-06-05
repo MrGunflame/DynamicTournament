@@ -102,6 +102,10 @@ pub enum Error {
     Http(#[from] http::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
+    #[error("invalid token")]
+    InvalidToken,
+    #[error(transparent)]
+    Base64(#[from] base64::DecodeError),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
