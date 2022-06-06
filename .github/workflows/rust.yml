@@ -31,6 +31,13 @@ jobs:
         path: target
         if-no-files-found: ignore
 
+  doc:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - run: RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --all-features
+
   test:
     runs-on: ubuntu-latest
     
