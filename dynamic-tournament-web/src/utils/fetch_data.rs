@@ -28,6 +28,7 @@ impl<T> FetchData<T> {
         }
     }
 
+    #[allow(unused)]
     pub fn as_ref(&self) -> FetchData<&T> {
         match &self.inner {
             Some(res) => match res {
@@ -38,6 +39,7 @@ impl<T> FetchData<T> {
         }
     }
 
+    #[allow(unused)]
     pub fn as_mut(&mut self) -> FetchData<&mut T> {
         match self.inner {
             Some(ref mut res) => match res {
@@ -49,6 +51,7 @@ impl<T> FetchData<T> {
     }
 
     /// Returns `true` if the `FetchData` has an initialized value.
+    #[allow(unused)]
     pub fn has_value(&self) -> bool {
         match self.inner {
             Some(ref res) => res.is_ok(),
@@ -57,6 +60,8 @@ impl<T> FetchData<T> {
     }
 
     /// Maps a `FetchData<T>` to an `FetchData<U>`.
+    #[allow(unused)]
+    #[inline]
     pub fn map<U, F>(self, f: F) -> FetchData<U>
     where
         F: FnOnce(T) -> U,
@@ -70,6 +75,7 @@ impl<T> FetchData<T> {
     ///
     /// Panics if `self` has no value `T`.
     #[allow(unused)]
+    #[inline]
     pub fn unwrap(self) -> T {
         self.inner.unwrap().unwrap()
     }
@@ -79,6 +85,8 @@ impl<T> FetchData<T> {
     /// # Safety
     ///
     /// This method causes undefined behavoir if called on a value that is not `T`.
+    #[allow(unused)]
+    #[inline]
     pub unsafe fn unwrap_unchecked(self) -> T {
         self.inner.unwrap_unchecked().unwrap_unchecked()
     }

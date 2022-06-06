@@ -1,5 +1,5 @@
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
+use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::{

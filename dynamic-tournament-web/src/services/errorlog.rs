@@ -2,10 +2,12 @@ use std::collections::HashSet;
 
 use yew_agent::{Agent, AgentLink, Context, Dispatched, HandlerId};
 
+#[allow(unused)]
 pub struct ErrorLog;
 
 impl ErrorLog {
     /// Dispatches a new error message to the error log.
+    #[allow(unused)]
     #[inline]
     pub fn error<T>(msg: T)
     where

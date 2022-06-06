@@ -2,13 +2,10 @@ use crate::Error;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
 use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, TournamentId},
-    tournaments::{
-        entrants::{Entrant, EntrantVariant},
-        EntrantKind, Tournament, TournamentOverview,
-    },
+    tournaments::{entrants::Entrant, EntrantKind, Tournament, TournamentOverview},
 };
+use sqlx::mysql::MySqlPool;
 use sqlx::Row;
-use sqlx::{mysql::MySqlPool, Executor};
 
 use futures::TryStreamExt;
 

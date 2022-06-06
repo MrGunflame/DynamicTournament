@@ -18,7 +18,7 @@ pub async fn route(
             Method::POST => create(req, state, tournament_id).await,
             _ => Err(StatusCodeError::method_not_allowed().into()),
         },
-        Some(part) => {
+        Some(_part) => {
             //let id = part.parse()?;
 
             match *req.method() {
@@ -67,7 +67,7 @@ async fn create(
             return Ok(resp);
         }
 
-        if entrants.iter().find(|&e| e.id == *id).is_none() {
+        if !entrants.iter().any(|e| e.id == *id) {
             *resp.status_mut() = StatusCode::BAD_REQUEST;
             *resp.body_mut() = Body::from(format!(
                 "invalid entrant {}, does not exist for tournament",
