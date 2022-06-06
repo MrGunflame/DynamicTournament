@@ -8,3 +8,6 @@ port = 3306
 user = "user"
 password = "1234"
 database = "dynamictournament"
+
+[authorization]
+algorithm = "HS256"
