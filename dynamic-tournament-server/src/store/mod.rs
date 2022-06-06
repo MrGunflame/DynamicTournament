@@ -165,4 +165,28 @@ impl Store {
 
         Ok(BracketId(id))
     }
+
+    pub async fn get_bracket(
+        &self,
+        tournament_id: TournamentId,
+        id: BracketId,
+    ) -> Result<Option<Bracket>, Error> {
+        let row = match sqlx::query("SELECT data FROM brackets WHERE tournament_id = ? AND id = ?")
+            .bind(tournament_id.0)
+            .bind(id.0)
+            .fetch_one(&self.pool)
+            .await
+        {
+            Ok(v) => v,
+            Err(sqlx::Error::RowNotFound) => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
+
+        let data: Vec<u8> = row.try_get("data")?;
+
+        let mut bracket: Bracket = serde_json::from_slice(&data)?;
+        bracket.id = id;
+
+        Ok(Some(bracket))
+    }
 }

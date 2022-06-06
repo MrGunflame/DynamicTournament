@@ -1,4 +1,7 @@
-use dynamic_tournament_api::v3::{id::TournamentId, tournaments::brackets::Bracket};
+use dynamic_tournament_api::v3::{
+    id::{BracketId, TournamentId},
+    tournaments::brackets::Bracket,
+};
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::{
@@ -18,11 +21,11 @@ pub async fn route(
             Method::POST => create(req, state, tournament_id).await,
             _ => Err(StatusCodeError::method_not_allowed().into()),
         },
-        Some(_part) => {
-            //let id = part.parse()?;
+        Some(part) => {
+            let id = part.parse()?;
 
             match *req.method() {
-                //Method::GET => get(req, state, tournament_id, id).await,
+                Method::GET => get(req, state, tournament_id, id).await,
                 _ => Err(StatusCodeError::method_not_allowed().into()),
             }
         }
@@ -38,6 +41,22 @@ async fn list(_req: Request, state: State, id: TournamentId) -> Result<Response<
         .unwrap();
 
     Ok(resp)
+}
+
+async fn get(
+    _req: Request,
+    state: State,
+    tournament_id: TournamentId,
+    id: BracketId,
+) -> Result<Response<Body>, Error> {
+    let bracket = state.store.get_bracket(tournament_id, id).await?;
+
+    let bracket = match bracket {
+        Some(bracket) => bracket,
+        None => return Err(StatusCodeError::not_found().into()),
+    };
+
+    Ok(Response::new(Body::from(serde_json::to_vec(&bracket)?)))
 }
 
 async fn create(
