@@ -5,7 +5,7 @@ use crate::{Match, Node, System};
 
 use std::ops::Range;
 
-/// A renderer used to render any [`Tournament`].
+/// A renderer used to render any [`System`].
 pub trait Renderer<T, E, D>
 where
     T: System<Entrant = E, NodeData = D>,

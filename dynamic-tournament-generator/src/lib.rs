@@ -639,7 +639,7 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     ///
     /// # Safety
     ///
-    /// Removing elements from [`Entrants`] while there are still [`Entrant`]s with an `index`
+    /// Removing elements from [`Entrants`] while there are still [`Node`]s with an `index`
     /// pointing to that element in the `Tournament` is undefined behavoir.
     ///
     /// Growing [`Entrants`] or modifying elements is always safe.
@@ -657,9 +657,9 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     ///
     /// Changing the length of the [`Matches`] to a length that is invalid for the `Tournament`
     /// is undefined behavoir. The exact requirements depend on the concrete `Tournament`. Changing
-    /// the `index` field [`Entrant`]s to an out-of-bounds of [`Entrants`] is undefined behavoir.
+    /// the `index` field [`Node`]s to an out-of-bounds of [`Entrants`] is undefined behavoir.
     ///
-    /// Changing the `data` fields of [`Entrant`]s is always safe, but may cause the `Tournament`
+    /// Changing the `data` fields of [`Node`]s is always safe, but may cause the `Tournament`
     /// to be in an incorrect or inconsistent state.
     unsafe fn matches_mut(&mut self) -> &mut Matches<Self::NodeData>;
 

@@ -116,7 +116,7 @@ where
     /// # Errors
     ///
     /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
-    /// [`Entrant`] in `matches` pointed to a value that is out-of-bounds.
+    /// [`Node`] in `matches` pointed to a value that is out-of-bounds.
     pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
@@ -201,11 +201,11 @@ where
     ///
     /// [`DoubleElimination`] assumes that `matches` has a length of
     /// `self.entrants.len().next_power_of_two() * 2 - 1`. Violating this assumption may cause
-    /// undefined behavoir. Further changing the `index` field of [`Entrant`] to a value that is
+    /// undefined behavoir. Further changing the `index` field of [`Node`] to a value that is
     /// not in bounds of `entrants` causes undefined behavoir.
     ///
-    /// Changing the data field of [`Entrant`] without changing the length of [`Matches`] or
-    /// changing the index field of [`Entrant`] is always safe, **but may cause the tournament to
+    /// Changing the data field of [`Node`] without changing the length of [`Matches`] or
+    /// changing the index field of [`Node`] is always safe, **but may cause the tournament to
     /// be in an incorrect or inconsistent state**.
     pub unsafe fn matches_mut(&mut self) -> &mut Matches<D> {
         &mut self.matches
