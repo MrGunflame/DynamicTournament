@@ -1,6 +1,8 @@
 pub mod brackets;
 pub mod entrants;
 
+use self::{brackets::BracketsClient, entrants::EntrantsClient};
+
 use super::id::{SystemId, TournamentId};
 use crate::{Client, Result};
 
@@ -120,6 +122,10 @@ pub struct TournamentsClient<'a> {
 }
 
 impl<'a> TournamentsClient<'a> {
+    pub(crate) fn new(client: &'a Client) -> Self {
+        Self { client }
+    }
+
     /// Returns a list of tournaments
     ///
     /// # Errors
@@ -162,5 +168,13 @@ impl<'a> TournamentsClient<'a> {
 
         self.client.send(req).await?;
         Ok(())
+    }
+
+    pub fn brackets(&self, tournament_id: TournamentId) -> BracketsClient {
+        BracketsClient::new(self.client, tournament_id)
+    }
+
+    pub fn entrants(&self, tournament_id: TournamentId) -> EntrantsClient {
+        EntrantsClient::new(self.client, tournament_id)
     }
 }

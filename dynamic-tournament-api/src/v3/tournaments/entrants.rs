@@ -50,13 +50,20 @@ pub struct Team {
     pub players: Vec<Player>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EntrantsClient<'a> {
     client: &'a Client,
     tournament_id: TournamentId,
 }
 
 impl<'a> EntrantsClient<'a> {
+    pub(crate) fn new(client: &'a Client, tournament_id: TournamentId) -> Self {
+        Self {
+            client,
+            tournament_id,
+        }
+    }
+
     /// Returns a list of all entrant in the tournament.
     ///
     /// # Errors

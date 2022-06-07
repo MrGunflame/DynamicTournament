@@ -24,6 +24,10 @@ pub struct SystemsClient<'a> {
 }
 
 impl<'a> SystemsClient<'a> {
+    pub(crate) fn new(client: &'a Client) -> Self {
+        Self { client }
+    }
+
     /// Returns a list of all [`System`]s.
     ///
     /// # Errors

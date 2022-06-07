@@ -37,6 +37,10 @@ impl Client {
         }
     }
 
+    pub fn v3(&self) -> v3::Client {
+        v3::Client::new(self)
+    }
+
     pub fn tournaments(&self) -> TournamentClient<'_> {
         TournamentClient::new(self)
     }
