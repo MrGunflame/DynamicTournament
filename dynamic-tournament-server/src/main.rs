@@ -208,6 +208,15 @@ impl StatusCodeError {
     pub fn payload_too_large() -> Self {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
     }
+
+    /// Sets the message of the error.
+    pub fn message<T>(mut self, msg: T) -> Self
+    where
+        T: ToString,
+    {
+        self.message = msg.to_string();
+        self
+    }
 }
 
 impl State {

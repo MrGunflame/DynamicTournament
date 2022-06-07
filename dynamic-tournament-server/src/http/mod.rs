@@ -9,12 +9,13 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
-use hyper::header::HeaderValue;
+use hyper::header::{HeaderValue, CONTENT_TYPE};
 use hyper::server::conn::AddrStream;
 use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 
 pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
@@ -142,8 +143,16 @@ async fn service_root(
                     *resp.body_mut() = Body::from("Method Not Allowed");
                 }
                 Error::StatusCodeError(err) => {
+                    let body = serde_json::to_vec(&ErrorResponse {
+                        code: err.code.as_u16(),
+                        message: err.message,
+                    })
+                    .unwrap();
+
                     *resp.status_mut() = err.code;
-                    *resp.body_mut() = Body::from(err.message);
+                    resp.headers_mut()
+                        .append(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                    *resp.body_mut() = Body::from(body);
                 }
                 err => {
                     log::error!("{:?}", err);
@@ -294,4 +303,10 @@ impl<'a> AsRef<str> for UriPart<'a> {
     fn as_ref(&self) -> &str {
         self.part
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    pub code: u16,
+    pub message: String,
 }
