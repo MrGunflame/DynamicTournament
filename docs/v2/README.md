@@ -31,7 +31,7 @@ Returns all detailed information about the tournament with the given `id`. The f
 `entrants`: *object*, An object containing a key `players` with a *[Player]* value **or** a key `teams` with a *[Team]* value.
 
 Player fields:  
-`name`: *string*, The name of the player
+`name`: *string*, The name of the player  
 `role`: `unknown` for *Unknown*, `roamer` for *Roamer*, `teamfighter` for *Teamfighter*, `duelist` for *Duelist*, `support` for *Support*  
 `rating`: *u64 | null*, The rating of the player.
 
@@ -80,7 +80,7 @@ Team fields:
 ### POST /v2/auth/login
 
 Log in using the provided credentials and returns a new JWT access and refresh token if successful:   
-`access_token`: *string*, The access token used to make requests
+`access_token`: *string*, The access token used to make requests  
 `refresh_token`: *string*, The refresh token used to acquire a new access and refresh token without loggin in again.
 
 #### Request Body
@@ -101,7 +101,7 @@ Log in using the provided credentials and returns a new JWT access and refresh t
 ### POST /v2/auth/refresh
 
 Acquire a new access and refresh token using a valid refresh_token. Returns the new tokens on success:  
-`access_token`: *string*, The access token used to make requests
+`access_token`: *string*, The access token used to make requests  
 `refresh_token`: *string*, The refresh token used to acquire a new access and refresh token without loggin in again.
 
 #### Request Body
