@@ -1,7 +1,8 @@
 use dynamic_tournament_api::v3::{
-    id::{BracketId, TournamentId},
+    id::{BracketId, SystemId, TournamentId},
     tournaments::brackets::Bracket,
 };
+use dynamic_tournament_generator::{options::TournamentOptions, EntrantScore, SingleElimination};
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::{
@@ -68,7 +69,7 @@ async fn create(
         return Err(StatusCodeError::unauthorized().into());
     }
 
-    let bracket: Bracket = req.json().await?;
+    let mut bracket: Bracket = req.json().await?;
 
     // Make sure all entrants in the bracket actually exist.
     let entrants = state.store.get_entrants(tournament_id).await?;
@@ -98,6 +99,19 @@ async fn create(
 
         consumed.push(*id);
     }
+
+    let options = match bracket.system {
+        SystemId(1) => SingleElimination::<u8, EntrantScore<u8>>::options(),
+        SystemId(2) => TournamentOptions::default(),
+        _ => unreachable!(),
+    };
+
+    bracket.options = match bracket.options.merge(options) {
+        Ok(v) => v,
+        Err(err) => {
+            return Err(StatusCodeError::bad_request().message(err).into());
+        }
+    };
 
     let id = state.store.insert_bracket(tournament_id, &bracket).await?;
 

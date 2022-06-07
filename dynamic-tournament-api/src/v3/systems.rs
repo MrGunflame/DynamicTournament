@@ -1,7 +1,7 @@
 use super::id::SystemId;
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::options::TournamentOption;
+use dynamic_tournament_generator::options::TournamentOptions;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -15,7 +15,7 @@ pub struct SystemOverview {
 pub struct System {
     pub id: SystemId,
     pub name: String,
-    pub options: Vec<TournamentOption>,
+    pub options: TournamentOptions,
 }
 
 #[derive(Copy, Clone)]

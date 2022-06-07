@@ -1,3 +1,4 @@
+use dynamic_tournament_generator::options::TournamentOptions;
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::http::{Request, RequestUri};
@@ -56,14 +57,12 @@ async fn get(_req: Request, _state: State, id: SystemId) -> Result<Response<Body
         1 => Some(System {
             id: SystemId(1),
             name: "Single Elimination".into(),
-            options: SingleElimination::<u8, EntrantScore<u8>>::options()
-                .into_values()
-                .collect(),
+            options: SingleElimination::<u8, EntrantScore<u8>>::options(),
         }),
         2 => Some(System {
             id: SystemId(2),
             name: "Double Elimination".into(),
-            options: vec![],
+            options: TournamentOptions::default(),
         }),
         _ => None,
     };
