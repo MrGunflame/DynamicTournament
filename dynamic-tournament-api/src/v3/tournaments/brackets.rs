@@ -1,3 +1,5 @@
+pub mod matches;
+
 use dynamic_tournament_generator::options::TournamentOptionValues;
 use serde::{Deserialize, Serialize};
 
