@@ -1,10 +1,18 @@
 use bincode::{DefaultOptions, Options};
+use dynamic_tournament_generator::EntrantScore;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Frame {
     Reserved,
     Authorize(String),
+    UpdateMatch {
+        index: u64,
+        nodes: [EntrantScore<u64>; 2],
+    },
+    ResetMatch {
+        index: usize,
+    },
 }
 
 impl Frame {

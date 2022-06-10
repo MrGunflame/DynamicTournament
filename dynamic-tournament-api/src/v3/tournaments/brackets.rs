@@ -4,7 +4,7 @@ use dynamic_tournament_generator::options::TournamentOptionValues;
 use serde::{Deserialize, Serialize};
 
 use crate::v3::id::{BracketId, EntrantId, SystemId, TournamentId};
-use crate::websocket::{WebSocket, WebSocketBuilder};
+use crate::websocket::WebSocketBuilder;
 use crate::{Client, Result};
 
 use self::matches::Frame;
@@ -72,8 +72,10 @@ impl<'a> BracketsClient<'a> {
 
     pub fn matches(&self, id: BracketId) -> WebSocketBuilder<Frame> {
         let uri = format!(
-            "/v3/tournaments/{}/brackets/{}/matches",
-            self.tournament_id, id
+            "{}/v3/tournaments/{}/brackets/{}/matches",
+            self.tournament_id,
+            id,
+            self.client.base_url().replacen("http", "ws", 1)
         );
 
         WebSocketBuilder::new(uri)

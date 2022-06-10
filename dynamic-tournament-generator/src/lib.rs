@@ -476,7 +476,7 @@ impl<T> EntrantSpot<T> {
 }
 
 /// A score `S` and a winner state.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EntrantScore<S> {
     pub score: S,
