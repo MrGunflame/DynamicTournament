@@ -1,4 +1,3 @@
-use dynamic_tournament_api::tournament::Team;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
@@ -70,7 +69,7 @@ impl Component for BracketUpdate {
             let value = self.nodes[i].score;
 
             let team = match ctx.props().teams[i].clone() {
-                EntrantSpot::Entrant(e) => e.name,
+                EntrantSpot::Entrant(e) => e,
                 // should be unreachable
                 _ => "BYE".to_owned(),
             };
@@ -107,7 +106,7 @@ impl Component for BracketUpdate {
             let winner = self.nodes[i].winner;
 
             let team = match ctx.props().teams[i].clone() {
-                EntrantSpot::Entrant(e) => e.name,
+                EntrantSpot::Entrant(e) => e,
                 // should be unreachable
                 _ => "BYE".to_owned(),
             };
@@ -161,7 +160,7 @@ impl Component for BracketUpdate {
 
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
-    pub teams: [EntrantSpot<Team>; 2],
+    pub teams: [EntrantSpot<String>; 2],
     pub nodes: [EntrantScore<u64>; 2],
     pub on_submit: Callback<[EntrantScore<u64>; 2]>,
 }

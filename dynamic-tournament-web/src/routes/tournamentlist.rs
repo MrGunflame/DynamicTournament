@@ -1,20 +1,23 @@
-use crate::routes::tournament::Route;
-use crate::{render_data, Data, DataResult, Title};
+use crate::routes::tournaments::Route;
+use crate::utils::FetchData;
+use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
-use dynamic_tournament_api::tournament::{TournamentId, TournamentOverview};
 use dynamic_tournament_api::Client;
 use yew_router::history::History;
 use yew_router::prelude::RouterScopeExt;
 
+use dynamic_tournament_api::v3::id::TournamentId;
+use dynamic_tournament_api::v3::tournaments::TournamentOverview;
+
 pub struct TournamentList {
-    data: Data<Vec<TournamentOverview>>,
+    tournaments: FetchData<Vec<TournamentOverview>>,
     timezone: Local,
 }
 
 impl Component for TournamentList {
-    type Message = Msg;
+    type Message = Message;
     type Properties = ();
 
     fn create(ctx: &Context<Self>) -> Self {
@@ -23,40 +26,38 @@ impl Component for TournamentList {
         let link = ctx.link();
         let (client, _) = ctx
             .link()
-            .context(Callback::noop())
+            .context::<Client>(Callback::noop())
             .expect("No ClientProvider given");
 
         link.send_future(async move {
-            async fn fetch_data(client: Client) -> DataResult<Vec<TournamentOverview>> {
-                let client = client.tournaments();
+            let msg = match client.v3().tournaments().list().await {
+                Ok(tournaments) => FetchData::from(tournaments),
+                Err(err) => FetchData::from_err(err),
+            };
 
-                let data = client.list().await?;
-
-                Ok(data)
-            }
-
-            let data = Some(fetch_data(client).await);
-
-            Msg::Update(data)
+            Message::Update(msg)
         });
 
         Self {
-            data: None,
+            tournaments: FetchData::new(),
             timezone: Local::now().timezone(),
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Update(data) => {
-                self.data = data;
+            Message::Update(tournaments) => {
+                self.tournaments = tournaments;
                 true
             }
-            Msg::ClickTournament { id } => {
+            Message::ClickTournament { id, name } => {
                 ctx.link()
                     .history()
                     .expect("failed to read history")
-                    .push(Route::Index { id: id.0 });
+                    .push(Route::Index {
+                        tournament_id: id,
+                        tournament_name: name,
+                    });
 
                 false
             }
@@ -64,27 +65,29 @@ impl Component for TournamentList {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        render_data(&self.data, |data| {
-            let tournaments: Html = data
+        self.tournaments.render(|tournaments| {
+            let tournaments: Html = tournaments
                 .iter()
                 .map(|tournament| {
                     let id = tournament.id;
                     let name = tournament.name.clone();
-                    let bracket_type = tournament.bracket_type.to_string();
+                    let bracket_type = tournament.kind.to_string();
                     let date = tournament
                         .date
                         .with_timezone(&self.timezone)
                         .format("%B %d, %Y %H:%M");
-                    let teams = tournament.entrants;
 
-                    let on_click = ctx.link().callback(move |_| Msg::ClickTournament { id });
+                    let tournament_name = name.clone();
+                    let on_click = ctx.link().callback(move |_| Message::ClickTournament {
+                        id,
+                        name: tournament_name.clone(),
+                    });
 
                     html! {
                         <tr class="tr-link" onclick={on_click}>
                             <td>{ name }</td>
                             <td>{ bracket_type }</td>
                             <td>{ date }</td>
-                            <td>{ teams }</td>
                         </tr>
                     }
                 })
@@ -96,7 +99,6 @@ impl Component for TournamentList {
                         <th>{ "Name" }</th>
                         <th>{ "Type" }</th>
                         <th>{ "Date" }</th>
-                        <th>{ "Teams" }</th>
                     </tr>
                     {tournaments}
                 </table>
@@ -109,7 +111,7 @@ impl Component for TournamentList {
     }
 }
 
-pub enum Msg {
-    Update(Data<Vec<TournamentOverview>>),
-    ClickTournament { id: TournamentId },
+pub enum Message {
+    Update(FetchData<Vec<TournamentOverview>>),
+    ClickTournament { id: TournamentId, name: String },
 }

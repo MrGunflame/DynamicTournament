@@ -1,28 +1,31 @@
+mod brackets;
+mod entrants;
 mod overview;
 mod teamdetails;
-mod teams;
 
+use entrants::Entrants;
 use teamdetails::TeamDetails;
-use teams::Teams;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::components::bracket::Bracket;
-use crate::components::movable_boxed::MovableBoxed;
-use crate::utils::FetchData;
-use crate::{DataResult, Title};
+use self::brackets::bracket::Bracket;
+use self::brackets::Brackets;
 
-use dynamic_tournament_api::tournament as api;
-use dynamic_tournament_api::tournament::TournamentId;
+use crate::utils::FetchData;
+use crate::Title;
+
 use dynamic_tournament_api::Client;
+
+use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
+use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
 use std::rc::Rc;
 
 use overview::Overview;
 
 pub struct Tournament {
-    tournament: FetchData<Rc<api::Tournament>>,
+    tournament: FetchData<Rc<ApiTournament>>,
 }
 
 impl Component for Tournament {
@@ -31,24 +34,19 @@ impl Component for Tournament {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
-        let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
+        let (client, _) = ctx
+            .link()
+            .context::<Client>(Callback::noop())
+            .expect("no client in context");
 
         let id = ctx.props().id;
         link.send_future(async move {
-            async fn fetch_data(
-                client: Client,
-                id: TournamentId,
-            ) -> DataResult<Rc<api::Tournament>> {
-                let client = client.tournaments();
+            let tournament = match client.v3().tournaments().get(id).await {
+                Ok(tournament) => FetchData::from(Rc::new(tournament)),
+                Err(err) => FetchData::from_err(err),
+            };
 
-                let data = client.get(id).await?;
-
-                Ok(Rc::new(data))
-            }
-
-            let data = Some(fetch_data(client, id).await);
-
-            Msg::Update(data.into())
+            Msg::Update(tournament)
         });
 
         Self {
@@ -72,16 +70,18 @@ impl Component for Tournament {
 
             let tournament = tournament.clone();
 
-            let id = ctx.props().id.0;
+            let tournament_id = ctx.props().id;
 
             let switch = move |route: &Route| -> Html {
                 let tournament = tournament.clone();
 
-                let mut routes = Vec::with_capacity(4);
+                let tournament_name = tournament.name.clone();
+
+                let mut routes = Vec::with_capacity(3);
                 for (r, n) in &[
-                    (Route::Index { id }, "Overview"),
-                    (Route::Bracket { id }, "Bracket"),
-                    (Route::Teams { id }, "Teams"),
+                    (Route::Index {tournament_id,tournament_name:tournament_name.clone()}, "Overview"),
+                    (Route::Brackets { tournament_id,tournament_name:tournament_name.clone()}, "Brackets"),
+                    (Route::Teams { id:tournament_id.0 }, "Teams"),
                 ] {
                     let classes = if r == route { "active" } else { "" };
 
@@ -90,24 +90,21 @@ impl Component for Tournament {
                     });
                 }
 
-                routes.push(html! {
-                    <li><Link<crate::routes::Route> to={crate::routes::Route::Embed { id: tournament.id.0 }}>{ "Embed Mode" }</Link<crate::routes::Route>></li>
-                });
-
                 let content = match route {
-                    Route::Index { id: _ } => html! {
+                    Route::Index { tournament_id: _,tournament_name:_ } => html! {
                         <Overview tournament={tournament.clone()} />
                     },
-                    Route::Bracket { id: _ } => html! {
-                        <MovableBoxed>
-                            <Bracket tournament={tournament.clone()} />
-                        </MovableBoxed>
+                    Route::Brackets { tournament_id: _, tournament_name: _ } => html! {
+                        <Brackets tournament={tournament.clone()} />
+                    },
+                    Route::Bracket{tournament_id:_, tournament_name: _, bracket_id,bracket_name:_}=> html! {
+                        <Bracket tournament={tournament.clone()} id={*bracket_id} />
                     },
                     Route::Teams { id: _ } => html! {
-                        <Teams teams={tournament.clone()} />
+                        <Entrants tournament_id={ tournament.id } />
                     },
                     Route::TeamDetails { id: _, team_id } => html! {
-                        <TeamDetails teams={tournament.clone()} index={*team_id} />
+                        <TeamDetails {tournament_id} id={EntrantId(*team_id as u64)} />
                     },
                 };
 
@@ -143,17 +140,30 @@ pub struct Props {
 }
 
 pub enum Msg {
-    Update(FetchData<Rc<api::Tournament>>),
+    Update(FetchData<Rc<ApiTournament>>),
 }
 
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
-    #[at("/tournament/:id")]
-    Index { id: u64 },
-    #[at("/tournament/:id/bracket")]
-    Bracket { id: u64 },
-    #[at("/tournament/:id/teams")]
+    #[at("/tournament/:tournament_id/:tournament_name")]
+    Index {
+        tournament_id: TournamentId,
+        tournament_name: String,
+    },
+    #[at("/tournament/:tournament_id/:tournament_name/brackets")]
+    Brackets {
+        tournament_id: TournamentId,
+        tournament_name: String,
+    },
+    #[at("/tournament/:tournament_id/:tournament_name/brackets/:bracket_id/:bracket_name")]
+    Bracket {
+        tournament_id: TournamentId,
+        tournament_name: String,
+        bracket_id: BracketId,
+        bracket_name: String,
+    },
+    #[at("/tournament/:id/:name/entrants")]
     Teams { id: u64 },
-    #[at("/tournament/:id/teams/:team_id")]
-    TeamDetails { id: u64, team_id: u32 },
+    #[at("/tournament/:id/:name/entrants/:team_id")]
+    TeamDetails { id: u64, team_id: usize },
 }

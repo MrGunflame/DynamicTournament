@@ -1,12 +1,12 @@
 mod entrant;
 mod r#match;
 
-use dynamic_tournament_api::tournament::Entrants as EntrantsVar;
+use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
+use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_generator::options::TournamentOptions;
 use dynamic_tournament_generator::tournament::TournamentKind;
 use dynamic_tournament_generator::{
-    EntrantScore, EntrantSpot, Entrants, Match, MatchResult, Matches, Node, SingleElimination,
-    System,
+    EntrantScore, EntrantSpot, Match, Node, SingleElimination, System,
 };
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
@@ -16,8 +16,6 @@ use dynamic_tournament_generator::render::{
 };
 use dynamic_tournament_generator::tournament::Tournament;
 
-use dynamic_tournament_api::tournament::{self, BracketType, Player, Team, TournamentId};
-use dynamic_tournament_api::{websocket, Client};
 use yew_agent::{Bridge, Bridged};
 
 use std::fmt::Display;
@@ -25,18 +23,22 @@ use std::rc::Rc;
 
 use yew::prelude::*;
 
+use dynamic_tournament_api::v3::id::SystemId;
+use dynamic_tournament_api::v3::tournaments::brackets::Bracket as ApiBracket;
+use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
+
 use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
+use crate::services::errorlog::ErrorLog;
 use crate::services::{EventBus, WebSocketService};
-use crate::utils::FetchData;
 
 pub struct Bracket {
     websocket: WebSocketService,
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
-    bracket: FetchData<AnyTournament>,
+    state: Option<Tournament<String, EntrantScore<u64>>>,
 }
 
 impl Component for Bracket {
@@ -45,81 +47,23 @@ impl Component for Bracket {
 
     fn create(ctx: &Context<Self>) -> Self {
         let client = ClientProvider::take(ctx);
-        let id = ctx.props().tournament.id;
 
-        let websocket = WebSocketService::new(&client, ctx.props().tournament.id.0);
-
-        let kind = match ctx.props().tournament.bracket_type {
-            BracketType::SingleElimination => TournamentKind::SingleElimination,
-            BracketType::DoubleElimination => TournamentKind::DoubleElimination,
+        let websocket = match WebSocketService::new(&client, ctx.props().tournament.id, 0.into()) {
+            Ok(ws) => ws,
+            Err(err) => {
+                panic!("{}", err);
+            }
         };
 
-        let options = match kind {
-            TournamentKind::SingleElimination => {
-                SingleElimination::<u8, EntrantScore<u8>>::options()
-            }
-            TournamentKind::DoubleElimination => TournamentOptions::default(),
-        };
+        let mut ws = websocket.clone();
+        ctx.link().send_future_batch(async move {
+            let _ = ws.send(Frame::SyncMatchesRequest).await;
 
-        let entrants = ctx.props().tournament.entrants.clone();
-
-        ctx.link().send_future(async move {
-            async fn fetch_data(
-                kind: TournamentKind,
-                entrants: EntrantsVar,
-                client: Client,
-                id: TournamentId,
-                options: TournamentOptions,
-            ) -> FetchData<AnyTournament> {
-                let client = client.tournaments();
-
-                match client.bracket(id).get().await {
-                    Ok(bracket) => match entrants {
-                        EntrantsVar::Players(entrants) => {
-                            let tournament = Tournament::resume(
-                                kind,
-                                Entrants::from(entrants),
-                                bracket.0,
-                                options,
-                            )
-                            .unwrap();
-
-                            FetchData::new_with_value(AnyTournament::Players(tournament))
-                        }
-                        EntrantsVar::Teams(entrants) => {
-                            let tournament = Tournament::resume(
-                                kind,
-                                Entrants::from(entrants),
-                                bracket.0,
-                                options,
-                            )
-                            .unwrap();
-
-                            FetchData::from(AnyTournament::Teams(tournament))
-                        }
-                    },
-                    Err(_) => match entrants {
-                        EntrantsVar::Players(entrants) => {
-                            let mut tournament = Tournament::new(kind, options);
-                            tournament.extend(Entrants::from(entrants));
-                            FetchData::new_with_value(AnyTournament::Players(tournament))
-                        }
-                        EntrantsVar::Teams(entrants) => {
-                            let mut tournament = Tournament::new(kind, options);
-                            tournament.extend(Entrants::from(entrants));
-                            FetchData::new_with_value(AnyTournament::Teams(tournament))
-                        }
-                    },
-                }
-            }
-
-            let data = fetch_data(kind, entrants, client, id, options).await;
-
-            Message::Update(data)
+            vec![]
         });
 
         Self {
-            bracket: FetchData::new(),
+            state: None,
             websocket,
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleMessage)),
             popup: None,
@@ -128,18 +72,13 @@ impl Component for Bracket {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Update(bracket) => {
-                self.bracket = bracket;
-
-                true
-            }
             Message::HandleMessage(msg) => {
                 log::debug!("Received message: {:?}", msg);
 
-                let bracket = self.bracket.as_mut().unwrap();
+                let bracket = self.state.as_mut().unwrap();
 
                 match msg {
-                    websocket::Message::UpdateMatch { index, nodes } => {
+                    Frame::UpdateMatch { index, nodes } => {
                         bracket.update_match(index.try_into().unwrap(), |m, res| {
                             let mut loser_index = None;
 
@@ -163,10 +102,41 @@ impl Component for Bracket {
                             }
                         });
                     }
-                    websocket::Message::ResetMatch { index } => {
+                    Frame::ResetMatch { index } => {
                         bracket.update_match(index, |_, res| {
                             res.reset_default();
                         });
+                    }
+                    Frame::SyncMatchesResponse(matches) => {
+                        let system_kind = match ctx.props().bracket.system {
+                            SystemId(1) => TournamentKind::SingleElimination,
+                            SystemId(2) => TournamentKind::DoubleElimination,
+                            _ => unimplemented!(),
+                        };
+
+                        let kind = ctx.props().tournament.kind;
+
+                        let options = match system_kind {
+                            TournamentKind::SingleElimination => {
+                                SingleElimination::<u8, EntrantScore<u8>>::options()
+                            }
+                            TournamentKind::DoubleElimination => TournamentOptions::default(),
+                        };
+
+                        let entrants = ctx
+                            .props()
+                            .entrants
+                            .iter()
+                            .map(|entrant| match &entrant.inner {
+                                EntrantVariant::Player(player) => player.name.clone(),
+                                EntrantVariant::Team(team) => team.name.clone(),
+                            })
+                            .collect();
+
+                        let tournament =
+                            Tournament::resume(system_kind, entrants, matches, options).unwrap();
+
+                        self.state = Some(tournament);
                     }
                     _ => (),
                 }
@@ -196,7 +166,7 @@ impl Component for Bracket {
                 let mut websocket = self.websocket.clone();
                 ctx.link().send_future_batch(async move {
                     websocket
-                        .send(websocket::Message::UpdateMatch {
+                        .send(Frame::UpdateMatch {
                             index: index.try_into().unwrap(),
                             nodes,
                         })
@@ -210,9 +180,7 @@ impl Component for Bracket {
             Message::ResetMatch(index) => {
                 let mut websocket = self.websocket.clone();
                 ctx.link().send_future_batch(async move {
-                    websocket
-                        .send(websocket::Message::ResetMatch { index })
-                        .await;
+                    websocket.send(Frame::ResetMatch { index }).await;
 
                     vec![Message::ClosePopup]
                 });
@@ -223,20 +191,17 @@ impl Component for Bracket {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        self.bracket.render(|bracket| {
+        if let Some(bracket) = &self.state {
             let popup = match self.popup {
                 Some(PopupState::UpdateScores(index)) => {
                     let on_close = ctx.link().callback(|_| Message::ClosePopup);
 
                     let m = &bracket.matches()[index];
 
-                    let entrants = dynamic_tournament_generator::Entrants::from(
-                        ctx.props().tournament.entrants.clone().unwrap_teams(),
-                    );
-
-                    let teams = m
+                    let entrants = m
                         .entrants
-                        .map(|e| e.map(|e| e.entrant(&entrants).unwrap().clone()));
+                        .map(|e| e.map(|e| e.entrant(bracket).unwrap().clone()));
+
                     let nodes = m.entrants.map(|e| e.unwrap().data);
 
                     let on_submit = ctx
@@ -245,7 +210,7 @@ impl Component for Bracket {
 
                     html! {
                         <Popup on_close={on_close}>
-                            <BracketUpdate {teams} {nodes} on_submit={on_submit} />
+                            <BracketUpdate teams={entrants} {nodes} on_submit={on_submit} />
                         </Popup>
                     }
                 }
@@ -261,14 +226,7 @@ impl Component for Bracket {
                 None => html! {},
             };
 
-            let bracket = match bracket {
-                AnyTournament::Players(tournament) => {
-                    HtmlRenderer::new(tournament, ctx).into_output()
-                }
-                AnyTournament::Teams(tournament) => {
-                    HtmlRenderer::new(tournament, ctx).into_output()
-                }
-            };
+            let bracket = HtmlRenderer::new(bracket, ctx).into_output();
 
             html! {
                 <>
@@ -276,13 +234,14 @@ impl Component for Bracket {
                     { popup }
                 </>
             }
-        })
+        } else {
+            html! { <span>{ "Loading" }</span> }
+        }
     }
 }
 
 pub enum Message {
-    Update(FetchData<AnyTournament>),
-    HandleMessage(websocket::Message),
+    HandleMessage(Frame),
     Action {
         index: usize,
         action: Action,
@@ -297,12 +256,14 @@ pub enum Message {
 
 #[derive(Clone, Debug, Properties)]
 pub struct Properties {
-    pub tournament: Rc<tournament::Tournament>,
+    pub tournament: Rc<ApiTournament>,
+    pub bracket: ApiBracket,
+    pub entrants: Vec<Entrant>,
 }
 
 impl PartialEq for Properties {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }
 
@@ -422,32 +383,4 @@ where
 enum PopupState {
     UpdateScores(usize),
     ResetMatch(usize),
-}
-
-/// A [`Tournament`] with either [`Player`]s or [`Team`]s as the entrants.
-#[derive(Clone, Debug)]
-pub enum AnyTournament {
-    Players(Tournament<Player, EntrantScore<u64>>),
-    Teams(Tournament<Team, EntrantScore<u64>>),
-}
-
-impl AnyTournament {
-    #[inline]
-    pub fn matches(&self) -> &Matches<EntrantScore<u64>> {
-        match self {
-            Self::Players(ref tournament) => tournament.matches(),
-            Self::Teams(ref tournament) => tournament.matches(),
-        }
-    }
-
-    #[inline]
-    pub fn update_match<F>(&mut self, index: usize, f: F)
-    where
-        F: FnOnce(&mut Match<Node<EntrantScore<u64>>>, &mut MatchResult<EntrantScore<u64>>),
-    {
-        match self {
-            Self::Players(ref mut tournament) => tournament.update_match(index, f),
-            Self::Teams(ref mut tournament) => tournament.update_match(index, f),
-        }
-    }
 }

@@ -1,17 +1,12 @@
 pub mod login;
 pub mod logout;
 pub mod not_found;
-pub mod tournament;
 pub mod tournamentlist;
+pub mod tournaments;
 
-use std::rc::Rc;
-
-use crate::components::bracket::Bracket;
 use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
-use crate::components::movable_boxed::MovableBoxed;
-use crate::components::providers::{ClientProvider, Provider};
-use crate::{render_data, Data, DataResult};
+use crate::components::providers::ClientProvider;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -22,8 +17,7 @@ use logout::Logout;
 
 use not_found::NotFound;
 
-use dynamic_tournament_api::tournament::TournamentId;
-use dynamic_tournament_api::Client;
+use dynamic_tournament_api::v3::id::TournamentId;
 
 pub struct App;
 
@@ -89,10 +83,12 @@ pub enum Route {
     TournamentR { id: u64 },
     #[at("/tournament/:id/:s")]
     Tournament { id: u64 },
-    #[at("/tournament/:id/teams/:s")]
+    #[at("/tournament/:id/:name/brackets")]
+    TournamentBrackets { id: u64 },
+    #[at("/tournament/:id/:name/brackets/:s/:s")]
+    TournamentBracket { id: u64 },
+    #[at("/tournament/:id/:s/entrants/:s")]
     TournamentTeam { id: u64 },
-    #[at("/embed/tournament/:id/bracket")]
-    Embed { id: u64 },
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -105,96 +101,19 @@ pub fn switch(route: &Route) -> Html {
             <tournamentlist::TournamentList />
         },
         Route::TournamentR { id } => html! {
-            <tournament::Tournament id={TournamentId(*id)} />
+            <tournaments::Tournament id={TournamentId(*id)} />
         },
         Route::Tournament { id } => html! {
-            <tournament::Tournament id={TournamentId(*id)} />
+            <tournaments::Tournament id={TournamentId(*id)} />
         },
         Route::TournamentTeam { id } => html! {
-            <tournament::Tournament id={TournamentId(*id)} />
+            <tournaments::Tournament id={TournamentId(*id)} />
         },
-        Route::Embed { id } => html! {
-            <Embed id={TournamentId(*id)} />
+        Route::TournamentBracket { id } => html! {
+            <tournaments::Tournament id={TournamentId(*id)} />
+        },
+        Route::TournamentBrackets { id } => html! {
+            <tournaments::Tournament id={TournamentId(*id)} />
         },
     }
-}
-
-pub struct Embed {
-    data: Data<(
-        Rc<dynamic_tournament_api::tournament::Tournament>,
-        Option<Rc<dynamic_tournament_api::tournament::Bracket>>,
-    )>,
-}
-
-impl Component for Embed {
-    type Message = Msg;
-    type Properties = EmbedProps;
-
-    fn create(ctx: &Context<Self>) -> Self {
-        let client = ClientProvider::take(ctx);
-        let id = ctx.props().id;
-
-        ctx.link().send_future(async move {
-            async fn fetch_data(
-                client: Client,
-                id: TournamentId,
-            ) -> DataResult<(
-                Rc<dynamic_tournament_api::tournament::Tournament>,
-                Option<Rc<dynamic_tournament_api::tournament::Bracket>>,
-            )> {
-                let client = client.tournaments();
-
-                let data = client.get(id).await?;
-
-                let bracket = match client.bracket(id).get().await {
-                    Ok(bracket) => Some(Rc::new(bracket)),
-                    Err(_) => None,
-                };
-
-                Ok((Rc::new(data), bracket))
-            }
-
-            let data = Some(fetch_data(client, id).await);
-
-            Msg::Update(data)
-        });
-
-        Self { data: None }
-    }
-
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            Msg::Update(data) => {
-                self.data = data;
-
-                true
-            }
-        }
-    }
-
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        render_data(&self.data, |(data, _)| {
-            let tournament = data.clone();
-
-            html! {
-                <MovableBoxed classes="bracket-fullscreen">
-                    <Bracket {tournament} />
-                </MovableBoxed>
-            }
-        })
-    }
-}
-
-#[derive(PartialEq, Properties)]
-pub struct EmbedProps {
-    id: TournamentId,
-}
-
-pub enum Msg {
-    Update(
-        Data<(
-            Rc<dynamic_tournament_api::tournament::Tournament>,
-            Option<Rc<dynamic_tournament_api::tournament::Bracket>>,
-        )>,
-    ),
 }

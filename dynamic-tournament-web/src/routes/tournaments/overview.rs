@@ -1,7 +1,8 @@
 use std::rc::Rc;
 
-use dynamic_tournament_api::tournament::Tournament;
 use yew::prelude::*;
+
+use dynamic_tournament_api::v3::tournaments::Tournament;
 
 pub struct Overview;
 

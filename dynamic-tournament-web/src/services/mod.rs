@@ -3,94 +3,57 @@ pub mod errorlog;
 
 use std::collections::HashSet;
 
-use futures::channel::mpsc;
-use futures::{SinkExt, StreamExt};
-use reqwasm::websocket::futures::WebSocket;
-use reqwasm::websocket::Message;
+use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
+use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
-use yew_agent::{Agent, AgentLink, Context, Dispatched, HandlerId};
+use yew_agent::{Agent, AgentLink, Context, Dispatched, Dispatcher, HandlerId};
 
-use dynamic_tournament_api::websocket;
+use dynamic_tournament_api::websocket::{EventHandler, WebSocket};
 use dynamic_tournament_api::Client;
 
-const BUFFER_SIZE: usize = 32;
+use gloo_utils::errors::JsError;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketService {
-    tx: mpsc::Sender<websocket::Message>,
+    ws: WebSocket<Frame>,
 }
 
 impl WebSocketService {
-    pub fn new(client: &Client, id: u64) -> Self {
-        // Replace http with ws and https with wss.
-        let uri = format!(
-            "{}/v2/tournament/{}/bracket",
-            client.base_url().replacen("http", "ws", 1),
-            id
-        );
+    pub fn new(
+        client: &Client,
+        tournament_id: TournamentId,
+        bracket_id: BracketId,
+    ) -> Result<Self, JsError> {
+        let builder = client
+            .v3()
+            .tournaments()
+            .brackets(tournament_id)
+            .matches(bracket_id)
+            .handler(Box::new(Handler(EventBus::dispatcher())));
 
         let auth = client.authorization().auth_token().map(|s| s.to_owned());
 
-        let ws = WebSocket::open(&uri).unwrap();
+        let ws = builder.build()?;
 
-        let (mut writer, mut reader) = ws.split();
+        if let Some(auth) = auth {
+            let mut ws = ws.clone();
+            spawn_local(async move {
+                ws.send(&Frame::Authorize(auth)).await.unwrap();
+            });
+        }
 
-        log::debug!("Connecting to {}", uri);
-
-        let (tx, mut rx) = mpsc::channel::<websocket::Message>(BUFFER_SIZE);
-        let mut event_bus = EventBus::dispatcher();
-
-        spawn_local(async move {
-            if let Some(auth) = auth {
-                let msg = websocket::Message::Authorize(auth).into_bytes();
-                writer.send(Message::Bytes(msg)).await.unwrap();
-            }
-
-            while let Some(msg) = rx.next().await {
-                log::debug!("Sending message to ws peer: {:?}", msg);
-                let enc = msg.into_bytes();
-                log::debug!("Serialized buffer: {:?} ({} bytes)", enc, enc.len());
-
-                writer.send(Message::Bytes(enc)).await.unwrap();
-            }
-
-            // Dropping all sender will close the connection.
-            log::debug!("Dropping ws writer");
-            let _ = writer.close().await;
-        });
-
-        spawn_local(async move {
-            while let Some(msg) = reader.next().await {
-                match msg {
-                    Ok(Message::Bytes(buf)) => {
-                        log::debug!("Received message from ws peer: {:?}", buf);
-                        let msg = websocket::Message::from_bytes(&buf).unwrap();
-                        event_bus.send(Request::EventBusMsg(msg));
-                    }
-                    Ok(Message::Text(_)) => panic!("cannot read text"),
-                    Err(err) => {
-                        log::error!("{:?}", err);
-                    }
-                }
-            }
-
-            log::debug!("Closing ws connection");
-        });
-
-        log::debug!("Connected to {}", uri);
-
-        Self { tx }
+        Ok(Self { ws })
     }
 
-    pub async fn send(&mut self, msg: websocket::Message) {
-        let _ = self.tx.send(msg).await;
+    pub async fn send(&mut self, msg: Frame) {
+        let _ = self.ws.send(&msg).await;
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
-    EventBusMsg(websocket::Message),
+    EventBusMsg(Frame),
 }
 
 pub struct EventBus {
@@ -102,7 +65,7 @@ impl Agent for EventBus {
     type Reach = Context<Self>;
     type Message = ();
     type Input = Request;
-    type Output = websocket::Message;
+    type Output = Frame;
 
     fn create(link: AgentLink<Self>) -> Self {
         Self {
@@ -129,5 +92,13 @@ impl Agent for EventBus {
 
     fn disconnected(&mut self, id: HandlerId) {
         self.subscribers.remove(&id);
+    }
+}
+
+struct Handler(Dispatcher<EventBus>);
+
+impl EventHandler<Frame> for Handler {
+    fn dispatch(&mut self, msg: Frame) {
+        self.0.send(Request::EventBusMsg(msg));
     }
 }

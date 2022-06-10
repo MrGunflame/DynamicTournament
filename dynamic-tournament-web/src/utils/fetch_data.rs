@@ -10,7 +10,7 @@ use std::rc::Rc;
 pub type BoxError = Rc<dyn std::error::Error + Send + Sync + 'static>;
 
 /// A wrapper around an `Option<Result<T>>`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FetchData<T> {
     inner: Option<Result<T, BoxError>>,
 }
@@ -25,6 +25,15 @@ impl<T> FetchData<T> {
     pub fn new_with_value(value: T) -> Self {
         Self {
             inner: Some(Ok(value)),
+        }
+    }
+
+    pub fn from_err<E>(err: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self {
+            inner: Some(Err(Rc::new(err))),
         }
     }
 
@@ -60,7 +69,6 @@ impl<T> FetchData<T> {
     }
 
     /// Maps a `FetchData<T>` to an `FetchData<U>`.
-    #[allow(unused)]
     #[inline]
     pub fn map<U, F>(self, f: F) -> FetchData<U>
     where
