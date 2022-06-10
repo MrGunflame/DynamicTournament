@@ -4,7 +4,10 @@ use dynamic_tournament_generator::options::TournamentOptionValues;
 use serde::{Deserialize, Serialize};
 
 use crate::v3::id::{BracketId, EntrantId, SystemId, TournamentId};
+use crate::websocket::{WebSocket, WebSocketBuilder};
 use crate::{Client, Result};
+
+use self::matches::Frame;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BracketOverview {
@@ -65,5 +68,14 @@ impl<'a> BracketsClient<'a> {
         let req = self.client.request().post().uri(&uri).body(bracket).build();
 
         self.client.send(req).await?.json().await
+    }
+
+    pub fn matches(&self, id: BracketId) -> WebSocketBuilder<Frame> {
+        let uri = format!(
+            "/v3/tournaments/{}/brackets/{}/matches",
+            self.tournament_id, id
+        );
+
+        WebSocketBuilder::new(uri)
     }
 }

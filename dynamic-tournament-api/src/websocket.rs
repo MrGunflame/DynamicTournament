@@ -1,25 +1,132 @@
-use dynamic_tournament_generator::EntrantScore;
-use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Message {
-    Reserved,
-    Authorize(String),
-    UpdateMatch {
-        index: u64,
-        nodes: [EntrantScore<u64>; 2],
-    },
-    ResetMatch {
-        index: usize,
-    },
+use futures::channel::mpsc;
+use futures::{SinkExt, StreamExt};
+use serde::{de::DeserializeOwned, Serialize};
+
+#[cfg(target_family = "wasm")]
+use gloo_utils::errors::JsError;
+#[cfg(target_family = "wasm")]
+use reqwasm::websocket::Message;
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_futures::spawn_local;
+
+#[derive(Clone, Debug)]
+pub struct WebSocket<T>
+where
+    T: Serialize + DeserializeOwned + 'static,
+{
+    tx: mpsc::Sender<Vec<u8>>,
+    _marker: PhantomData<mpsc::Sender<T>>,
 }
 
-impl Message {
-    pub fn into_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).unwrap()
+impl<T> WebSocket<T>
+where
+    T: Serialize + DeserializeOwned + 'static,
+{
+    #[cfg(target_family = "wasm")]
+    pub fn new(uri: &str, mut handler: Box<dyn EventHandler<T>>) -> Result<Self, JsError> {
+        log::debug!("Connecting to {}", uri);
+
+        let ws = match reqwasm::websocket::futures::WebSocket::open(uri) {
+            Ok(ws) => ws,
+            Err(err) => return Err(err),
+        };
+
+        let (mut writer, mut reader) = ws.split();
+
+        let (tx, mut rx) = mpsc::channel(32);
+
+        log::debug!("Connected to {}", uri);
+
+        // Writer task
+        spawn_local(async move {
+            while let Some(bytes) = rx.next().await {
+                log::debug!("Sending message to ws peer: {:?}", bytes);
+
+                writer.send(Message::Bytes(bytes)).await.unwrap();
+            }
+
+            let _ = writer.close().await;
+            log::debug!("Dropped ws writer");
+        });
+
+        spawn_local(async move {
+            while let Some(msg) = reader.next().await {
+                match msg {
+                    Ok(Message::Bytes(bytes)) => {
+                        log::debug!("Received message from ws peer: {:?}", bytes);
+
+                        let msg = bincode::deserialize(&bytes).unwrap();
+
+                        handler.dispatch(msg);
+                    }
+                    Ok(Message::Text(_)) => {}
+                    Err(err) => {
+                        log::error!("{:?}", err);
+                    }
+                }
+            }
+
+            log::debug!("Dropped ws reader");
+        });
+
+        Ok(Self {
+            tx,
+            _marker: PhantomData,
+        })
     }
 
-    pub fn from_bytes(buf: &[u8]) -> bincode::Result<Self> {
-        bincode::deserialize(buf)
+    pub async fn send(&mut self, msg: &T) -> Result<(), bincode::Error> {
+        let bytes = bincode::serialize(msg)?;
+        let _ = self.tx.send(bytes).await;
+        Ok(())
     }
+
+    pub async fn close(&mut self) {}
+}
+
+pub trait EventHandler<T>
+where
+    T: Serialize + DeserializeOwned + 'static,
+{
+    fn dispatch(&mut self, msg: T);
+}
+
+pub struct WebSocketBuilder<T> {
+    uri: String,
+    handler: Option<Box<dyn EventHandler<T>>>,
+}
+
+impl<T> WebSocketBuilder<T>
+where
+    T: Serialize + DeserializeOwned + 'static,
+{
+    pub fn new(uri: String) -> Self {
+        Self { uri, handler: None }
+    }
+
+    pub fn handler(mut self, handler: Box<dyn EventHandler<T>>) -> Self {
+        self.handler = Some(handler);
+        self
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub fn build(self) -> Result<WebSocket<T>, JsError> {
+        let handler = match self.handler {
+            Some(handler) => handler,
+            None => Box::new(DefaultHandler),
+        };
+
+        WebSocket::new(&self.uri, handler)
+    }
+}
+
+struct DefaultHandler;
+
+impl<T> EventHandler<T> for DefaultHandler
+where
+    T: Serialize + DeserializeOwned + 'static,
+{
+    fn dispatch(&mut self, _msg: T) {}
 }
