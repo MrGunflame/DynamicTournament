@@ -1,7 +1,7 @@
 use crate::State;
 
 use dynamic_tournament_api::tournament::{Bracket, BracketType, Team, Tournament};
-use dynamic_tournament_api::websocket;
+use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantScore, EntrantSpot, SingleElimination,
 };
@@ -81,7 +81,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                 protocol::Message::Binary(bytes) => {
                                     log::debug!("Received a binary frame from client");
 
-                                    let msg = match websocket::Message::from_bytes(&bytes) {
+                                    let msg = match Frame::from_bytes(&bytes) {
                                         Ok(msg) => msg,
                                         Err(err) => {
                                             log::debug!("Failed to deserialize message: {:?}", err);
@@ -90,15 +90,15 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                     };
 
                                     match msg {
-                                        websocket::Message::Reserved => (),
-                                        websocket::Message::Authorize(string) => {
+                                        Frame::Reserved => (),
+                                        Frame::Authorize(string) => {
                                             if state.is_authenticated_string(&string) {
                                                 is_authenticated = true;
                                             } else {
                                                 break;
                                             }
                                         }
-                                        websocket::Message::UpdateMatch { index, nodes } => {
+                                        Frame::UpdateMatch { index, nodes } => {
                                             // Only update the bracket when the client is authenticated.
                                             // Otherwise we will just ignore the message.
                                             if is_authenticated {
@@ -106,7 +106,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                                 store_bracket(&bracket, &state2, id).await;
                                             }
                                         }
-                                        websocket::Message::ResetMatch { index } => {
+                                        Frame::ResetMatch { index } => {
                                             // Only update the bracket when the client is authenticated.
                                             // Otherwise we will just ignore the message.
                                             if is_authenticated {
@@ -174,7 +174,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                     match msg {
                         Some(msg) => match msg {
                             WebSocketMessage::Message(msg) => {
-                                let bytes = msg.into_bytes();
+                                let bytes = msg.to_bytes().unwrap();
 
                                 if let Err(err) = sink.send(protocol::Message::Binary(bytes)).await {
                                     log::warn!("Failed to send frame: {:?}", err);
@@ -204,7 +204,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                 // Listen to messages from the subscriber.
                 msg = sub_rx.recv() => {
                     let msg = msg.unwrap();
-                    let bytes = msg.into_bytes();
+                    let bytes = msg.to_bytes().unwrap();
 
                     if let Err(err) = sink.send(protocol::Message::Binary(bytes)).await {
                         log::warn!("Failed to send frame: {:?}", err);
@@ -226,7 +226,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
 #[derive(Debug)]
 enum WebSocketMessage {
     #[allow(dead_code)]
-    Message(websocket::Message),
+    Message(Frame),
     Pong(Vec<u8>),
     Close,
 }
@@ -248,14 +248,14 @@ struct InnerLiveBracket {
     bracket: TournamentBracket,
     // Note: This could be a spmc channel. tokio::sync::watch is not appropriate however since
     // more than just the recent value is required.
-    tx: broadcast::Sender<websocket::Message>,
+    tx: broadcast::Sender<Frame>,
 }
 
 impl LiveBracket {
     pub fn new(
         tournament: Tournament,
         bracket: Option<Bracket>,
-    ) -> Result<(Self, broadcast::Receiver<websocket::Message>), crate::Error> {
+    ) -> Result<(Self, broadcast::Receiver<Frame>), crate::Error> {
         let bracket = match tournament.bracket_type {
             BracketType::SingleElimination => {
                 let bracket = match bracket {
@@ -297,7 +297,7 @@ impl LiveBracket {
     /// Creates a new [`Receiver`] for updates of this `LiveBracket`.
     ///
     /// [`Receiver`]: broadcast::Receiver
-    pub fn subscribe(&self) -> broadcast::Receiver<websocket::Message> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Frame> {
         let inner = self.inner.read();
 
         inner.tx.subscribe()
@@ -356,7 +356,7 @@ impl LiveBracket {
             }
         }
 
-        let _ = inner.tx.send(websocket::Message::UpdateMatch {
+        let _ = inner.tx.send(Frame::UpdateMatch {
             index: index.try_into().unwrap(),
             nodes,
         });
@@ -379,7 +379,7 @@ impl LiveBracket {
             }
         }
 
-        let _ = inner.tx.send(websocket::Message::ResetMatch { index });
+        let _ = inner.tx.send(Frame::ResetMatch { index });
     }
 }
 

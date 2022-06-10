@@ -305,6 +305,12 @@ impl<'a> AsRef<str> for UriPart<'a> {
     }
 }
 
+impl<'a> PartialEq<str> for UriPart<'a> {
+    fn eq(&self, other: &str) -> bool {
+        self.part == other
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub code: u16,

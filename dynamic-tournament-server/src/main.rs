@@ -209,6 +209,11 @@ impl StatusCodeError {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
     }
 
+    /// 426 Upgrade Required
+    pub fn upgrade_required() -> Self {
+        Self::new(StatusCode::UPGRADE_REQUIRED, "Upgrade Required")
+    }
+
     /// Sets the message of the error.
     pub fn message<T>(mut self, msg: T) -> Self
     where
