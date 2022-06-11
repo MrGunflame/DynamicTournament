@@ -79,9 +79,9 @@ impl Component for Tournament {
 
                 let mut routes = Vec::with_capacity(3);
                 for (r, n) in &[
-                    (Route::Index {tournament_id,tournament_name:tournament_name.clone()}, "Overview"),
-                    (Route::Brackets { tournament_id,tournament_name}, "Brackets"),
-                    (Route::Teams { id:tournament_id.0 }, "Teams"),
+                    (Route::Index { tournament_id, tournament_name: tournament_name.clone() }, "Overview"),
+                    (Route::Brackets { tournament_id, tournament_name: tournament_name.clone() }, "Brackets"),
+                    (Route::Teams { tournament_id, tournament_name }, "Entrants"),
                 ] {
                     let classes = if r == route { "active" } else { "" };
 
@@ -97,14 +97,14 @@ impl Component for Tournament {
                     Route::Brackets { tournament_id: _, tournament_name: _ } => html! {
                         <Brackets tournament={tournament.clone()} />
                     },
-                    Route::Bracket{tournament_id:_, tournament_name: _, bracket_id,bracket_name:_}=> html! {
+                    Route::Bracket{ tournament_id: _, tournament_name: _, bracket_id, bracket_name: _ }=> html! {
                         <Bracket tournament={tournament.clone()} id={*bracket_id} />
                     },
-                    Route::Teams { id: _ } => html! {
-                        <Entrants tournament_id={ tournament.id } />
+                    Route::Teams { tournament_id: _, tournament_name: _, } => html! {
+                        <Entrants tournament={ tournament.clone() } />
                     },
-                    Route::TeamDetails { id: _, team_id } => html! {
-                        <TeamDetails {tournament_id} id={EntrantId(*team_id as u64)} />
+                    Route::TeamDetails { tournament_id: _, tournament_name: _, team_id } => html! {
+                        <TeamDetails {tournament_id} id={EntrantId(*team_id as u64 + 1)} />
                     },
                 };
 
@@ -162,8 +162,15 @@ pub enum Route {
         bracket_id: BracketId,
         bracket_name: String,
     },
-    #[at("/tournament/:id/:name/entrants")]
-    Teams { id: u64 },
-    #[at("/tournament/:id/:name/entrants/:team_id")]
-    TeamDetails { id: u64, team_id: usize },
+    #[at("/tournament/:tournament_id/:tournament_name/entrants")]
+    Teams {
+        tournament_id: TournamentId,
+        tournament_name: String,
+    },
+    #[at("/tournament/:tournament_id/:tournament_name/entrants/:team_id")]
+    TeamDetails {
+        tournament_id: TournamentId,
+        tournament_name: String,
+        team_id: usize,
+    },
 }

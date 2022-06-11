@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
@@ -5,7 +8,6 @@ use crate::utils::FetchData;
 
 use super::Route;
 
-use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_api::Client;
 
@@ -23,7 +25,7 @@ impl Component for Entrants {
             .context::<Client>(Callback::noop())
             .expect("no client in context");
 
-        let tournament_id = ctx.props().tournament_id;
+        let tournament_id = ctx.props().tournament.id;
         link.send_future(async move {
             let entrants = match client
                 .v3()
@@ -50,12 +52,17 @@ impl Component for Entrants {
                 self.entrants = entrants;
             }
             Message::OnClick(team_id) => {
-                let id = ctx.props().tournament_id;
+                let id = ctx.props().tournament.id;
+                let name = ctx.props().tournament.name.clone();
 
                 ctx.link()
                     .history()
                     .expect("No History given")
-                    .push(Route::TeamDetails { id: id.0, team_id });
+                    .push(Route::TeamDetails {
+                        tournament_id: id,
+                        tournament_name: name,
+                        team_id,
+                    });
             }
         }
 
@@ -102,9 +109,15 @@ impl Component for Entrants {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, Properties)]
 pub struct Props {
-    pub tournament_id: TournamentId,
+    pub tournament: Rc<Tournament>,
+}
+
+impl PartialEq for Props {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.tournament, &other.tournament)
+    }
 }
 
 pub enum Message {

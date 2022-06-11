@@ -49,6 +49,11 @@ impl Component for TeamDetails {
         }
     }
 
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+        self.entrant = msg;
+        true
+    }
+
     fn view(&self, _ctx: &Context<Self>) -> Html {
         self.entrant.render(|entrant| {
             let title;

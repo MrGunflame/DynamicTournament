@@ -87,7 +87,9 @@ pub enum Route {
     TournamentBrackets { id: u64 },
     #[at("/tournament/:id/:name/brackets/:s/:s")]
     TournamentBracket { id: u64 },
-    #[at("/tournament/:id/:s/entrants/:s")]
+    #[at("/tournament/:id/:name/entrants")]
+    TournamentTeams { id: u64 },
+    #[at("/tournament/:id/:name/entrants/:s")]
     TournamentTeam { id: u64 },
 }
 
@@ -113,6 +115,9 @@ pub fn switch(route: &Route) -> Html {
             <tournaments::Tournament id={TournamentId(*id)} />
         },
         Route::TournamentBrackets { id } => html! {
+            <tournaments::Tournament id={TournamentId(*id)} />
+        },
+        Route::TournamentTeams { id } => html! {
             <tournaments::Tournament id={TournamentId(*id)} />
         },
     }
