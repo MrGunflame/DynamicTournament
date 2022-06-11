@@ -31,7 +31,6 @@ use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
-use crate::services::errorlog::ErrorLog;
 use crate::services::{EventBus, WebSocketService};
 
 pub struct Bracket {
@@ -48,12 +47,14 @@ impl Component for Bracket {
     fn create(ctx: &Context<Self>) -> Self {
         let client = ClientProvider::take(ctx);
 
-        let websocket = match WebSocketService::new(&client, ctx.props().tournament.id, 0.into()) {
-            Ok(ws) => ws,
-            Err(err) => {
-                panic!("{}", err);
-            }
-        };
+        let websocket =
+            match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
+            {
+                Ok(ws) => ws,
+                Err(err) => {
+                    panic!("{}", err);
+                }
+            };
 
         let mut ws = websocket.clone();
         ctx.link().send_future_batch(async move {
@@ -75,37 +76,52 @@ impl Component for Bracket {
             Message::HandleMessage(msg) => {
                 log::debug!("Received message: {:?}", msg);
 
-                let bracket = self.state.as_mut().unwrap();
-
                 match msg {
                     Frame::UpdateMatch { index, nodes } => {
-                        bracket.update_match(index.try_into().unwrap(), |m, res| {
-                            let mut loser_index = None;
+                        log::warn!(
+                            "Received an UpdateMatch frame before initializing the state, ignoring"
+                        );
 
-                            for (i, (entrant, node)) in m.entrants.iter_mut().zip(nodes).enumerate()
-                            {
-                                if let EntrantSpot::Entrant(entrant) = entrant {
-                                    entrant.data = node;
+                        let bracket = self.state.as_mut().unwrap();
+
+                        {
+                            bracket.update_match(index.try_into().unwrap(), |m, res| {
+                                let mut loser_index = None;
+
+                                for (i, (entrant, node)) in
+                                    m.entrants.iter_mut().zip(nodes).enumerate()
+                                {
+                                    if let EntrantSpot::Entrant(entrant) = entrant {
+                                        entrant.data = node;
+                                    }
+
+                                    if node.winner {
+                                        res.winner_default(entrant);
+                                        loser_index = Some(match i {
+                                            0 => 1,
+                                            _ => 1,
+                                        });
+                                    }
                                 }
 
-                                if node.winner {
-                                    res.winner_default(entrant);
-                                    loser_index = Some(match i {
-                                        0 => 1,
-                                        _ => 1,
-                                    });
+                                if let Some(loser_index) = loser_index {
+                                    res.loser_default(&m.entrants[loser_index]);
                                 }
-                            }
-
-                            if let Some(loser_index) = loser_index {
-                                res.loser_default(&m.entrants[loser_index]);
-                            }
-                        });
+                            });
+                        }
                     }
                     Frame::ResetMatch { index } => {
-                        bracket.update_match(index, |_, res| {
-                            res.reset_default();
-                        });
+                        log::warn!(
+                            "Received a ResetMatch frame before initializing the state, ignoring"
+                        );
+
+                        let bracket = self.state.as_mut().unwrap();
+
+                        {
+                            bracket.update_match(index, |_, res| {
+                                res.reset_default();
+                            });
+                        }
                     }
                     Frame::SyncMatchesResponse(matches) => {
                         let system_kind = match ctx.props().bracket.system {

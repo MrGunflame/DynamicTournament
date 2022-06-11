@@ -47,6 +47,8 @@ impl WebSocketService {
     }
 
     pub async fn send(&mut self, msg: Frame) {
+        log::debug!("Sending frame: {:?}", msg);
+
         let _ = self.ws.send(&msg).await;
     }
 }
@@ -99,6 +101,8 @@ struct Handler(Dispatcher<EventBus>);
 
 impl EventHandler<Frame> for Handler {
     fn dispatch(&mut self, msg: Frame) {
+        log::debug!("Received frame: {:?}", msg);
+
         self.0.send(Request::EventBusMsg(msg));
     }
 }
