@@ -73,9 +73,9 @@ impl<'a> BracketsClient<'a> {
     pub fn matches(&self, id: BracketId) -> WebSocketBuilder<Frame> {
         let uri = format!(
             "{}/v3/tournaments/{}/brackets/{}/matches",
+            self.client.base_url().replacen("http", "ws", 1),
             self.tournament_id,
             id,
-            self.client.base_url().replacen("http", "ws", 1)
         );
 
         WebSocketBuilder::new(uri)

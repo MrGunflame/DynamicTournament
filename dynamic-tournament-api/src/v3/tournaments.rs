@@ -9,6 +9,7 @@ use crate::{Client, Result};
 use entrants::{Player, Team};
 
 use std::collections::HashMap;
+use std::fmt::{self, Display, Formatter};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -58,6 +59,19 @@ impl EntrantKind {
             1 => Some(Self::Team),
             _ => None,
         }
+    }
+}
+
+impl Display for EntrantKind {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Player => "Player",
+                Self::Team => "Team",
+            }
+        )
     }
 }
 

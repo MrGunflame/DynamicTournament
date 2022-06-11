@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use bincode::Options;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use serde::{de::DeserializeOwned, Serialize};
@@ -42,7 +43,7 @@ where
         // Writer task
         spawn_local(async move {
             while let Some(bytes) = rx.next().await {
-                log::debug!("Sending message to ws peer: {:?}", bytes);
+                log::debug!("Writing websocket frame: {:?}", bytes);
 
                 writer.send(Message::Bytes(bytes)).await.unwrap();
             }
@@ -57,7 +58,11 @@ where
                     Ok(Message::Bytes(bytes)) => {
                         log::debug!("Received message from ws peer: {:?}", bytes);
 
-                        let msg = bincode::deserialize(&bytes).unwrap();
+                        let msg = bincode::DefaultOptions::new()
+                            .with_little_endian()
+                            .with_varint_encoding()
+                            .deserialize(&bytes)
+                            .unwrap();
 
                         handler.dispatch(msg);
                     }
@@ -78,7 +83,11 @@ where
     }
 
     pub async fn send(&mut self, msg: &T) -> Result<(), bincode::Error> {
-        let bytes = bincode::serialize(msg)?;
+        let bytes = bincode::DefaultOptions::new()
+            .with_little_endian()
+            .with_varint_encoding()
+            .serialize(msg)?;
+
         let _ = self.tx.send(bytes).await;
         Ok(())
     }
@@ -119,6 +128,11 @@ where
         };
 
         WebSocket::new(&self.uri, handler)
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub fn build(self) -> Result<WebSocket<T>, ()> {
+        unimplemented!()
     }
 }
 

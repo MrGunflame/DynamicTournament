@@ -89,7 +89,7 @@ impl<T> From<Vec<T>> for Entrants<T> {
 ///
 /// This is a wrapper around a `Vec<Match<Node<T>>>` and has the same layout as a
 /// `Vec<Match<Node<T>>>`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
