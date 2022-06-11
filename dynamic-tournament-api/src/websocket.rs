@@ -121,17 +121,17 @@ where
     }
 
     #[cfg(target_family = "wasm")]
-    pub fn build(self) -> Result<WebSocket<T>, JsError> {
+    pub fn build(self) -> Result<WebSocket<T>, crate::Error> {
         let handler = match self.handler {
             Some(handler) => handler,
             None => Box::new(DefaultHandler),
         };
 
-        WebSocket::new(&self.uri, handler)
+        Ok(WebSocket::new(&self.uri, handler)?)
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub fn build(self) -> Result<WebSocket<T>, ()> {
+    pub fn build(self) -> Result<WebSocket<T>, crate::Error> {
         unimplemented!()
     }
 }

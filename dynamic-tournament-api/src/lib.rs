@@ -18,6 +18,9 @@ use std::sync::{Arc, RwLock};
 #[cfg(feature = "local-storage")]
 use gloo_storage::{LocalStorage, Storage};
 
+#[cfg(target_family = "wasm")]
+use gloo_utils::errors::JsError;
+
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: Arc<RwLock<ClientInner>>,
@@ -110,6 +113,17 @@ pub enum Error {
     InvalidToken,
     #[error(transparent)]
     Base64(#[from] base64::DecodeError),
+    #[cfg(target_family = "wasm")]
+    #[error("JsError: {0}")]
+    JsError(JsError),
+}
+
+// Manual impl required because JsError does not implement StdError.
+#[cfg(target_family = "wasm")]
+impl From<JsError> for Error {
+    fn from(err: JsError) -> Self {
+        Self::JsError(err)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
