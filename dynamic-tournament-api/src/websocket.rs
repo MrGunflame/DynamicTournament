@@ -2,9 +2,11 @@ use std::marker::PhantomData;
 
 use bincode::Options;
 use futures::channel::mpsc;
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use serde::{de::DeserializeOwned, Serialize};
 
+#[cfg(target_family = "wasm")]
+use futures::StreamExt;
 #[cfg(target_family = "wasm")]
 use gloo_utils::errors::JsError;
 #[cfg(target_family = "wasm")]
@@ -132,6 +134,7 @@ where
 
     #[cfg(not(target_family = "wasm"))]
     pub fn build(self) -> Result<WebSocket<T>, crate::Error> {
+        drop(self.uri);
         unimplemented!()
     }
 }

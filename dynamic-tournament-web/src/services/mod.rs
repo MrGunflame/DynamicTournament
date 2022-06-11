@@ -5,14 +5,13 @@ use std::collections::HashSet;
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
+use dynamic_tournament_api::Error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use yew_agent::{Agent, AgentLink, Context, Dispatched, Dispatcher, HandlerId};
 
 use dynamic_tournament_api::websocket::{EventHandler, WebSocket};
 use dynamic_tournament_api::Client;
-
-use gloo_utils::errors::JsError;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketService {
@@ -24,7 +23,7 @@ impl WebSocketService {
         client: &Client,
         tournament_id: TournamentId,
         bracket_id: BracketId,
-    ) -> Result<Self, JsError> {
+    ) -> Result<Self, Error> {
         let builder = client
             .v3()
             .tournaments()

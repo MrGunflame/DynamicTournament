@@ -80,7 +80,7 @@ impl Component for Tournament {
                 let mut routes = Vec::with_capacity(3);
                 for (r, n) in &[
                     (Route::Index {tournament_id,tournament_name:tournament_name.clone()}, "Overview"),
-                    (Route::Brackets { tournament_id,tournament_name:tournament_name.clone()}, "Brackets"),
+                    (Route::Brackets { tournament_id,tournament_name}, "Brackets"),
                     (Route::Teams { id:tournament_id.0 }, "Teams"),
                 ] {
                     let classes = if r == route { "active" } else { "" };

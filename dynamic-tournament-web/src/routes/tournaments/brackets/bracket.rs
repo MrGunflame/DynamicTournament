@@ -79,7 +79,7 @@ impl Component for Bracket {
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::UpdateBracket(bracket) => self.bracket = bracket,
             Message::UpdateEntrants(entrants) => self.entrants = entrants,

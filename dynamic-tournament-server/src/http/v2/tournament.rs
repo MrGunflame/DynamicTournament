@@ -84,14 +84,14 @@ async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
+async fn create(_req: Request, _state: State) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 
     Ok(resp)
 }
 
-async fn get(_req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
+async fn get(_req: Request, _id: u64, _state: State) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 

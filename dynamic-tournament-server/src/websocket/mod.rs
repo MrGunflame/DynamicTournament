@@ -4,7 +4,6 @@ use dynamic_tournament_api::v3::id::{BracketId, SystemId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
 use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
-use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_generator::{
     DoubleElimination, EntrantScore, EntrantSpot, Matches, SingleElimination,
 };
@@ -35,13 +34,6 @@ pub async fn handle(
 
     let stream = WebSocketStream::from_raw_socket(conn, Role::Server, None).await;
 
-    let tournament = state
-        .store
-        .get_tournament(tournament_id)
-        .await
-        .unwrap()
-        .unwrap();
-
     let entrants = state.store.get_entrants(tournament_id).await.unwrap();
     let bracket = state
         .store
@@ -62,14 +54,13 @@ pub async fn handle(
         match subscribers.get(&(tournament_id, bracket_id)) {
             Some(b) => (b.subscribe(), b.clone()),
             None => {
-                let (bracket, rx) =
-                    match LiveBracket::new(tournament, entrants, bracket, bracket_state) {
-                        Ok(v) => v,
-                        Err(err) => {
-                            log::error!("Failed to create new LiveBracket: {err}");
-                            return;
-                        }
-                    };
+                let (bracket, rx) = match LiveBracket::new(entrants, bracket, bracket_state) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        log::error!("Failed to create new LiveBracket: {err}");
+                        return;
+                    }
+                };
 
                 let mut subscribers = RwLockUpgradableReadGuard::upgrade(subscribers);
 
@@ -293,7 +284,6 @@ struct InnerLiveBracket {
 
 impl LiveBracket {
     pub fn new(
-        tournament: Tournament,
         entrants: Vec<Entrant>,
         bracket: Bracket,
         state: Option<Matches<EntrantScore<u64>>>,

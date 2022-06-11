@@ -70,6 +70,7 @@ impl<T> FetchData<T> {
 
     /// Maps a `FetchData<T>` to an `FetchData<U>`.
     #[inline]
+    #[allow(unused)]
     pub fn map<U, F>(self, f: F) -> FetchData<U>
     where
         F: FnOnce(T) -> U,

@@ -66,14 +66,14 @@ impl Component for Bracket {
         Self {
             state: None,
             websocket,
-            _producer: EventBus::bridge(ctx.link().callback(Message::HandleMessage)),
+            _producer: EventBus::bridge(ctx.link().callback(Message::HandleFrame)),
             popup: None,
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::HandleMessage(msg) => {
+            Message::HandleFrame(msg) => {
                 log::debug!("Received message: {:?}", msg);
 
                 match msg {
@@ -129,8 +129,6 @@ impl Component for Bracket {
                             SystemId(2) => TournamentKind::DoubleElimination,
                             _ => unimplemented!(),
                         };
-
-                        let kind = ctx.props().tournament.kind;
 
                         let options = match system_kind {
                             TournamentKind::SingleElimination => {
@@ -257,7 +255,7 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    HandleMessage(Frame),
+    HandleFrame(Frame),
     Action {
         index: usize,
         action: Action,

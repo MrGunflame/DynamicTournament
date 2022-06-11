@@ -49,9 +49,9 @@ impl Component for TeamDetails {
         }
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         self.entrant.render(|entrant| {
-            let mut title = String::new();
+            let title;
 
             let entrants = match &entrant.inner {
                 EntrantVariant::Player(player) => {
