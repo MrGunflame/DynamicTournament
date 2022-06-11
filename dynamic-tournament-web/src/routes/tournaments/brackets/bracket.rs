@@ -23,8 +23,8 @@ impl PartialEq for Props {
 }
 
 pub struct Bracket {
-    bracket: FetchData<ApiBracket>,
-    entrants: FetchData<Vec<Entrant>>,
+    bracket: FetchData<Rc<ApiBracket>>,
+    entrants: FetchData<Rc<Vec<Entrant>>>,
 }
 
 impl Component for Bracket {
@@ -50,7 +50,7 @@ impl Component for Bracket {
                     .get(id)
                     .await
                 {
-                    Ok(bracket) => FetchData::from(bracket),
+                    Ok(bracket) => FetchData::from(Rc::new(bracket)),
                     Err(err) => FetchData::from_err(err),
                 };
 
@@ -66,7 +66,7 @@ impl Component for Bracket {
                 .list()
                 .await
             {
-                Ok(entrants) => FetchData::from(entrants),
+                Ok(entrants) => FetchData::from(Rc::new(entrants)),
                 Err(err) => FetchData::from_err(err),
             };
 
@@ -108,6 +108,6 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    UpdateBracket(FetchData<ApiBracket>),
-    UpdateEntrants(FetchData<Vec<Entrant>>),
+    UpdateBracket(FetchData<Rc<ApiBracket>>),
+    UpdateEntrants(FetchData<Rc<Vec<Entrant>>>),
 }

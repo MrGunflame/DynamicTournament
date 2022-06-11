@@ -271,13 +271,15 @@ pub enum Message {
 #[derive(Clone, Debug, Properties)]
 pub struct Properties {
     pub tournament: Rc<ApiTournament>,
-    pub bracket: ApiBracket,
-    pub entrants: Vec<Entrant>,
+    pub bracket: Rc<ApiBracket>,
+    pub entrants: Rc<Vec<Entrant>>,
 }
 
 impl PartialEq for Properties {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.tournament, &other.tournament)
+            && Rc::ptr_eq(&self.bracket, &other.bracket)
+            && Rc::ptr_eq(&self.entrants, &other.entrants)
     }
 }
 
