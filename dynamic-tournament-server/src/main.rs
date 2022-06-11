@@ -7,7 +7,7 @@ mod websocket;
 use config::Config;
 
 use dynamic_tournament_api::auth::Claims;
-use dynamic_tournament_api::tournament::{Bracket, TournamentOverview};
+use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use hyper::StatusCode;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Validation;
@@ -20,10 +20,6 @@ use sqlx::mysql::MySqlPool;
 use store::Store;
 use thiserror::Error;
 
-use dynamic_tournament_api::tournament::{Tournament, TournamentId};
-
-use futures::TryStreamExt;
-use sqlx::Row;
 use tokio::sync::{mpsc, watch};
 use websocket::LiveBracket;
 
@@ -103,7 +99,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "CREATE TABLE IF NOT EXISTS brackets (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
-            data BLOB NOT NULL
+            data BLOB NOT NULL,
+            state BLOB NOT NULL
         )",
     ];
 
@@ -123,7 +120,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 pub struct State {
     pub store: Store,
     users: Vec<LoginData>,
-    pub subscribers: Arc<RwLock<HashMap<u64, LiveBracket>>>,
+    pub subscribers: Arc<RwLock<HashMap<(TournamentId, BracketId), LiveBracket>>>,
     // Note: Clone before polling.
     pub shutdown_rx: watch::Receiver<Option<mpsc::Sender<bool>>>,
     pub config: Arc<Config>,
@@ -268,87 +265,6 @@ impl State {
         let data = jsonwebtoken::decode(token, &key, &validation)?;
 
         Ok(data.claims)
-    }
-
-    pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows = sqlx::query("SELECT id, data FROM tournaments").fetch(&self.store.pool);
-
-        let mut tournaments = Vec::new();
-        while let Some(row) = rows.try_next().await? {
-            let id = row.try_get("id")?;
-            let data: Vec<u8> = row.try_get("data")?;
-
-            let data: Tournament = serde_json::from_slice(&data).unwrap();
-
-            tournaments.push(TournamentOverview {
-                id: TournamentId(id),
-                name: data.name,
-                date: data.date,
-                bracket_type: data.bracket_type,
-                entrants: data.entrants.len().try_into().unwrap(),
-            });
-        }
-
-        Ok(tournaments)
-    }
-
-    pub async fn get_tournament(&self, id: u64) -> Result<Option<Tournament>, Error> {
-        let row = match sqlx::query("SELECT data FROM tournaments WHERE id = ?")
-            .bind(id)
-            .fetch_one(&self.store.pool)
-            .await
-        {
-            Ok(v) => v,
-            Err(sqlx::Error::RowNotFound) => return Ok(None),
-            Err(err) => return Err(err.into()),
-        };
-
-        let data: Vec<u8> = row.try_get("data")?;
-        let mut data: Tournament = serde_json::from_slice(&data).unwrap();
-        data.id = TournamentId(id);
-
-        Ok(Some(data))
-    }
-
-    pub async fn create_tournament(&self, tournament: Tournament) -> Result<u64, Error> {
-        let res = sqlx::query("INSERT INTO tournaments (data) VALUES (?)")
-            .bind(serde_json::to_vec(&tournament).unwrap())
-            .execute(&self.store.pool)
-            .await?;
-
-        let id = res.last_insert_id();
-
-        Ok(id)
-    }
-
-    pub async fn update_bracket(&self, tournament_id: u64, bracket: Bracket) -> Result<(), Error> {
-        let data = serde_json::to_vec(&bracket)?;
-
-        sqlx::query("INSERT INTO tournaments_brackets (tournament_id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data=VALUES(data)")
-            .bind(tournament_id)
-            .bind(data)
-            .execute(&self.store.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn get_bracket(&self, tournament_id: u64) -> Result<Option<Bracket>, Error> {
-        let row = match sqlx::query("SELECT data FROM tournaments_brackets WHERE tournament_id = ?")
-            .bind(tournament_id)
-            .fetch_one(&self.store.pool)
-            .await
-        {
-            Ok(v) => v,
-            Err(sqlx::Error::RowNotFound) => return Ok(None),
-            Err(err) => return Err(err.into()),
-        };
-
-        let slice = row.try_get("data")?;
-
-        let bracket = serde_json::from_slice(slice)?;
-
-        Ok(Some(bracket))
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::http::{Request, RequestUri};
 use crate::{Error, State, StatusCodeError};
 
-use dynamic_tournament_api::v3::id::TournamentId;
+use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use hyper::header::{
     HeaderValue, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION,
     UPGRADE,
@@ -16,10 +16,11 @@ pub async fn route(
     mut uri: RequestUri<'_>,
     state: State,
     id: TournamentId,
+    bracket_id: BracketId,
 ) -> Result<Response<Body>, Error> {
     if uri.take().is_none() {
         match *req.method() {
-            Method::GET => serve(req, id, state).await,
+            Method::GET => serve(req, id, bracket_id, state).await,
             _ => Err(StatusCodeError::method_not_allowed().into()),
         }
     } else {
@@ -27,7 +28,19 @@ pub async fn route(
     }
 }
 
-async fn serve(mut req: Request, id: TournamentId, state: State) -> Result<Response<Body>, Error> {
+async fn serve(
+    mut req: Request,
+    id: TournamentId,
+    bracket_id: BracketId,
+    state: State,
+) -> Result<Response<Body>, Error> {
+    // Check that the tournament and bracket exist.
+    if state.store.get_tournament(id).await?.is_none()
+        || state.store.get_bracket(id, bracket_id).await?.is_none()
+    {
+        return Err(StatusCodeError::not_found().into());
+    }
+
     if !req.headers().contains_key(UPGRADE) {
         return Err(StatusCodeError::upgrade_required().into());
     }
@@ -53,7 +66,7 @@ async fn serve(mut req: Request, id: TournamentId, state: State) -> Result<Respo
 
     task::spawn(async move {
         match hyper::upgrade::on(&mut req.request).await {
-            Ok(conn) => crate::websocket::handle(conn, state, id.0).await,
+            Ok(conn) => crate::websocket::handle(conn, state, id, bracket_id).await,
             Err(err) => log::error!("Failed to upgrade connection: {:?}", err),
         }
     });

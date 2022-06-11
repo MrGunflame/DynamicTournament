@@ -4,6 +4,7 @@ use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, TournamentId},
     tournaments::{entrants::Entrant, EntrantKind, Tournament, TournamentOverview},
 };
+use dynamic_tournament_generator::{EntrantScore, Matches};
 use sqlx::mysql::MySqlPool;
 use sqlx::Row;
 
@@ -155,9 +156,10 @@ impl Store {
         tournament_id: TournamentId,
         bracket: &Bracket,
     ) -> Result<BracketId, Error> {
-        let res = sqlx::query("INSERT INTO brackets (tournament_id, data) VALUES (?, ?)")
+        let res = sqlx::query("INSERT INTO brackets (tournament_id, data, state) VALUES (?, ?, ?)")
             .bind(tournament_id.0)
             .bind(serde_json::to_vec(bracket)?)
+            .bind(serde_json::to_vec::<Option<u8>>(&None)?)
             .execute(&self.pool)
             .await?;
 
@@ -188,5 +190,39 @@ impl Store {
         bracket.id = id;
 
         Ok(Some(bracket))
+    }
+
+    pub async fn get_bracket_state(
+        &self,
+        tournament_id: TournamentId,
+        id: BracketId,
+    ) -> Result<Option<Matches<EntrantScore<u64>>>, Error> {
+        let row = sqlx::query("SELECT state FROM brackets WHERE tournament_id = ? AND id = ?")
+            .bind(tournament_id.0)
+            .bind(id.0)
+            .fetch_one(&self.pool)
+            .await?;
+
+        let state: Vec<u8> = row.try_get("state")?;
+
+        let matches = serde_json::from_slice(&state)?;
+
+        Ok(matches)
+    }
+
+    pub async fn update_bracket_state(
+        &self,
+        tournament_id: TournamentId,
+        id: BracketId,
+        state: &Option<Matches<EntrantScore<u64>>>,
+    ) -> Result<(), Error> {
+        sqlx::query("UPDATE brackets SET state = ? WHERE tournament_id = ? AND id = ?")
+            .bind(serde_json::to_vec(state)?)
+            .bind(tournament_id.0)
+            .bind(id.0)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

@@ -1,9 +1,12 @@
 use crate::State;
 
-use dynamic_tournament_api::tournament::{Bracket, BracketType, Team, Tournament};
+use dynamic_tournament_api::v3::id::{BracketId, SystemId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
+use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
+use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
+use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_generator::{
-    DoubleElimination, EntrantScore, EntrantSpot, SingleElimination,
+    DoubleElimination, EntrantScore, EntrantSpot, Matches, SingleElimination,
 };
 
 use futures::SinkExt;
@@ -22,33 +25,57 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub async fn handle(conn: Upgraded, state: State, id: u64) {
+pub async fn handle(
+    conn: Upgraded,
+    state: State,
+    tournament_id: TournamentId,
+    bracket_id: BracketId,
+) {
     let mut shutdown_rx = state.shutdown_rx.clone();
 
     let stream = WebSocketStream::from_raw_socket(conn, Role::Server, None).await;
 
-    let tournament = state.get_tournament(id).await.unwrap().unwrap();
-    let bracket = state.get_bracket(id).await.unwrap();
+    let tournament = state
+        .store
+        .get_tournament(tournament_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let entrants = state.store.get_entrants(tournament_id).await.unwrap();
+    let bracket = state
+        .store
+        .get_bracket(tournament_id, bracket_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let bracket_state = state
+        .store
+        .get_bracket_state(tournament_id, bracket_id)
+        .await
+        .unwrap();
 
     let (mut sub_rx, bracket) = {
         let subscribers = state.subscribers.upgradable_read();
 
-        match subscribers.get(&id) {
+        match subscribers.get(&(tournament_id, bracket_id)) {
             Some(b) => (b.subscribe(), b.clone()),
             None => {
-                let (bracket, rx) = match LiveBracket::new(tournament, bracket) {
-                    Ok(v) => v,
-                    Err(err) => {
-                        log::error!("Failed to create new LiveBracket: {err}");
-                        return;
-                    }
-                };
+                let (bracket, rx) =
+                    match LiveBracket::new(tournament, entrants, bracket, bracket_state) {
+                        Ok(v) => v,
+                        Err(err) => {
+                            log::error!("Failed to create new LiveBracket: {err}");
+                            return;
+                        }
+                    };
 
                 let mut subscribers = RwLockUpgradableReadGuard::upgrade(subscribers);
 
                 let b2 = bracket.clone();
 
-                subscribers.insert(id, bracket);
+                subscribers.insert((tournament_id, bracket_id), bracket);
 
                 (rx, b2)
             }
@@ -80,6 +107,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                 }
                                 protocol::Message::Binary(bytes) => {
                                     log::debug!("Received a binary frame from client");
+                                    log::debug!("Reading websocket frame: {:?}", bytes);
 
                                     let msg = match Frame::from_bytes(&bytes) {
                                         Ok(msg) => msg,
@@ -103,7 +131,7 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                             // Otherwise we will just ignore the message.
                                             if is_authenticated {
                                                 bracket.update(index.try_into().unwrap(), nodes);
-                                                store_bracket(&bracket, &state2, id).await;
+                                                store_bracket(&bracket, &state2, tournament_id,bracket_id).await;
                                             }
                                         }
                                         Frame::ResetMatch { index } => {
@@ -111,8 +139,18 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                                             // Otherwise we will just ignore the message.
                                             if is_authenticated {
                                                 bracket.reset(index);
-                                                store_bracket(&bracket, &state2, id).await;
+                                                store_bracket(&bracket, &state2, tournament_id,bracket_id).await;
                                             }
+                                        }
+                                        Frame::SyncMatchesRequest=>{
+                                            let matches = bracket.matches();
+
+                                            let _ = tx.send(WebSocketMessage::Message(Frame::SyncMatchesResponse(matches))).await;
+                                        }
+                                        // Should never receive this
+                                        Frame::SyncMatchesResponse(_) => {
+                                            let _ = tx.send(WebSocketMessage::Close).await;
+                                            break;
                                         }
                                     }
                                 }
@@ -171,6 +209,8 @@ pub async fn handle(conn: Upgraded, state: State, id: u64) {
                     }
                 }
                 msg = rx.recv() => {
+                    log::debug!("Writing websocket frame: {:?}", msg);
+
                     match msg {
                         Some(msg) => match msg {
                             WebSocketMessage::Message(msg) => {
@@ -254,37 +294,40 @@ struct InnerLiveBracket {
 impl LiveBracket {
     pub fn new(
         tournament: Tournament,
-        bracket: Option<Bracket>,
+        entrants: Vec<Entrant>,
+        bracket: Bracket,
+        state: Option<Matches<EntrantScore<u64>>>,
     ) -> Result<(Self, broadcast::Receiver<Frame>), crate::Error> {
-        let bracket = match tournament.bracket_type {
-            BracketType::SingleElimination => {
-                let bracket = match bracket {
-                    Some(bracket) => {
-                        let entrants = tournament.entrants.unwrap_teams().into();
+        // Only take the entrants in the bracket.
+        let mut bracket_entrants = Vec::with_capacity(bracket.entrants.len());
+        for entrant in entrants.into_iter() {
+            if bracket.entrants.iter().any(|id| *id == entrant.id) {
+                bracket_entrants.push(entrant);
+            }
+        }
 
-                        SingleElimination::resume(
-                            entrants,
-                            bracket.0,
-                            SingleElimination::<Team, EntrantScore<u64>>::options(),
-                        )?
-                    }
-                    None => SingleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
+        let bracket = match bracket.system {
+            SystemId(1) => {
+                let bracket = match state {
+                    Some(bracket) => SingleElimination::resume(
+                        bracket_entrants.into(),
+                        bracket,
+                        SingleElimination::<u8, EntrantScore<u64>>::options(),
+                    )?,
+                    None => SingleElimination::new(bracket_entrants.into_iter()),
                 };
 
                 TournamentBracket::SingleElimination(bracket)
             }
-            BracketType::DoubleElimination => {
-                let bracket = match bracket {
-                    Some(bracket) => {
-                        let entrants = tournament.entrants.unwrap_teams().into();
-
-                        DoubleElimination::resume(entrants, bracket.0)?
-                    }
-                    None => DoubleElimination::new(tournament.entrants.unwrap_teams().into_iter()),
+            SystemId(2) => {
+                let bracket = match state {
+                    Some(bracket) => DoubleElimination::resume(bracket_entrants.into(), bracket)?,
+                    None => DoubleElimination::new(bracket_entrants.into_iter()),
                 };
 
                 TournamentBracket::DoubleElimination(bracket)
             }
+            _ => unimplemented!(),
         };
 
         let (tx, rx) = broadcast::channel(8);
@@ -381,29 +424,44 @@ impl LiveBracket {
 
         let _ = inner.tx.send(Frame::ResetMatch { index });
     }
+
+    pub fn matches(&self) -> Matches<EntrantScore<u64>> {
+        let inner = self.inner.read();
+
+        match inner.bracket {
+            TournamentBracket::SingleElimination(ref bracket) => bracket.matches(),
+            TournamentBracket::DoubleElimination(ref bracket) => bracket.matches(),
+        }
+        .clone()
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum TournamentBracket {
-    SingleElimination(SingleElimination<Team, EntrantScore<u64>>),
-    DoubleElimination(DoubleElimination<Team, EntrantScore<u64>>),
+    SingleElimination(SingleElimination<Entrant, EntrantScore<u64>>),
+    DoubleElimination(DoubleElimination<Entrant, EntrantScore<u64>>),
 }
 
-pub async fn store_bracket(bracket: &LiveBracket, state: &State, id: u64) {
+pub async fn store_bracket(
+    bracket: &LiveBracket,
+    state: &State,
+    tournament_id: TournamentId,
+    bracket_id: BracketId,
+) {
     let bracket = {
         let inner = bracket.inner.read();
 
         inner.bracket.clone()
     };
 
+    let br = match bracket {
+        TournamentBracket::SingleElimination(b) => b.into_matches(),
+        TournamentBracket::DoubleElimination(b) => b.into_matches(),
+    };
+
     state
-        .update_bracket(
-            id,
-            match bracket {
-                TournamentBracket::SingleElimination(b) => Bracket(b.into_matches()),
-                TournamentBracket::DoubleElimination(b) => Bracket(b.into_matches()),
-            },
-        )
+        .store
+        .update_bracket_state(tournament_id, bracket_id, &Some(br))
         .await
         .unwrap();
 }

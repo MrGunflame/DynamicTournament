@@ -1,9 +1,9 @@
 use crate::http::{Request, RequestUri};
 use crate::{Error, State, StatusCodeError};
 
-use hyper::header::{HeaderValue, CONNECTION, UPGRADE};
+use dynamic_tournament_api::tournament::{BracketType, TournamentId, TournamentOverview};
+use dynamic_tournament_api::v3::id::SystemId;
 use hyper::{Body, Method, Response, StatusCode};
-use sha1::{Digest, Sha1};
 
 pub async fn route(
     req: Request,
@@ -24,14 +24,6 @@ pub async fn route(
             let id: u64 = id.parse()?;
 
             match uri.take_str() {
-                Some("bracket") => match *req.method() {
-                    Method::GET => bracket(req, id, state).await,
-                    Method::OPTIONS => Ok(Response::builder()
-                        .status(204)
-                        .body(Body::from("No Content"))
-                        .unwrap()),
-                    _ => Err(StatusCodeError::method_not_allowed().into()),
-                },
                 None => match *req.method() {
                     Method::GET => get(req, id, state).await,
                     Method::OPTIONS => Ok(Response::builder()
@@ -47,9 +39,41 @@ pub async fn route(
 }
 
 async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
-    let ids = state.list_tournaments().await?;
+    let tournaments = state.store.list_tournaments().await?;
+    let mut entrants = Vec::with_capacity(tournaments.len());
+    let mut brackets = Vec::with_capacity(tournaments.len());
 
-    let body = serde_json::to_string(&ids)?;
+    for tournament in tournaments.iter() {
+        let e = state.store.get_entrants(tournament.id).await?;
+        entrants.push(e.len() as u64);
+
+        let b = state.store.list_brackets(tournament.id).await?;
+        brackets.push(if b.is_empty() {
+            // Placeholder
+            BracketType::SingleElimination
+        } else {
+            match b[0].system {
+                SystemId(1) => BracketType::SingleElimination,
+                SystemId(2) => BracketType::DoubleElimination,
+                _ => unreachable!(),
+            }
+        });
+    }
+
+    let body: Vec<TournamentOverview> = tournaments
+        .into_iter()
+        .zip(entrants.into_iter())
+        .zip(brackets.into_iter())
+        .map(|((t, e), b)| TournamentOverview {
+            id: TournamentId(t.id.0),
+            name: t.name,
+            date: t.date,
+            bracket_type: b,
+            entrants: e,
+        })
+        .collect();
+
+    let body = serde_json::to_string(&body)?;
 
     let resp = Response::builder()
         .status(StatusCode::OK)
@@ -61,95 +85,15 @@ async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
 }
 
 async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
-    if !state.is_authenticated(&req) {
-        return Ok(Response::builder()
-            .status(403)
-            .body(Body::from("Forbidden"))
-            .unwrap());
-    }
-
-    let tournament = req.json().await?;
-
     let mut resp = Response::new(Body::empty());
-
-    let id = state.create_tournament(tournament).await?;
-
-    *resp.status_mut() = StatusCode::CREATED;
-    *resp.body_mut() = Body::from(id.to_string());
+    *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 
     Ok(resp)
 }
 
 async fn get(_req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
     let mut resp = Response::new(Body::empty());
+    *resp.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
 
-    resp.headers_mut()
-        .append("Content-Type", HeaderValue::from_static("application/json"));
-
-    match state.get_tournament(id).await? {
-        Some(t) => {
-            *resp.status_mut() = StatusCode::OK;
-            *resp.body_mut() = Body::from(serde_json::to_string(&t).unwrap());
-        }
-        None => {
-            *resp.status_mut() = StatusCode::NOT_FOUND;
-        }
-    }
-
-    Ok(resp)
-}
-
-pub async fn bracket(mut req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
-    let mut resp = Response::new(Body::empty());
-
-    if !req.headers().contains_key(UPGRADE) {
-        match state.get_bracket(id).await? {
-            Some(bracket) => {
-                *resp.status_mut() = StatusCode::OK;
-                resp.headers_mut()
-                    .insert("Content-Type", HeaderValue::from_static("application/json"));
-
-                let body = serde_json::to_string(&bracket)?;
-                *resp.body_mut() = Body::from(body);
-            }
-            None => {
-                *resp.status_mut() = StatusCode::NOT_FOUND;
-                *resp.body_mut() = Body::from("Not Found");
-            }
-        }
-
-        return Ok(resp);
-    }
-
-    log::info!("Upgraded connection");
-
-    if let Some(value) = req.headers().get("Sec-WebSocket-Key") {
-        let value = value.to_str().unwrap().to_owned() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-
-        let mut hasher = Sha1::new();
-        hasher.update(value.as_bytes());
-        let result = hasher.finalize();
-
-        let val = base64::encode(result);
-
-        resp.headers_mut()
-            .insert("Sec-WebSocket-Accept", HeaderValue::from_str(&val).unwrap());
-    }
-
-    tokio::task::spawn(async move {
-        match hyper::upgrade::on(&mut req.request).await {
-            Ok(conn) => crate::websocket::handle(conn, state, id).await,
-            Err(err) => log::error!("Failed to upgrade connection: {:?}", err),
-        }
-    });
-
-    resp.headers_mut()
-        .insert("Sec-WebSocket-Version", HeaderValue::from_static("13"));
-
-    *resp.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
-    resp.headers_mut()
-        .insert(CONNECTION, HeaderValue::from_static("Upgrade"));
-    resp.headers_mut()
-        .insert(UPGRADE, HeaderValue::from_static("websocket"));
     Ok(resp)
 }

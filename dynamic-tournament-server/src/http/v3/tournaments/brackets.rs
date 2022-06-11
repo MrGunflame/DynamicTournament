@@ -32,7 +32,7 @@ pub async fn route(
                     Method::GET => get(req, state, tournament_id, id).await,
                     _ => Err(StatusCodeError::method_not_allowed().into()),
                 },
-                Some("matches") => matches::route(req, uri, state, tournament_id).await,
+                Some("matches") => matches::route(req, uri, state, tournament_id, id).await,
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
         }
