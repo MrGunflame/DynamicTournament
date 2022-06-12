@@ -3,12 +3,11 @@ pub mod entrants;
 
 use self::{brackets::BracketsClient, entrants::EntrantsClient};
 
-use super::id::{SystemId, TournamentId};
+use super::id::TournamentId;
 use crate::{Client, Result};
 
 use entrants::{Player, Team};
 
-use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 use chrono::{DateTime, Utc};
@@ -97,21 +96,6 @@ impl Entrants {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct BracketId(pub u64);
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Bracket {
-    pub id: BracketId,
-    pub system: SystemId,
-    /// The list of entrants playing in this bracket. All entrants must exist in the tournament.
-    pub entrants: Vec<u64>,
-    /// A list of optional key-value pairs for the bracket nodes.
-    pub nodes: HashMap<String, NodeKind>,
 }
 
 /// All types avaliable to use for custom node values. For the value variant see [`NodeValue`].
