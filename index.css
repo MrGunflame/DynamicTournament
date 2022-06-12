@@ -9,7 +9,6 @@ body {
   background-size: cover;
   background-attachment: fixed;
   margin: 0;
-  font-size: larger;
 }
 
 .team {
@@ -21,8 +20,6 @@ body {
   color: #e7ad26;
   font-weight: bold;
 }
-
-
 
 .team-label {
   text-shadow: 1px 1px 1px black;
@@ -46,7 +43,6 @@ body {
 .match {
   display: flex;
   align-items: center;
-  width: 100%;
 }
 
 .match>span {
@@ -455,4 +451,18 @@ td {
   margin: 0;
   padding: 0;
   cursor: pointer;
+}
+
+@media all and (max-width: 600px) {
+  .navbar {
+    overflow: scroll;
+  }
+
+  .main {
+    overflow-x: scroll;
+  }
+
+  .popup-wrapper .popup {
+    width: 90%;
+  }
 }
