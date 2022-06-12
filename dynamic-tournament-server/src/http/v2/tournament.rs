@@ -94,6 +94,10 @@ async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
 }
 
 async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
+    if !state.is_authenticated(&req) {
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
     let body: Tournament = req.json().await?;
 
     let kind = match body.entrants {
