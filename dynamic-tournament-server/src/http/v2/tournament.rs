@@ -169,7 +169,7 @@ async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
         entrants: entrant_ids,
     };
 
-    state.store.insert_bracket(tournament.id, &bracket).await?;
+    state.store.insert_bracket(id, &bracket).await?;
 
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = StatusCode::CREATED;
