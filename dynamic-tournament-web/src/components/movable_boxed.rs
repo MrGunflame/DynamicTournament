@@ -81,8 +81,6 @@ impl Component for MovableBoxed {
                     return None;
                 }
 
-                event.prevent_default();
-
                 let touch = event.touches().get(0).unwrap();
 
                 Some(Message::MouseDown(Coordinates {
