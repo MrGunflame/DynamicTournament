@@ -1,9 +1,14 @@
+use gloo_events::EventListener;
+use wasm_bindgen::JsCast;
 use web_sys::{Element, KeyboardEvent};
 use yew::create_portal;
 use yew::prelude::*;
 
+use crate::utils::document;
+
 pub struct Popup {
     host: Element,
+    listener: Option<EventListener>,
 }
 
 impl Component for Popup {
@@ -15,7 +20,10 @@ impl Component for Popup {
 
         let host = document.get_element_by_id("popup-host").unwrap();
 
-        Self { host }
+        Self {
+            host,
+            listener: None,
+        }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -27,20 +35,31 @@ impl Component for Popup {
         }
     }
 
+    fn rendered(&mut self, ctx: &Context<Self>, first_render: bool) {
+        if !first_render {
+            return;
+        }
+
+        let onkeydown =
+            ctx.link()
+                .batch_callback(move |event: KeyboardEvent| match event.code().as_str() {
+                    "Escape" => Some(Message::Close),
+                    _ => None,
+                });
+
+        let keydown = EventListener::new(&document(), "keydown", move |event| {
+            onkeydown.emit(event.dyn_ref::<KeyboardEvent>().unwrap().clone());
+        });
+
+        self.listener = Some(keydown);
+    }
+
     fn view(&self, ctx: &Context<Self>) -> Html {
         let on_close = ctx.link().callback(|_| Message::Close);
 
-        // Close the popup with the Escape key.
-        let onkeydown = ctx
-            .link()
-            .batch_callback(|e: KeyboardEvent| match e.code().as_str() {
-                "Escape" => Some(Message::Close),
-                _ => None,
-            });
-
         create_portal(
             html! {
-                <div tabindex="-1" class="popup-wrapper" onkeydown={onkeydown}>
+                <div tabindex="-1" class="popup-wrapper">
                     <div class="popup">
                         <div class="popup-close-wrapper">
                             <button class="popup-close" onclick={on_close} title="Close" disabled=false>
