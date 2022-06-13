@@ -104,7 +104,7 @@ impl Component for Tournament {
                         <Entrants tournament={ tournament.clone() } />
                     },
                     Route::TeamDetails { tournament_id: _, tournament_name: _, team_id } => html! {
-                        <TeamDetails {tournament_id} id={EntrantId(*team_id as u64 + 1)} />
+                        <TeamDetails {tournament_id} id={*team_id} />
                     },
                 };
 
@@ -171,6 +171,6 @@ pub enum Route {
     TeamDetails {
         tournament_id: TournamentId,
         tournament_name: String,
-        team_id: usize,
+        team_id: EntrantId,
     },
 }

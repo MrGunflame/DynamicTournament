@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use dynamic_tournament_api::v3::id::EntrantId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -73,9 +74,10 @@ impl Component for Entrants {
         self.entrants.render(|entrants| {
             let entrants: Html = entrants
                 .iter()
-                .enumerate()
-                .map(|(index, entrant)| {
-                    let onclick = ctx.link().callback(move |_| Message::OnClick(index));
+                .map(|entrant| {
+                    let id = entrant.id;
+
+                    let onclick = ctx.link().callback(move |_| Message::OnClick(id));
 
                     match entrant.inner {
                         EntrantVariant::Player(ref player) => html! {
@@ -122,5 +124,5 @@ impl PartialEq for Props {
 
 pub enum Message {
     Update(FetchData<Vec<Entrant>>),
-    OnClick(usize),
+    OnClick(EntrantId),
 }

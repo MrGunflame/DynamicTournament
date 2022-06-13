@@ -1,8 +1,13 @@
+use std::collections::HashMap;
+
 use yew::prelude::*;
 
 use dynamic_tournament_api::v3::{
-    id::{EntrantId, TournamentId},
-    tournaments::entrants::{Entrant, EntrantVariant},
+    id::{EntrantId, RoleId, TournamentId},
+    tournaments::{
+        entrants::{Entrant, EntrantVariant},
+        roles::Role,
+    },
 };
 use dynamic_tournament_api::Client;
 
@@ -17,10 +22,11 @@ pub struct Props {
 #[derive(Debug)]
 pub struct TeamDetails {
     entrant: FetchData<Entrant>,
+    roles: FetchData<HashMap<RoleId, Role>>,
 }
 
 impl Component for TeamDetails {
-    type Message = FetchData<Entrant>;
+    type Message = Message;
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
@@ -31,32 +37,64 @@ impl Component for TeamDetails {
 
         let tournament_id = ctx.props().tournament_id;
         let id = ctx.props().id;
+
+        {
+            let client = client.clone();
+            ctx.link().send_future(async move {
+                let msg = match client
+                    .v3()
+                    .tournaments()
+                    .entrants(tournament_id)
+                    .get(id)
+                    .await
+                {
+                    Ok(entrant) => FetchData::from(entrant),
+                    Err(err) => FetchData::from_err(err),
+                };
+
+                Message::UpdateEntrant(msg)
+            });
+        }
+
         ctx.link().send_future(async move {
-            match client
-                .v3()
-                .tournaments()
-                .entrants(tournament_id)
-                .get(id)
-                .await
-            {
-                Ok(entrant) => FetchData::from(entrant),
+            let msg = match client.v3().tournaments().roles(tournament_id).list().await {
+                Ok(roles) => {
+                    // Convert the Vec into a HashMap with the ids as key.
+                    let roles: HashMap<RoleId, Role> =
+                        roles.into_iter().map(|role| (role.id, role)).collect();
+
+                    FetchData::from(roles)
+                }
                 Err(err) => FetchData::from_err(err),
-            }
+            };
+
+            Message::UpdateRoles(msg)
         });
 
         Self {
             entrant: FetchData::new(),
+            roles: FetchData::new(),
         }
     }
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        self.entrant = msg;
+        match msg {
+            Message::UpdateEntrant(entrant) => self.entrant = entrant,
+            Message::UpdateRoles(roles) => self.roles = roles,
+        }
+
         true
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
+        if !self.roles.has_value() {
+            return self.roles.render(|_| html! {});
+        }
+
         self.entrant.render(|entrant| {
             let title;
+
+            let roles = self.roles.as_ref().unwrap();
 
             let entrants = match &entrant.inner {
                 EntrantVariant::Player(player) => {
@@ -75,10 +113,15 @@ impl Component for TeamDetails {
                     team.players
                         .iter()
                         .map(|player| {
+                            let role = match roles.get(&player.role) {
+                                Some(role) => role.name.clone(),
+                                None => String::from("Unknown"),
+                            };
+
                             html! {
                                 <tr>
                                     <td>{ player.name.clone() }</td>
-                                    <td>{ player.role.to_string() }</td>
+                                    <td>{ role }</td>
                                 </tr>
                             }
                         })
@@ -102,4 +145,9 @@ impl Component for TeamDetails {
             }
         })
     }
+}
+
+pub enum Message {
+    UpdateEntrant(FetchData<Entrant>),
+    UpdateRoles(FetchData<HashMap<RoleId, Role>>),
 }
