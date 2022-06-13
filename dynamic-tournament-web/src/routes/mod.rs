@@ -77,19 +77,19 @@ pub enum Route {
     #[not_found]
     #[at("/404")]
     NotFound,
-    #[at("/tournament")]
+    #[at("/tournaments")]
     TournamentList,
-    #[at("/tournament/:id")]
+    #[at("/tournaments/:id")]
     TournamentR { id: u64 },
-    #[at("/tournament/:id/:s")]
+    #[at("/tournaments/:id/:s")]
     Tournament { id: u64 },
-    #[at("/tournament/:id/:name/brackets")]
+    #[at("/tournaments/:id/:name/brackets")]
     TournamentBrackets { id: u64 },
-    #[at("/tournament/:id/:name/brackets/:s/:s")]
+    #[at("/tournaments/:id/:name/brackets/:s/:s")]
     TournamentBracket { id: u64 },
-    #[at("/tournament/:id/:name/entrants")]
+    #[at("/tournaments/:id/:name/entrants")]
     TournamentTeams { id: u64 },
-    #[at("/tournament/:id/:name/entrants/:s")]
+    #[at("/tournaments/:id/:name/entrants/:s")]
     TournamentTeam { id: u64 },
 }
 

@@ -145,29 +145,29 @@ pub enum Msg {
 
 #[derive(Clone, Routable, PartialEq)]
 pub enum Route {
-    #[at("/tournament/:tournament_id/:tournament_name")]
+    #[at("/tournaments/:tournament_id/:tournament_name")]
     Index {
         tournament_id: TournamentId,
         tournament_name: String,
     },
-    #[at("/tournament/:tournament_id/:tournament_name/brackets")]
+    #[at("/tournaments/:tournament_id/:tournament_name/brackets")]
     Brackets {
         tournament_id: TournamentId,
         tournament_name: String,
     },
-    #[at("/tournament/:tournament_id/:tournament_name/brackets/:bracket_id/:bracket_name")]
+    #[at("/tournaments/:tournament_id/:tournament_name/brackets/:bracket_id/:bracket_name")]
     Bracket {
         tournament_id: TournamentId,
         tournament_name: String,
         bracket_id: BracketId,
         bracket_name: String,
     },
-    #[at("/tournament/:tournament_id/:tournament_name/entrants")]
+    #[at("/tournaments/:tournament_id/:tournament_name/entrants")]
     Teams {
         tournament_id: TournamentId,
         tournament_name: String,
     },
-    #[at("/tournament/:tournament_id/:tournament_name/entrants/:team_id")]
+    #[at("/tournaments/:tournament_id/:tournament_name/entrants/:team_id")]
     TeamDetails {
         tournament_id: TournamentId,
         tournament_name: String,
