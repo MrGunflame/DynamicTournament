@@ -1,5 +1,6 @@
 mod brackets;
 mod entrants;
+mod roles;
 
 use dynamic_tournament_api::v3::id::TournamentId;
 use hyper::{Body, Method, Response, StatusCode};
@@ -26,6 +27,7 @@ pub async fn route(
             match uri.take_str() {
                 Some("entrants") => entrants::route(req, uri, state, id).await,
                 Some("brackets") => brackets::route(req, uri, state, id).await,
+                Some("roles") => roles::route(req, uri, state, id).await,
                 None => match *req.method() {
                     Method::GET => get(req, state, id).await,
                     _ => Err(StatusCodeError::method_not_allowed().into()),

@@ -102,6 +102,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             data BLOB NOT NULL,
             state BLOB NOT NULL
         )",
+        "CREATE TABLE IF NOT EXISTS roles (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            tournament_id BIGINT UNSIGNED NOT NULL,
+            name TEXT NOT NULL
+        )",
     ];
 
     for t in tables {
