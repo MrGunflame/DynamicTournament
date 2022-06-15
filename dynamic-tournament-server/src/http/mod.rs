@@ -6,43 +6,102 @@ use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::str::FromStr;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
+use futures::future::BoxFuture;
+use futures::Future;
 use hyper::header::{HeaderValue, CONTENT_TYPE};
-use hyper::server::conn::AddrStream;
-use hyper::server::Server;
-use hyper::service::{make_service_fn, service_fn};
+use hyper::server::conn::Http;
+use hyper::service::Service;
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
 use tokio::time::Instant;
 
-pub async fn bind(addr: SocketAddr, state: State) -> Result<(), hyper::Error> {
+pub async fn bind(addr: SocketAddr, state: State) -> Result<(), crate::Error> {
     let mut shutdown_rx = state.shutdown_rx.clone();
 
-    let make_svc = make_service_fn(move |conn: &AddrStream| {
-        log::info!("Accepting new connection from {}", conn.remote_addr());
+    let service = RootService { state };
 
-        let state = state.clone();
-        async move {
-            Ok::<_, Infallible>(service_fn({
-                move |req| {
-                    let state = state.clone();
-                    service_root(req, state)
-                }
-            }))
+    let listener = TcpListener::bind(addr).await?;
+    loop {
+        tokio::select! {
+            res = listener.accept() => {
+                let (stream, addr) = res?;
+                log::info!("Accepting new connection from {:?}", addr);
+
+                let service = service.clone();
+                let mut shutdown_rx = shutdown_rx.clone();
+                tokio::task::spawn(async move {
+                    let mut conn = Http::new()
+                        .http1_keep_alive(true)
+                        .serve_connection(stream, service)
+                        .with_upgrades();
+
+                    let mut conn = Pin::new(&mut conn);
+
+                    tokio::select! {
+                        res = &mut conn => {
+                            if let Err(err) = res {
+                                log::warn!("Http error: {:?}", err);
+                            }
+                        }
+                        _ = shutdown_rx.changed() => {
+                            log::debug!("Shutting down connection");
+                            conn.graceful_shutdown();
+                        }
+                    }
+                });
+            }
+            // Shut down the server.
+            _ = shutdown_rx.changed() => {
+                log::debug!("Shutting down http server");
+                return Ok(());
+            }
         }
-    });
+    }
+}
 
-    let server = Server::bind(&addr)
-        .serve(make_svc)
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.changed().await;
-            log::info!("Stopping server");
-        });
+#[derive(Clone, Debug)]
+struct RootService {
+    state: State,
+}
 
-    server.await
+impl Service<hyper::Request<Body>> for RootService {
+    type Response = Response<Body>;
+    type Error = crate::Error;
+    type Future = RootServiceFuture;
+
+    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: hyper::Request<Body>) -> Self::Future {
+        RootServiceFuture::new(req, self.state.clone())
+    }
+}
+
+struct RootServiceFuture(BoxFuture<'static, Result<Response<Body>, crate::Error>>);
+
+impl RootServiceFuture {
+    fn new(req: hyper::Request<Body>, state: State) -> Self {
+        Self(Box::pin(async move {
+            Ok(service_root(req, state).await.unwrap())
+        }))
+    }
+}
+
+impl Future for RootServiceFuture {
+    type Output = Result<Response<Body>, crate::Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        let future = unsafe { self.map_unchecked_mut(|this| &mut this.0) };
+        future.poll(cx)
+    }
 }
 
 async fn service_root(

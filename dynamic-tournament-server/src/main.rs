@@ -151,6 +151,8 @@ pub enum Error {
     JsonWebToken(#[from] jsonwebtoken::errors::Error),
     #[error("{0}")]
     Bracket(#[from] dynamic_tournament_generator::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error)]
