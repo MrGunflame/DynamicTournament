@@ -31,6 +31,7 @@ use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
+use crate::services::errorlog::ErrorLog;
 use crate::services::{EventBus, WebSocketService};
 
 pub struct Bracket {
@@ -52,6 +53,7 @@ impl Component for Bracket {
             {
                 Ok(ws) => ws,
                 Err(err) => {
+                    ErrorLog::error(err.to_string());
                     panic!("{}", err);
                 }
             };
@@ -147,10 +149,14 @@ impl Component for Bracket {
                             })
                             .collect();
 
-                        let tournament =
-                            Tournament::resume(system_kind, entrants, matches, options).unwrap();
-
-                        self.state = Some(tournament);
+                        self.state =
+                            match Tournament::resume(system_kind, entrants, matches, options) {
+                                Ok(tournament) => Some(tournament),
+                                Err(err) => {
+                                    ErrorLog::error(err.to_string());
+                                    None
+                                }
+                            };
                     }
                     _ => (),
                 }
