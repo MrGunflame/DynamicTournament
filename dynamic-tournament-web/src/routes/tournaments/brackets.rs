@@ -27,6 +27,7 @@ impl PartialEq for Props {
     }
 }
 
+#[derive(Debug)]
 pub struct Brackets {
     brackets: FetchData<Vec<BracketOverview>>,
 }
@@ -64,7 +65,19 @@ impl Component for Brackets {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Update(brackets) => self.brackets = brackets,
+            Message::Update(brackets) => {
+                self.brackets = brackets;
+
+                // Redirect to the bracket when there's only one avaliable.
+                self.brackets.as_ref().map(|brackets| {
+                    if let Some(bracket) = brackets.get(0) {
+                        log::debug!("Redirecting to bracket {}", bracket.id);
+
+                        ctx.link()
+                            .send_message(Message::OnClick(bracket.id, bracket.name.clone()));
+                    }
+                });
+            }
             Message::OnClick(id, name) => {
                 let tournament_id = ctx.props().tournament.id;
                 let tournament_name = ctx.props().tournament.name.clone();
@@ -86,6 +99,12 @@ impl Component for Brackets {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         self.brackets.render(|brackets| {
+            if brackets.is_empty() {
+                return html! {
+                    <div>{ "There are currently no brackets avaliable." }</div>
+                };
+            }
+
             let brackets: Html = brackets
                 .iter()
                 .map(|bracket| {
