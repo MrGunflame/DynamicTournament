@@ -33,6 +33,17 @@ pub struct Tournament {
     pub kind: EntrantKind,
 }
 
+/// A [`Tournament`] with all optional fields. This is primarly useful for `PATCH` requestsPATCH requests.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PartialTournament {
+    #[cfg_attr(feature = "server", serde(skip_deserializing))]
+    pub id: Option<TournamentId>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub date: Option<DateTime<Utc>>,
+    pub kind: Option<EntrantKind>,
+}
+
 /// The type of [`Entrant`]s accepted by the tournament.
 ///
 /// [`Entrant`]: entrants::Entrant
@@ -167,6 +178,44 @@ impl<'a> TournamentsClient<'a> {
 
         self.client.send(req).await?;
         Ok(())
+    }
+
+    /// Deletes the tournament with the given `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn delete(&self, id: TournamentId) -> Result<()> {
+        let req = self
+            .client
+            .request()
+            .delete()
+            .uri(&format!("/v3/tournaments/{}", id))
+            .build();
+
+        self.client.send(req).await?.json().await
+    }
+
+    /// Updates the tournament with the given `id` using the given tournament. Returns the updated
+    /// [`Tournament`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
+    pub async fn patch(
+        &self,
+        id: TournamentId,
+        tournament: &PartialTournament,
+    ) -> Result<Tournament> {
+        let req = self
+            .client
+            .request()
+            .patch()
+            .uri(&format!("/v3/tournaments/{}", id))
+            .body(tournament)
+            .build();
+
+        self.client.send(req).await?.json().await
     }
 
     pub fn brackets(&self, tournament_id: TournamentId) -> BracketsClient {
