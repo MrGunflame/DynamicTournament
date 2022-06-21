@@ -15,6 +15,14 @@ impl ErrorLog {
     {
         ErrorLogBus::dispatcher().send(msg.to_string());
     }
+
+    #[inline]
+    pub fn info<T>(msg: T)
+    where
+        T: ToString,
+    {
+        ErrorLogBus::dispatcher().send(msg.to_string());
+    }
 }
 
 pub struct ErrorLogBus {
