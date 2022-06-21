@@ -1,3 +1,4 @@
+mod admin;
 mod brackets;
 mod entrants;
 mod overview;
@@ -9,6 +10,7 @@ use teamdetails::TeamDetails;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use self::admin::Admin;
 use self::brackets::bracket::Bracket;
 use self::brackets::Brackets;
 
@@ -77,11 +79,12 @@ impl Component for Tournament {
 
                 let tournament_name = tournament.name.clone();
 
-                let mut routes = Vec::with_capacity(3);
+                let mut routes = Vec::with_capacity(4);
                 for (r, n) in &[
                     (Route::Index { tournament_id, tournament_name: tournament_name.clone() }, "Overview"),
                     (Route::Brackets { tournament_id, tournament_name: tournament_name.clone() }, "Brackets"),
-                    (Route::Teams { tournament_id, tournament_name }, "Entrants"),
+                    (Route::Teams { tournament_id, tournament_name: tournament_name.clone() }, "Entrants"),
+                    (Route::Admin { tournament_id, tournament_name }, "Admin")
                 ] {
                     let classes = if r == route { "active" } else { "" };
 
@@ -105,6 +108,9 @@ impl Component for Tournament {
                     },
                     Route::TeamDetails { tournament_id: _, tournament_name: _, team_id } => html! {
                         <TeamDetails {tournament_id} id={*team_id} />
+                    },
+                    Route::Admin { tournament_id: _, tournament_name: _ } => html! {
+                        <Admin tournament={tournament.clone()} />
                     },
                 };
 
@@ -172,5 +178,10 @@ pub enum Route {
         tournament_id: TournamentId,
         tournament_name: String,
         team_id: EntrantId,
+    },
+    #[at("/tournaments/:tournament_id/:tournament_name/admin")]
+    Admin {
+        tournament_id: TournamentId,
+        tournament_name: String,
     },
 }

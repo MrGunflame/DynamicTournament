@@ -91,6 +91,8 @@ pub enum Route {
     TournamentTeams { id: u64 },
     #[at("/tournaments/:id/:name/entrants/:s")]
     TournamentTeam { id: u64 },
+    #[at("/tournaments/:id/:name/admin")]
+    Admin { id: u64 },
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -118,6 +120,9 @@ pub fn switch(route: &Route) -> Html {
             <tournaments::Tournament id={TournamentId(*id)} />
         },
         Route::TournamentTeams { id } => html! {
+            <tournaments::Tournament id={TournamentId(*id)} />
+        },
+        Route::Admin { id } => html! {
             <tournaments::Tournament id={TournamentId(*id)} />
         },
     }
