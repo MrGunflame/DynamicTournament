@@ -19,7 +19,7 @@ use hyper::service::Service;
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::net::TcpListener;
+use tokio::net::TcpSocket;
 use tokio::time::Instant;
 
 pub async fn bind(addr: SocketAddr, state: State) -> Result<(), crate::Error> {
@@ -27,11 +27,29 @@ pub async fn bind(addr: SocketAddr, state: State) -> Result<(), crate::Error> {
 
     let service = RootService { state };
 
-    let listener = TcpListener::bind(addr).await?;
+    let socket = TcpSocket::new_v4()?;
+    if let Err(err) = socket.set_reuseaddr(true) {
+        log::warn!("Failed to set SO_REUSEADDR flag: {}", err);
+    }
+
+    // Enable SO_REUSEPORT for all supported systems.
+    #[cfg(all(unix, not(target_os = "solaris"), not(target_os = "illumos")))]
+    if let Err(err) = socket.set_reuseport(true) {
+        log::warn!("Failed to set SO_REUSEPORT flag: {}", err);
+    }
+
+    socket.bind(addr)?;
+    let listener = socket.listen(1024)?;
     loop {
         tokio::select! {
             res = listener.accept() => {
-                let (stream, addr) = res?;
+                let (stream, addr) = match res {
+                    Ok((stream, addr)) => (stream, addr),
+                    Err(err) => {
+                        log::warn!("Failed to accept connection: {:?}", err);
+                        continue;
+                    }
+                };
                 log::info!("Accepting new connection from {:?}", addr);
 
                 let service = service.clone();
@@ -80,6 +98,7 @@ impl Service<hyper::Request<Body>> for RootService {
         Poll::Ready(Ok(()))
     }
 
+    #[inline]
     fn call(&mut self, req: hyper::Request<Body>) -> Self::Future {
         RootServiceFuture::new(req, self.state.clone())
     }
