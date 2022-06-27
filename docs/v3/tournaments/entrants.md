@@ -15,8 +15,8 @@ An entrant can be one of two:
 
 ### Team
 
-| Field   | Type     | Description                        |
-| ------- | -------- | ---------------------------------- |
-| name    | string   | The name of the team.              |
-| players | Player[] | A list of all players in the team. |
+| Field   | Type                | Description                        |
+| ------- | ------------------- | ---------------------------------- |
+| name    | string              | The name of the team.              |
+| players | [Player](#player)[] | A list of all players in the team. |
 
