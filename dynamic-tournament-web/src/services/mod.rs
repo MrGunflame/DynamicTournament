@@ -13,6 +13,8 @@ use yew_agent::{Agent, AgentLink, Context, Dispatched, Dispatcher, HandlerId};
 use dynamic_tournament_api::websocket::{EventHandler, WebSocket};
 use dynamic_tournament_api::Client;
 
+pub use errorlog::MessageLog;
+
 #[derive(Clone, Debug)]
 pub struct WebSocketService {
     ws: WebSocket<Frame>,

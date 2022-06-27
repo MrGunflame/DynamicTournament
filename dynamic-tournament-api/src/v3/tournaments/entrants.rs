@@ -114,4 +114,19 @@ impl<'a> EntrantsClient<'a> {
 
         self.client.send(req).await?.json().await
     }
+
+    pub async fn delete(&self, id: EntrantId) -> Result<()> {
+        let req = self
+            .client
+            .request()
+            .uri(&format!(
+                "/v3/tournaments/{}/entrants/{}",
+                self.tournament_id, id
+            ))
+            .delete()
+            .build();
+
+        self.client.send(req).await?;
+        Ok(())
+    }
 }

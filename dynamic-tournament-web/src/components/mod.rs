@@ -11,4 +11,5 @@ pub mod popup;
 pub mod providers;
 pub mod update_bracket;
 
+pub use button::Button;
 pub use input::Input;

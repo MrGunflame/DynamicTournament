@@ -1,14 +1,19 @@
 use std::rc::Rc;
 
 use dynamic_tournament_api::{
-    v3::tournaments::{
-        entrants::{Entrant, EntrantVariant},
-        EntrantKind, Tournament,
+    v3::{
+        id::EntrantId,
+        tournaments::{
+            entrants::{Entrant, EntrantVariant},
+            EntrantKind, Tournament,
+        },
     },
-    Client,
+    Client, Error,
 };
 use yew::{html, Callback, Component, Context, Html, Properties};
 
+use crate::components::Button;
+use crate::services::MessageLog;
 use crate::utils::FetchData;
 
 #[derive(Clone, Debug, Properties)]
@@ -47,12 +52,44 @@ impl Component for Entrants {
         }
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::UpdateEntrants(entrants) => {
                 self.entrants = entrants;
                 true
             }
+            Message::DeleteEntrant(id) => {
+                let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
+
+                let tournament_id = ctx.props().tournament.id;
+                ctx.link().send_future(async move {
+                    let res = client
+                        .v3()
+                        .tournaments()
+                        .entrants(tournament_id)
+                        .delete(id)
+                        .await;
+
+                    Message::DeleteEntrantResult(res.map(|_| id))
+                });
+
+                false
+            }
+            Message::DeleteEntrantResult(res) => match res {
+                Ok(id) => {
+                    // Remove the entrant locally.
+                    self.entrants
+                        .as_mut()
+                        .unwrap()
+                        .retain(|entrant| entrant.id != id);
+
+                    true
+                }
+                Err(err) => {
+                    MessageLog::error(err);
+                    false
+                }
+            },
         }
     }
 
@@ -60,18 +97,35 @@ impl Component for Entrants {
         self.entrants.render(|entrants| {
             let body = entrants
                 .iter()
-                .map(|e| match &e.inner {
-                    EntrantVariant::Player(player) => html! {
-                        <tr>
-                            <td>{ player.name.clone() }</td>
-                        </tr>
-                    },
-                    EntrantVariant::Team(team) => html! {
-                        <tr>
-                            <td>{ team.name.clone() }</td>
-                            <td>{ team.players.len() }</td>
-                        </tr>
-                    },
+                .map(|e| {
+                    let id = e.id;
+                    let delete = ctx.link().callback(move |_| Message::DeleteEntrant(id));
+
+                    match &e.inner {
+                        EntrantVariant::Player(player) => html! {
+                            <tr>
+                                <td>{ player.name.clone() }</td>
+                                <td>
+                                    <Button title="Delete" onclick={delete}>
+                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
+                                        <span class="sr-only">{ "Delete" }</span>
+                                    </Button>
+                                </td>
+                            </tr>
+                        },
+                        EntrantVariant::Team(team) => html! {
+                            <tr>
+                                <td>{ team.name.clone() }</td>
+                                <td>{ team.players.len() }</td>
+                                <td>
+                                    <Button title="Delete" onclick={delete}>
+                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
+                                        <span class="sr-only">{ "Delete" }</span>
+                                    </Button>
+                                </td>
+                            </tr>
+                        },
+                    }
                 })
                 .collect::<Html>();
 
@@ -79,12 +133,14 @@ impl Component for Entrants {
                 EntrantKind::Player => html! {
                     <tr>
                         <th>{ "Name" }</th>
+                        <th>{ "Delete" }</th>
                     </tr>
                 },
                 EntrantKind::Team => html! {
                     <tr>
                         <th>{ "Name" }</th>
                         <th>{ "Players" }</th>
+                        <th>{ "Delete" }</th>
                     </tr>
                 },
             };
@@ -104,4 +160,6 @@ impl Component for Entrants {
 
 pub enum Message {
     UpdateEntrants(FetchData<Vec<Entrant>>),
+    DeleteEntrant(EntrantId),
+    DeleteEntrantResult(Result<EntrantId, Error>),
 }

@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use yew_agent::{Agent, AgentLink, Context, Dispatched, HandlerId};
 
+pub type MessageLog = ErrorLog;
+
 #[allow(unused)]
 pub struct ErrorLog;
 
