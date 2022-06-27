@@ -109,3 +109,10 @@ Requires the following headers to be set:
 
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
 - `404 Not Found`: Returned if the tournament with the requested `id` does not exist.
+
+## Sub-Endpoints
+
+Each tournament has the following endpoints:
+- /v3/tournaments/:id/brackets
+- /v3/tournaments/:id/entrants
+- /v3/tournaments/:id/roles
