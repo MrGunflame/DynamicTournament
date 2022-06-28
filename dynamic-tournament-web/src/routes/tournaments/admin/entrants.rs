@@ -30,6 +30,8 @@ impl PartialEq for Props {
 #[derive(Debug)]
 pub(super) struct Entrants {
     entrants: FetchData<Vec<Entrant>>,
+    // Expanded teams
+    expanded: Vec<bool>,
 }
 
 impl Component for Entrants {
@@ -49,12 +51,17 @@ impl Component for Entrants {
 
         Self {
             entrants: FetchData::new(),
+            expanded: Vec::new(),
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::UpdateEntrants(entrants) => {
+                if entrants.has_value() {
+                    self.expanded = vec![false; entrants.as_ref().unwrap().len()];
+                }
+
                 self.entrants = entrants;
                 true
             }
@@ -90,6 +97,10 @@ impl Component for Entrants {
                     false
                 }
             },
+            Message::ExpandTeam(index) => {
+                self.expanded[index] = !self.expanded[index];
+                true
+            }
         }
     }
 
@@ -97,7 +108,9 @@ impl Component for Entrants {
         self.entrants.render(|entrants| {
             let body = entrants
                 .iter()
-                .map(|e| {
+                .zip(self.expanded.iter())
+                .enumerate()
+                .map(|(index, (e, expanded))| {
                     let id = e.id;
                     let delete = ctx.link().callback(move |_| Message::DeleteEntrant(id));
 
@@ -113,18 +126,60 @@ impl Component for Entrants {
                                 </td>
                             </tr>
                         },
-                        EntrantVariant::Team(team) => html! {
-                            <tr>
-                                <td>{ team.name.clone() }</td>
-                                <td>{ team.players.len() }</td>
-                                <td>
-                                    <Button title="Delete" onclick={delete}>
-                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
-                                        <span class="sr-only">{ "Delete" }</span>
+                        EntrantVariant::Team(team) => {
+                            let expand = ctx.link().callback(move |_| Message::ExpandTeam(index));
+
+                            let expand = if *expanded {
+                                html! {
+                                    <Button title="Shrink" onclick={expand}>
+                                        <i aria-hidden="true" class="fa-solid fa-caret-down" style="transition: .5s;"></i>
+                                        <span class="sr-only">{ "Shrink" }</span>
                                     </Button>
-                                </td>
-                            </tr>
-                        },
+                                }
+                            } else {
+                                html! {
+                                <Button title="Expand" onclick={expand}>
+                                    <i aria-hidden="true" class="fa-solid fa-caret-down" style="transform: rotate(-90deg); transition: .3s;"></i>
+                                    <span class="sr-only">{ "Expand" }</span>
+                                </Button>}
+                            };
+
+                            // Show all players when the team is expanded.
+                            let players = if *expanded {
+                                team.players
+                                    .iter()
+                                    .map(|player| {
+                                        html! {
+                                            <tr>
+                                                <td>{ player.name.clone() }</td>
+                                                <td>{ player.rating.unwrap_or(0) }</td>
+                                            </tr>
+                                        }
+                                    })
+                                    .collect::<Html>()
+                            } else {
+                                html! {}
+                            };
+
+                            html! {
+                                <>
+                                    <tr>
+                                        <td>
+                                            { expand }
+                                            { team.name.clone() }
+                                        </td>
+                                        <td>{ team.players.len() }</td>
+                                        <td>
+                                            <Button title="Delete" onclick={delete}>
+                                                <i aria-hidden="true" class="fa-solid fa-trash"></i>
+                                                <span class="sr-only">{ "Delete" }</span>
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                    { players }
+                                </>
+                            }
+                        }
                     }
                 })
                 .collect::<Html>();
@@ -162,4 +217,5 @@ pub enum Message {
     UpdateEntrants(FetchData<Vec<Entrant>>),
     DeleteEntrant(EntrantId),
     DeleteEntrantResult(Result<EntrantId, Error>),
+    ExpandTeam(usize),
 }
