@@ -394,3 +394,33 @@ pub struct ErrorResponse {
     pub code: u16,
     pub message: String,
 }
+
+/// Checks the request method and runs the specified path. If no matching method is found
+/// an method_not_allowed error is returned.
+#[macro_export]
+macro_rules! method {
+    ($req:expr, {$($method:expr => $branch:expr),* $(,)?}) => {
+        match $req.method() {
+            $(
+                method if method == $method => $branch,
+            )*
+            method if method == hyper::Method::OPTIONS => {
+                use hyper::{Response, Body};
+                use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
+
+                let allow = vec![$($method.as_str()),*];
+                let allow = HeaderValue::from_bytes(allow.join(",").as_bytes()).unwrap();
+
+                let mut resp = Response::new(Body::empty());
+                *resp.status_mut() = hyper::StatusCode::NO_CONTENT;
+
+                let headers = &mut *resp.headers_mut();
+                headers.insert(ALLOW, allow.clone());
+                headers.insert(ACCESS_CONTROL_ALLOW_METHODS, allow);
+
+                Ok(resp)
+            }
+            _ => Err(crate::StatusCodeError::method_not_allowed().into()),
+        }
+    };
+}

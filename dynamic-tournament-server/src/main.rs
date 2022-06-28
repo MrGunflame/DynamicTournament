@@ -203,6 +203,11 @@ impl StatusCodeError {
         Self::new(StatusCode::REQUEST_TIMEOUT, "Request Timeout")
     }
 
+    /// 410 Gone
+    pub fn gone() -> Self {
+        Self::new(StatusCode::GONE, "Gone")
+    }
+
     /// 411 Length Required
     pub fn length_required() -> Self {
         Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")

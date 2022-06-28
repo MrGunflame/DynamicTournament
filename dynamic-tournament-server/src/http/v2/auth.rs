@@ -3,6 +3,7 @@ use hyper::{Body, Response};
 use hyper::{Method, StatusCode};
 use jsonwebtoken::{EncodingKey, Header};
 
+use crate::method;
 use crate::{
     http::{Request, RequestUri},
     Error, State, StatusCodeError,
@@ -23,23 +24,12 @@ pub async fn route(
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take_all() {
-        Some("login") => match *req.method() {
+        Some("login") => method!(req, {
             Method::POST => login(req, state).await,
-            Method::OPTIONS => Ok(Response::builder()
-                .status(204)
-                .body(Body::from("No Content"))
-                .unwrap()),
-
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
-        Some("refresh") => match *req.method() {
+        }),
+        Some("refresh") => method!(req, {
             Method::POST => refresh(req, state).await,
-            Method::OPTIONS => Ok(Response::builder()
-                .status(204)
-                .body(Body::from("No Content"))
-                .unwrap()),
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
+        }),
         _ => Err(StatusCodeError::not_found().into()),
     }
 }

@@ -5,6 +5,7 @@ mod roles;
 use dynamic_tournament_api::v3::id::TournamentId;
 use hyper::{Body, Method, Response, StatusCode};
 
+use crate::method;
 use crate::{
     http::{Request, RequestUri},
     Error, State, StatusCodeError,
@@ -16,11 +17,10 @@ pub async fn route(
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
-        None => match *req.method() {
+        None => method!(req, {
             Method::GET => list(req, state).await,
             Method::POST => create(req, state).await,
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
+        }),
         Some(part) => {
             let id = part.parse()?;
 
@@ -28,10 +28,9 @@ pub async fn route(
                 Some("entrants") => entrants::route(req, uri, state, id).await,
                 Some("brackets") => brackets::route(req, uri, state, id).await,
                 Some("roles") => roles::route(req, uri, state, id).await,
-                None => match *req.method() {
+                None => method!(req, {
                     Method::GET => get(req, state, id).await,
-                    _ => Err(StatusCodeError::method_not_allowed().into()),
-                },
+                }),
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
         }

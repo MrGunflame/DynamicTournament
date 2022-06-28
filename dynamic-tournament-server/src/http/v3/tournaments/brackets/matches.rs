@@ -1,4 +1,5 @@
 use crate::http::{Request, RequestUri};
+use crate::method;
 use crate::{Error, State, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
@@ -19,10 +20,9 @@ pub async fn route(
     bracket_id: BracketId,
 ) -> Result<Response<Body>, Error> {
     if uri.take().is_none() {
-        match *req.method() {
+        method!(req, {
             Method::GET => serve(req, id, bracket_id, state).await,
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        }
+        })
     } else {
         Err(StatusCodeError::not_found().into())
     }

@@ -1,5 +1,5 @@
 use crate::http::{Request, RequestUri};
-use crate::{Error, State, StatusCodeError};
+use crate::{method, Error, State, StatusCodeError};
 
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
@@ -20,29 +20,16 @@ pub async fn route(
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
-        None => match *req.method() {
+        None => method!(req, {
             Method::GET => list(req, state).await,
             Method::POST => create(req, state).await,
-            Method::OPTIONS => Ok(Response::builder()
-                .status(204)
-                .body(Body::from("No Content"))
-                .unwrap()),
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
+        }),
         Some(id) => {
             let id: u64 = id.parse()?;
 
-            match uri.take_str() {
-                None => match *req.method() {
-                    Method::GET => get(req, id, state).await,
-                    Method::OPTIONS => Ok(Response::builder()
-                        .status(204)
-                        .body(Body::from("No Content"))
-                        .unwrap()),
-                    _ => Err(StatusCodeError::method_not_allowed().into()),
-                },
-                _ => Err(StatusCodeError::not_found().into()),
-            }
+            method!(req, {
+                Method::GET => get(req, id, state).await,
+            })
         }
     }
 }

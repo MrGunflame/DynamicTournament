@@ -7,6 +7,7 @@ use dynamic_tournament_api::v3::{
 use dynamic_tournament_generator::{options::TournamentOptions, EntrantScore, SingleElimination};
 use hyper::{Body, Method, Response, StatusCode};
 
+use crate::method;
 use crate::{
     http::{Request, RequestUri},
     Error, State, StatusCodeError,
@@ -19,19 +20,17 @@ pub async fn route(
     tournament_id: TournamentId,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
-        None => match *req.method() {
+        None => method!(req, {
             Method::GET => list(req, state, tournament_id).await,
             Method::POST => create(req, state, tournament_id).await,
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
+        }),
         Some(part) => {
             let id = part.parse()?;
 
             match uri.take_str() {
-                None => match *req.method() {
+                None => method!(req, {
                     Method::GET => get(req, state, tournament_id, id).await,
-                    _ => Err(StatusCodeError::method_not_allowed().into()),
-                },
+                }),
                 Some("matches") => matches::route(req, uri, state, tournament_id, id).await,
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
