@@ -112,6 +112,9 @@ impl Component for Tournament {
                     Route::Admin { tournament_id: _, tournament_name: _ } => html! {
                         <Admin tournament={tournament.clone()} />
                     },
+                    Route::AdminBracket { tournament_id, tournament_name:_, id }=>html! {
+                        <admin::brackets::bracket::Bracket tournament_id={*tournament_id} id={*id} />
+                    },
                 };
 
                 html! {
@@ -183,5 +186,11 @@ pub enum Route {
     Admin {
         tournament_id: TournamentId,
         tournament_name: String,
+    },
+    #[at("/tournaments/:tournament_id/:tournament_name/admin/brackets/:id")]
+    AdminBracket {
+        tournament_id: TournamentId,
+        tournament_name: String,
+        id: BracketId,
     },
 }

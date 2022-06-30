@@ -1,3 +1,4 @@
+pub mod brackets;
 mod entrants;
 mod settings;
 
@@ -61,6 +62,7 @@ impl Component for Admin {
             <div>
                 <settings::Settings tournament={ctx.props().tournament.clone()} />
                 <entrants::Entrants tournament={ctx.props().tournament.clone()} />
+                <brackets::Brackets tournament={ctx.props().tournament.clone()} />
                 <div>
                     <h2>{ "The Danger Zone" }</h2>
 

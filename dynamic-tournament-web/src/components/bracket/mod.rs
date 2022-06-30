@@ -1,4 +1,4 @@
-mod entrant;
+pub mod entrant;
 mod r#match;
 
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;

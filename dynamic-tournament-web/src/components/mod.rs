@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod bracket;
 pub mod button;
 pub mod config_provider;
