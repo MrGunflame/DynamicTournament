@@ -29,16 +29,6 @@ The final binary will be `target/release/dynamic-tournament-server`.
 
 For more information see the server crate: https://github.com/MrGunflame/DynamicTournament/tree/master/dynamic-tournament-server
 
-## TODO
+## License
 
-These features are still work in progress:
-- [ ] Different Tournament Types (e.g. Double Elimination, Round-robin, Swiss, etc..)
-- [x] A way to save and load the bracket state
-- [x] A proper score system
-- [x] Auto-forward placeholder matches
-- [x] A way to undo matches and revert the bracket state
-- [x] DoubleElimination
-- [ ] Seeding
-- [ ] Full refactor for v1.0
-- [x] Live bracket updates with WebSockets
-- [x] Split Entrants and Data in dynamic-tournament-generator
+This project is licensed under the [Apache License, Version 2.0](https://github.com/MrGunflame/DynamicTournament/blob/master/LICENSE) unless otherwise stated.
