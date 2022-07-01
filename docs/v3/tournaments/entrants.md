@@ -68,7 +68,7 @@ Returns the newly created entrant. If multiple entrants have been created, retur
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
 - `404 Not Found`: Returned if the tournament with the requested `id` does not exist.
 
-### PATCH `/v3/tournaments/:id/entrants/:id`
+## PATCH `/v3/tournaments/:id/entrants/:id`
 
 Updates a number of fields of the entrant with the given `id`.
 
