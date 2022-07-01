@@ -91,6 +91,8 @@ Returns the updated [Role](#role).
 
 Deletes the role with the given `id`.
 
+*Note:* The `id` of the deleted role won't be reused and any players using the deleted `id` will link to `"Unknown"` instead.
+
 ### Request Headers
 
 - `Authorization: Bearer <TOKEN>`
