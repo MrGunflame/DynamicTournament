@@ -315,7 +315,7 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] if an database error occured.
+    /// Returns an [`enum@Error`] if an database error occured.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>, Error> {
         let mut rows =
             sqlx::query("SELECT id, name, date, kind FROM tournaments").fetch(&self.store.pool);
@@ -346,7 +346,7 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] if an database error occured.
+    /// Returns an [`enum@Error`] if an database error occured.
     pub async fn get(&self, id: TournamentId) -> Result<Option<Tournament>, Error> {
         let row = get_one!(
             sqlx::query("SELECT name, date, description, kind FROM tournaments WHERE id = ?")
@@ -373,7 +373,7 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] if an database error occured.
+    /// Returns an [`enum@Error`] if an database error occured.
     pub async fn insert(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
         let res = sqlx::query(
             "INSERT INTO tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
@@ -392,7 +392,7 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] if an database error occured.
+    /// Returns an [`enum@Error`] if an database error occured.
     pub async fn delete(&self, id: TournamentId) -> Result<(), Error> {
         sqlx::query("DELETE FROM tournaments WHERE id = ?")
             .bind(id.0)
@@ -406,7 +406,7 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] if an database error occured.
+    /// Returns an [`enum@Error`] if an database error occured.
     ///
     /// # Panics
     ///
