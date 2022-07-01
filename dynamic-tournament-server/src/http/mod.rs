@@ -192,13 +192,10 @@ async fn service_root(
                     .append("Access-Control-Allow-Origin", origin);
             }
 
-            for (k, v) in [
-                ("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT"),
-                (
-                    "Access-Control-Allow-Headers",
-                    "content-type, authorization",
-                ),
-            ] {
+            for (k, v) in [(
+                "Access-Control-Allow-Headers",
+                "content-type, authorization",
+            )] {
                 resp.headers_mut().append(k, HeaderValue::from_static(v));
             }
 

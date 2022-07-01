@@ -2,7 +2,7 @@ use dynamic_tournament_generator::options::TournamentOptions;
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::http::{Request, RequestUri};
-use crate::{Error, State, StatusCodeError};
+use crate::{method, Error, State, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
@@ -14,16 +14,15 @@ pub async fn route(
     state: State,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
-        None => match *req.method() {
-            Method::GET => list(req, state).await,
-            _ => Err(StatusCodeError::method_not_allowed().into()),
-        },
+        None => method!(req, {
+            Method::GET => list(req,state).await,
+        }),
         Some(part) => {
             let id = part.parse()?;
-            match *req.method() {
+
+            method!(req, {
                 Method::GET => get(req, state, id).await,
-                _ => Err(StatusCodeError::method_not_allowed().into()),
-            }
+            })
         }
     }
 }
