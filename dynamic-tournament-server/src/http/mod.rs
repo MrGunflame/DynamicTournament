@@ -132,7 +132,10 @@ async fn service_root(
     log::trace!("Headers: {:?}", req.headers());
     log::trace!("Body: {:?}", req.body());
 
-    let req = Request { request: req };
+    let req = Request {
+        request: Some(req),
+        state,
+    };
 
     if req.method() == Method::POST {
         let mut resp = Response::new(Body::empty());
@@ -179,8 +182,8 @@ async fn service_root(
 
     let res = match uri.take_str() {
         Some("v1") => v1::route().await,
-        Some("v2") => v2::route(req, uri, state).await,
-        Some("v3") => v3::route(req, uri, state).await,
+        Some("v2") => v2::route(req, uri).await,
+        Some("v3") => v3::route(req, uri).await,
         _ => Err(Error::NotFound),
     };
 
@@ -244,23 +247,28 @@ async fn service_root(
 
 #[derive(Debug)]
 pub struct Request {
-    pub request: hyper::Request<Body>,
+    pub request: Option<hyper::Request<Body>>,
+    state: State,
 }
 
 impl Request {
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
     pub fn method(&self) -> &Method {
-        self.request.method()
+        self.request.as_ref().unwrap().method()
     }
 
     pub fn headers(&self) -> &HeaderMap<HeaderValue> {
-        self.request.headers()
+        self.request.as_ref().unwrap().headers()
     }
 
     pub fn uri(&self) -> &Uri {
-        self.request.uri()
+        self.request.as_ref().unwrap().uri()
     }
 
-    pub async fn json<T>(self) -> Result<T, Error>
+    pub async fn json<T>(&mut self) -> Result<T, Error>
     where
         T: DeserializeOwned,
     {
@@ -269,7 +277,7 @@ impl Request {
         let deadline = Instant::now() + DUR;
 
         let bytes = tokio::select! {
-            res = hyper::body::to_bytes(self.request.into_body()) => {
+            res = hyper::body::to_bytes(self.request.take().unwrap().into_body()) => {
                 res?
             }
             _ = tokio::time::sleep_until(deadline) => {
@@ -287,7 +295,7 @@ impl Request {
     /// Returns the value of the "Content-Length" header. If the header is not present or has an
     /// invalid value an error is returned.
     pub fn content_length(&self) -> Result<u64, Error> {
-        match self.request.headers().get("Content-Length") {
+        match self.headers().get("Content-Length") {
             Some(value) => match value.to_str() {
                 Ok(value) => match value.parse() {
                     Ok(value) => Ok(value),

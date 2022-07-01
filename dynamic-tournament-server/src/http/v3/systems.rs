@@ -2,32 +2,28 @@ use dynamic_tournament_generator::options::TournamentOptions;
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::http::{Request, RequestUri};
-use crate::{method, Error, State, StatusCodeError};
+use crate::{method, Error, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
 use dynamic_tournament_generator::{EntrantScore, SingleElimination};
 
-pub async fn route(
-    req: Request,
-    mut uri: RequestUri<'_>,
-    state: State,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req,state).await,
+            Method::GET => list(req).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             method!(req, {
-                Method::GET => get(req, state, id).await,
+                Method::GET => get(req, id).await,
             })
         }
     }
 }
 
-async fn list(_req: Request, _state: State) -> Result<Response<Body>, Error> {
+async fn list(_req: Request) -> Result<Response<Body>, Error> {
     // Hardcoded for now.
     let systems = [
         SystemOverview {
@@ -51,7 +47,7 @@ async fn list(_req: Request, _state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn get(_req: Request, _state: State, id: SystemId) -> Result<Response<Body>, Error> {
+async fn get(_req: Request, id: SystemId) -> Result<Response<Body>, Error> {
     let system = match id.as_ref() {
         1 => Some(System {
             id: SystemId(1),
