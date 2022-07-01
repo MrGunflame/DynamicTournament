@@ -33,8 +33,30 @@ pub struct Tournament {
     pub kind: EntrantKind,
 }
 
+impl Tournament {
+    /// Updates an existing `Tournament` by applying a [`PartialTournament`] patch on it.
+    pub fn update(&mut self, patch: PartialTournament) {
+        if let Some(name) = patch.name {
+            self.name = name;
+        }
+
+        if let Some(description) = patch.description {
+            self.description = description;
+        }
+
+        if let Some(date) = patch.date {
+            self.date = date;
+        }
+
+        if let Some(kind) = patch.kind {
+            self.kind = kind;
+        }
+    }
+}
+
 /// A [`Tournament`] with all optional fields. This is primarly useful for `PATCH` requestsPATCH requests.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PartialTournament {
     #[cfg_attr(feature = "server", serde(skip_deserializing))]
     pub id: Option<TournamentId>,

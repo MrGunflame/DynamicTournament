@@ -26,6 +26,7 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
                 Some("roles") => roles::route(req, uri, id).await,
                 None => method!(req, {
                     Method::GET => get(req, id).await,
+                    Method::PATCH => patch(req, id).await,
                 }),
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
@@ -34,7 +35,7 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
 }
 
 async fn list(req: Request) -> Result<Response<Body>, Error> {
-    let tournaments = req.state().store.list_tournaments().await?;
+    let tournaments = req.state().store.tournaments().list().await?;
 
     let body = serde_json::to_vec(&tournaments)?;
 
@@ -48,7 +49,7 @@ async fn list(req: Request) -> Result<Response<Body>, Error> {
 }
 
 async fn get(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
-    let tournament = req.state().store.get_tournament(id).await?;
+    let tournament = req.state().store.tournaments().get(id).await?;
 
     let tournament = tournament.ok_or_else(StatusCodeError::not_found)?;
 
@@ -62,7 +63,27 @@ async fn create(mut req: Request) -> Result<Response<Body>, Error> {
 
     let tournament = req.json().await?;
 
-    let id = req.state().store.insert_tournament(&tournament).await?;
+    let id = req.state().store.tournaments().insert(&tournament).await?;
 
     Ok(Response::new(Body::from(id.to_string())))
+}
+
+async fn patch(mut req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
+    // Check if the tournament exists.
+    let mut tournament = match req.state().store.tournaments().get(id).await? {
+        Some(tournament) => tournament,
+        None => return Err(StatusCodeError::not_found().into()),
+    };
+
+    let partial = req.json().await?;
+    req.state().store.tournaments().update(id, &partial).await?;
+
+    // Merge the patch.
+    tournament.update(partial);
+
+    Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
 }
