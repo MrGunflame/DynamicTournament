@@ -10,9 +10,10 @@ An entrant can be one of two:
 
 | Field  | Type            | Description                                                                  |
 | ------ | --------------- | ---------------------------------------------------------------------------- |
-| id     | u64             | The unique identifier of the entrant.                                        |
+| id     | u64             | The unique identifier of the entrant.                                         |
 | name   | string          | The name of the player.                                                      |
 | rating | u64 &#124; null | The rating of the player or `null` to disable. Optional, defaults to `null`. |
+| role   | u64             | The id of the role of the player. Optional, defaults to `0`. (See [Roles endpoint](roles.md) ) |
 
 ### Team
 
@@ -50,6 +51,7 @@ The request body contains the new [Player](#player) or [Team](#team) with the fo
 | ------ | --------------- | ---------------------------------------------------------------------------- |
 | name   | string          | The name of the player.                                                      |
 | rating | u64 &#124; null | The rating of the player or `null` to disable. Optional, defaults to `null`. |
+| role   | u64             | The id of the role of the player. Optional, defaults to `0`. (See [Roles endpoint](roles.md) ) |
 
 | Field   | Type                | Description                        |
 | ------- | ------------------- | ---------------------------------- |
