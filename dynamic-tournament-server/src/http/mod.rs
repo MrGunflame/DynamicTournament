@@ -14,6 +14,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{HeaderValue, CONTENT_TYPE};
+use hyper::http::request::Parts;
 use hyper::server::conn::Http;
 use hyper::service::Service;
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
@@ -132,10 +133,7 @@ async fn service_root(
     log::trace!("Headers: {:?}", req.headers());
     log::trace!("Body: {:?}", req.body());
 
-    let req = Request {
-        request: Some(req),
-        state,
-    };
+    let req = Request::new(req, state);
 
     if req.method() == Method::POST {
         let mut resp = Response::new(Body::empty());
@@ -247,25 +245,41 @@ async fn service_root(
 
 #[derive(Debug)]
 pub struct Request {
-    pub request: Option<hyper::Request<Body>>,
+    pub parts: Parts,
+    pub body: Option<Body>,
     state: State,
 }
 
 impl Request {
+    #[inline]
+    fn new(req: hyper::Request<Body>, state: State) -> Self {
+        let (parts, body) = req.into_parts();
+
+        Self {
+            parts,
+            body: Some(body),
+            state,
+        }
+    }
+
+    #[inline]
     pub fn state(&self) -> &State {
         &self.state
     }
 
+    #[inline]
     pub fn method(&self) -> &Method {
-        self.request.as_ref().unwrap().method()
+        &self.parts.method
     }
 
+    #[inline]
     pub fn headers(&self) -> &HeaderMap<HeaderValue> {
-        self.request.as_ref().unwrap().headers()
+        &self.parts.headers
     }
 
+    #[inline]
     pub fn uri(&self) -> &Uri {
-        self.request.as_ref().unwrap().uri()
+        &self.parts.uri
     }
 
     pub async fn json<T>(&mut self) -> Result<T, Error>
@@ -277,7 +291,7 @@ impl Request {
         let deadline = Instant::now() + DUR;
 
         let bytes = tokio::select! {
-            res = hyper::body::to_bytes(self.request.take().unwrap().into_body()) => {
+            res = hyper::body::to_bytes(self.body.take().unwrap()) => {
                 res?
             }
             _ = tokio::time::sleep_until(deadline) => {

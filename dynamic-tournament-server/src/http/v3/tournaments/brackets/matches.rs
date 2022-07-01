@@ -28,7 +28,7 @@ pub async fn route(
 }
 
 async fn serve(
-    mut req: Request,
+    req: Request,
     id: TournamentId,
     bracket_id: BracketId,
 ) -> Result<Response<Body>, Error> {
@@ -68,8 +68,11 @@ async fn serve(
     log::debug!("Upgrading connection");
 
     task::spawn(async move {
-        match hyper::upgrade::on(&mut req.request.take().unwrap()).await {
-            Ok(conn) => crate::websocket::handle(conn, req.state().clone(), id, bracket_id).await,
+        let state = req.state().clone();
+        let req = hyper::Request::from_parts(req.parts, req.body.unwrap());
+
+        match hyper::upgrade::on(req).await {
+            Ok(conn) => crate::websocket::handle(conn, state, id, bracket_id).await,
             Err(err) => log::error!("Failed to upgrade connection: {:?}", err),
         }
     });
