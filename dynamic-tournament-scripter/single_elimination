@@ -1,0 +1,13 @@
+.creation:
+
+JG *0, 2
+
+.next_power_of_two:
+PUSH %rax
+MOV 1, %rax
+.npot_loop:
+JGE %rax, &0 .npot_ret
+SHL 1
+GOTO: .npot_loop
+
+.npot_ret: RET
