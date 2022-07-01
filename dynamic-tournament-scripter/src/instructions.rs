@@ -11,20 +11,20 @@ pub enum Instruction {
 
     AND(Operand),
     OR(Operand),
-    NOT(Operand),
     XOR(Operand),
+    NOT,
 
     MOV(Operand, Operand),
     PUSH,
     POP,
 
     JMP(Location),
-    JE(Pointer, Pointer, Location),
-    JNE(Pointer, Pointer, Location),
-    JG(Pointer, Pointer, Location),
-    JGE(Pointer, Pointer, Location),
-    JL(Pointer, Pointer, Location),
-    JLE(Pointer, Pointer, Location),
+    JE(Operand, Operand, Location),
+    JNE(Operand, Operand, Location),
+    JG(Operand, Operand, Location),
+    JGE(Operand, Operand, Location),
+    JL(Operand, Operand, Location),
+    JLE(Operand, Operand, Location),
 
     ABORT,
 }
@@ -33,6 +33,12 @@ pub enum Instruction {
 pub enum Operand {
     Const(u64),
     Pointer(Pointer),
+}
+
+impl Operand {
+    pub fn pointer(val: u64) -> Self {
+        Self::Pointer(Pointer(val))
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -47,7 +53,7 @@ impl Deref for Pointer {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Location(u64);
+pub struct Location(pub u64);
 
 #[derive(Clone, Debug)]
 pub struct Instructions(pub(crate) Vec<Instruction>);

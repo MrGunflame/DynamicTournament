@@ -1,6 +1,7 @@
 use instructions::{Instruction, Instructions, Operand};
 
 mod instructions;
+mod tournament;
 
 #[derive(Clone, Debug)]
 pub struct VirtualMachine {
@@ -11,6 +12,7 @@ pub struct VirtualMachine {
 }
 
 impl VirtualMachine {
+    /// Creates a new `VirtualMachine` using the given set of instructions.
     pub fn new<T>(instructions: T) -> Self
     where
         T: Into<Instructions>,
@@ -23,7 +25,14 @@ impl VirtualMachine {
         }
     }
 
-    pub fn peek(&mut self) -> Option<()> {
+    pub fn clear(&mut self) {
+        self.location = 0;
+        self.reg = 0;
+        self.stack.clear();
+    }
+
+    /// Run the next instruction then suspend execution until the next call to `step`.
+    pub fn step(&mut self) -> Option<()> {
         let instruction = &self.instructions.0[self.location as usize];
 
         match instruction {
@@ -31,6 +40,11 @@ impl VirtualMachine {
             Instruction::SUB(rhs) => self.reg -= self.get(*rhs)?,
             Instruction::MUL(rhs) => self.reg *= self.get(*rhs)?,
             Instruction::DIV(rhs) => self.reg /= self.get(*rhs)?,
+
+            Instruction::AND(rhs) => self.reg &= self.get(*rhs)?,
+            Instruction::OR(rhs) => self.reg |= self.get(*rhs)?,
+            Instruction::XOR(rhs) => self.reg ^= self.get(*rhs)?,
+            Instruction::NOT => self.reg = !self.reg,
             _ => return None,
         }
 
@@ -38,9 +52,10 @@ impl VirtualMachine {
         None
     }
 
+    /// Runs all instructions to finish.
     pub fn run(&mut self) -> Option<()> {
         while (self.location as usize) < self.instructions.0.len() {
-            self.peek()?;
+            self.step()?;
         }
 
         None
@@ -51,57 +66,24 @@ impl VirtualMachine {
         Some((self.reg, self.stack))
     }
 
-    /// Adds `rhs` to `%reg`.
-    #[inline]
-    fn add(&mut self, rhs: Operand) -> Option<()> {
-        self.reg += self.get(rhs)?;
-        Some(())
-    }
-
-    #[inline]
-    fn sub(&mut self, rhs: Operand) -> Option<()> {
-        self.reg -= self.get(rhs)?;
-        Some(())
-    }
-
-    #[inline]
-    fn mul(&mut self, rhs: Operand) -> Option<()> {
-        self.reg *= self.get(rhs)?;
-        Some(())
-    }
-
-    #[inline]
-    fn div(&mut self, rhs: Operand) -> Option<()> {
-        self.reg /= self.get(rhs)?;
-        Some(())
-    }
-
-    fn and(&mut self, rhs: Operand) -> Option<()> {
-        self.reg &= self.get(rhs)?;
-        Some(())
-    }
-
-    fn or(&mut self, rhs: Operand) -> Option<()> {
-        self.reg |= self.get(rhs)?;
-        Some(())
-    }
-
-    fn not(&mut self) -> Option<()> {
-        self.reg = !self.reg;
-        Some(())
-    }
-
-    fn xor(&mut self, rhs: Operand) -> Option<()> {
-        self.reg ^= self.get(rhs)?;
-        Some(())
-    }
-
     /// Returns the value for operand.
     fn get(&self, operand: Operand) -> Option<u64> {
         match operand {
             Operand::Const(v) => Some(v),
             Operand::Pointer(ptr) => self.stack.get(*ptr as usize).map(|v| *v),
         }
+    }
+
+    pub fn stack(&self) -> &Vec<u64> {
+        &self.stack
+    }
+
+    pub fn stack_mut(&mut self) -> &mut Vec<u64> {
+        &mut self.stack
+    }
+
+    pub fn rax(&self) -> u64 {
+        self.reg
     }
 }
 
@@ -116,7 +98,7 @@ pub enum ErrorKind {
 #[cfg(test)]
 mod tests {
     use super::VirtualMachine;
-    use crate::instructions::{Instruction, Instructions, Operand, Pointer};
+    use crate::instructions::{Instruction, Operand, Pointer};
 
     #[test]
     fn test_virtual_machine_add() {
@@ -129,7 +111,7 @@ mod tests {
         vm.reg = 210;
         vm.stack.push(500);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 260);
 
         vm.run();
@@ -147,10 +129,10 @@ mod tests {
         vm.reg = 70;
         vm.stack.push(9);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 10);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 1);
     }
 
@@ -165,10 +147,10 @@ mod tests {
         vm.reg = 6;
         vm.stack.push(5);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 5 * 6);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 5 * 6 * 5);
     }
 
@@ -183,10 +165,10 @@ mod tests {
         vm.reg = 100;
         vm.stack.push(5);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 100 / 10);
 
-        vm.peek();
+        vm.step();
         assert_eq!(vm.reg, 100 / 10 / 5);
     }
 }
