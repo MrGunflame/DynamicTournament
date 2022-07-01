@@ -2,6 +2,7 @@ use crate::Error;
 use dynamic_tournament_api::v3::id::RoleId;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
 use dynamic_tournament_api::v3::tournaments::roles::Role;
+use dynamic_tournament_api::v3::tournaments::PartialTournament;
 use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, TournamentId},
     tournaments::{entrants::Entrant, EntrantKind, Tournament, TournamentOverview},
@@ -18,6 +19,16 @@ pub struct Store {
 }
 
 impl Store {
+    #[inline]
+    pub fn tournaments(&self) -> TournamentsClient<'_> {
+        TournamentsClient { store: self }
+    }
+
+    #[inline]
+    pub fn entrants(&self, id: TournamentId) -> EntrantsClient<'_> {
+        EntrantsClient { store: self, id }
+    }
+
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
         let res = sqlx::query(
             "INSERT INTO tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
@@ -281,5 +292,196 @@ impl Store {
 
         let id = res.last_insert_id();
         Ok(RoleId(id))
+    }
+}
+
+macro_rules! get_one {
+    ($query:expr) => {
+        match $query {
+            Ok(v) => v,
+            Err(sqlx::Error::RowNotFound) => return Ok(None),
+            Err(err) => return Err(err.into()),
+        }
+    };
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct TournamentsClient<'a> {
+    store: &'a Store,
+}
+
+impl<'a> TournamentsClient<'a> {
+    /// Returns a list of all [`TournamentOverview`]s.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if an database error occured.
+    pub async fn list(&self) -> Result<Vec<TournamentOverview>, Error> {
+        let mut rows =
+            sqlx::query("SELECT id, name, date, kind FROM tournaments").fetch(&self.store.pool);
+
+        let mut tournaments = Vec::new();
+        while let Some(row) = rows.try_next().await? {
+            let id = row.try_get("id")?;
+            let name = row.try_get("name")?;
+            let date = row.try_get("date")?;
+            let kind = row.try_get("kind")?;
+
+            let id = TournamentId(id);
+            let kind = EntrantKind::from_u8(kind).unwrap();
+
+            tournaments.push(TournamentOverview {
+                id,
+                name,
+                date,
+                kind,
+            });
+        }
+
+        Ok(tournaments)
+    }
+
+    /// Returns the [`Tournament`] with the given `id`. Returns `None` if no tournament with the
+    /// given `id` exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if an database error occured.
+    pub async fn get(&self, id: TournamentId) -> Result<Option<Tournament>, Error> {
+        let row = get_one!(
+            sqlx::query("SELECT name, date, description, kind FROM tournaments WHERE id = ?")
+                .bind(id.0)
+                .fetch_one(&self.store.pool)
+                .await
+        );
+
+        let name = row.try_get("name")?;
+        let description = row.try_get("description")?;
+        let date = row.try_get("date")?;
+        let kind = EntrantKind::from_u8(row.try_get("kind")?).unwrap();
+
+        Ok(Some(Tournament {
+            id,
+            name,
+            description,
+            date,
+            kind,
+        }))
+    }
+
+    /// Inserts a new [`Tournament`] and returns the [`TournamentId`] for the newly created value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if an database error occured.
+    pub async fn insert(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
+        let res = sqlx::query(
+            "INSERT INTO tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
+        )
+        .bind(&tournament.name)
+        .bind(&tournament.description)
+        .bind(tournament.date)
+        .bind(tournament.kind.to_u8())
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(TournamentId(res.last_insert_id()))
+    }
+
+    /// Deletes the [`Tournament`] with the given `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if an database error occured.
+    pub async fn delete(&self, id: TournamentId) -> Result<(), Error> {
+        sqlx::query("DELETE FROM tournaments WHERE id = ?")
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Updates the [`Tournament`] with the given `id` using the given [`PartialTournament`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if an database error occured.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug mode if the tournament `kind` is changed without the entrants of that
+    /// tournament being empty. This check is skipped in release mode.
+    pub async fn update(
+        &self,
+        id: TournamentId,
+        tournament: &PartialTournament,
+    ) -> Result<(), Error> {
+        if let Some(name) = &tournament.name {
+            sqlx::query("UPDATE tournaments SET name = ? WHERE id = ?")
+                .bind(name)
+                .bind(id.0)
+                .execute(&self.store.pool)
+                .await?;
+        }
+
+        if let Some(description) = &tournament.description {
+            sqlx::query("UPDATE tournaments SET description = ? WHERE id = ?")
+                .bind(description)
+                .bind(id.0)
+                .execute(&self.store.pool)
+                .await?;
+        }
+
+        if let Some(date) = tournament.date {
+            sqlx::query("UPDATE tournaments SET date = ? WHERE id = ?")
+                .bind(date)
+                .bind(id.0)
+                .execute(&self.store.pool)
+                .await?;
+        }
+
+        if let Some(kind) = tournament.kind {
+            #[cfg(debug_assertions)]
+            {
+                let entrants = self.store.entrants(id).list().await?;
+                assert!(entrants.is_empty());
+            }
+
+            sqlx::query("UPDATE tournaments SET kind = ? WHERE id = ?")
+                .bind(kind.to_u8())
+                .bind(id.0)
+                .execute(&self.store.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct EntrantsClient<'a> {
+    store: &'a Store,
+    id: TournamentId,
+}
+
+impl<'a> EntrantsClient<'a> {
+    pub async fn list(&self) -> Result<Vec<Entrant>, Error> {
+        let mut rows = sqlx::query("SELECT id, data FROM entrants WHERE tournament_id = ?")
+            .bind(self.id.0)
+            .fetch(&self.store.pool);
+
+        let mut entrants = Vec::new();
+        while let Some(row) = rows.try_next().await? {
+            let id = row.try_get("id")?;
+            let data: Vec<u8> = row.try_get("data")?;
+
+            let mut inner: Entrant = serde_json::from_slice(&data)?;
+            inner.id = EntrantId(id);
+
+            entrants.push(inner);
+        }
+
+        Ok(entrants)
     }
 }
