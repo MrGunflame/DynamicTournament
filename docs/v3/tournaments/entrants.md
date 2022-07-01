@@ -95,7 +95,7 @@ Returns the update entrant.
 - `400 Bad Request`: Returned if the request body is malformed.
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
 - `404 Not Found`: Returned if the tournament or entrant with the requested `id` does not exist
--
+
 ## DELETE `/v3/tournaments/:id/entrants/:id`
 
 Deletes the entrant with the given `id`.
@@ -107,5 +107,5 @@ Requires the following request headers to be set:
 
 ### Errors
 
-`401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
-`404 Not Found`: Returned if the tournament or entrant with the requested `id` does not exist.
+- `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
+- `404 Not Found`: Returned if the tournament or entrant with the requested `id` does not exist.
