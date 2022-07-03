@@ -1,6 +1,11 @@
 mod systems;
 mod tournaments;
 
+use std::{
+    io::{self, Write},
+    str::FromStr,
+};
+
 use clap::{Parser, Subcommand};
 use dynamic_tournament_api::{Client, Error};
 
@@ -61,4 +66,17 @@ async fn main() {
     if let Err(err) = res {
         println!("{}", err);
     }
+}
+
+pub fn read_line<T>(name: &str) -> Result<T, T::Err>
+where
+    T: FromStr,
+{
+    let buf = format!("{}: ", name);
+    io::stdout().write_all(buf.as_bytes()).unwrap();
+    io::stdout().flush().unwrap();
+
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf).unwrap();
+    FromStr::from_str(&buf[..buf.len() - 1])
 }
