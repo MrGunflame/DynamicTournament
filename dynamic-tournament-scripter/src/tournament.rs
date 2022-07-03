@@ -91,9 +91,9 @@ mod tests {
         let instructions = vec![Instruction::JGE(
             Operand::pointer(0),
             Operand::Const(3),
-            Location(8),
+            Operand::Location(Location(8)),
         )];
 
-        let mut vm = CreationMachine::new();
+        //let mut vm = CreationMachine::new();
     }
 }

@@ -6,8 +6,8 @@ pub enum Instruction {
     SUB(Operand),
     MUL(Operand),
     DIV(Operand),
-    SHL(Pointer),
-    SHR(Pointer),
+    SHL(Operand),
+    SHR(Operand),
 
     AND(Operand),
     OR(Operand),
@@ -18,13 +18,13 @@ pub enum Instruction {
     PUSH,
     POP,
 
-    JMP(Location),
-    JE(Operand, Operand, Location),
-    JNE(Operand, Operand, Location),
-    JG(Operand, Operand, Location),
-    JGE(Operand, Operand, Location),
-    JL(Operand, Operand, Location),
-    JLE(Operand, Operand, Location),
+    JMP(Operand),
+    JE(Operand, Operand, Operand),
+    JNE(Operand, Operand, Operand),
+    JG(Operand, Operand, Operand),
+    JGE(Operand, Operand, Operand),
+    JL(Operand, Operand, Operand),
+    JLE(Operand, Operand, Operand),
 
     ABORT,
 }
@@ -32,7 +32,14 @@ pub enum Instruction {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Operand {
     Const(u64),
+    Register(Register),
     Pointer(Pointer),
+    Location(Location),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Register {
+    RAX,
 }
 
 impl Operand {

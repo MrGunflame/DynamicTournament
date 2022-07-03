@@ -1,5 +1,6 @@
-use instructions::{Instruction, Instructions, Operand};
+use instructions::{Instruction, Instructions, Operand, Register};
 
+mod asm;
 mod instructions;
 mod tournament;
 
@@ -70,6 +71,10 @@ impl VirtualMachine {
     fn get(&self, operand: Operand) -> Option<u64> {
         match operand {
             Operand::Const(v) => Some(v),
+            Operand::Register(reg) => match reg {
+                Register::RAX => Some(self.rax()),
+            },
+            Operand::Location(_) => None,
             Operand::Pointer(ptr) => self.stack.get(*ptr as usize).map(|v| *v),
         }
     }
