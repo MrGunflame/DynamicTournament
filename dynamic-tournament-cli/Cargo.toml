@@ -1,0 +1,9 @@
+[package]
+name = "dynamic-tournament-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api" }
+clap = { version = "3.2.8", features = ["derive"] }
+tokio = { version = "1.19.2", features = ["rt", "rt-multi-thread", "macros"] }
