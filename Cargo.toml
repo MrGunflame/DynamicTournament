@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "dynamic-tournament-api",
+    "dynamic-tournament-cli",
     "dynamic-tournament-generator",
     "dynamic-tournament-scripter",
     "dynamic-tournament-server",

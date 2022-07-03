@@ -1,5 +1,5 @@
 use crate::http::{Request, RequestUri};
-use crate::{method, Error, State, StatusCodeError};
+use crate::{method, Error, StatusCodeError};
 
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
@@ -14,36 +14,32 @@ use dynamic_tournament_generator::{EntrantScore, SingleElimination};
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Response, StatusCode};
 
-pub async fn route(
-    req: Request,
-    mut uri: RequestUri<'_>,
-    state: State,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req, state).await,
-            Method::POST => create(req, state).await,
+            Method::GET => list(req).await,
+            Method::POST => create(req).await,
         }),
         Some(id) => {
             let id: u64 = id.parse()?;
 
             method!(req, {
-                Method::GET => get(req, id, state).await,
+                Method::GET => get(req, id).await,
             })
         }
     }
 }
 
-async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
-    let tournaments = state.store.list_tournaments().await?;
+async fn list(req: Request) -> Result<Response<Body>, Error> {
+    let tournaments = req.state().store.list_tournaments().await?;
     let mut entrants = Vec::with_capacity(tournaments.len());
     let mut brackets = Vec::with_capacity(tournaments.len());
 
     for tournament in tournaments.iter() {
-        let e = state.store.get_entrants(tournament.id).await?;
+        let e = req.state().store.get_entrants(tournament.id).await?;
         entrants.push(e.len() as u64);
 
-        let b = state.store.list_brackets(tournament.id).await?;
+        let b = req.state().store.list_brackets(tournament.id).await?;
         brackets.push(if b.is_empty() {
             // Placeholder
             BracketType::SingleElimination
@@ -80,8 +76,8 @@ async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
-    if !state.is_authenticated(&req) {
+async fn create(mut req: Request) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
@@ -132,11 +128,11 @@ async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
             .collect(),
     };
 
-    let id = state.store.insert_tournament(&tournament).await?;
+    let id = req.state().store.insert_tournament(&tournament).await?;
 
     let mut entrant_ids = Vec::new();
     for entrant in entrants {
-        let id = state.store.insert_entrant(id, entrant).await?;
+        let id = req.state().store.insert_entrant(id, entrant).await?;
         entrant_ids.push(id);
     }
 
@@ -156,7 +152,7 @@ async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
         entrants: entrant_ids,
     };
 
-    state.store.insert_bracket(id, &bracket).await?;
+    req.state().store.insert_bracket(id, &bracket).await?;
 
     let mut resp = Response::new(Body::empty());
     *resp.status_mut() = StatusCode::CREATED;
@@ -165,13 +161,13 @@ async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn get(_req: Request, id: u64, state: State) -> Result<Response<Body>, Error> {
-    let tournament = match state.store.get_tournament(id.into()).await? {
+async fn get(req: Request, id: u64) -> Result<Response<Body>, Error> {
+    let tournament = match req.state().store.get_tournament(id.into()).await? {
         Some(t) => t,
         None => return Err(StatusCodeError::not_found().into()),
     };
 
-    let entrants = state.store.get_entrants(id.into()).await?;
+    let entrants = req.state().store.get_entrants(id.into()).await?;
 
     let entrants = match entrants.get(0).cloned() {
         Some(e) => match e.inner {

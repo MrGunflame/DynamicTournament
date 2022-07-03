@@ -9,10 +9,14 @@ use crate::{Client, Result};
 
 use entrants::{Player, Team};
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TournamentOverview {
@@ -33,8 +37,30 @@ pub struct Tournament {
     pub kind: EntrantKind,
 }
 
+impl Tournament {
+    /// Updates an existing `Tournament` by applying a [`PartialTournament`] patch on it.
+    pub fn update(&mut self, patch: PartialTournament) {
+        if let Some(name) = patch.name {
+            self.name = name;
+        }
+
+        if let Some(description) = patch.description {
+            self.description = description;
+        }
+
+        if let Some(date) = patch.date {
+            self.date = date;
+        }
+
+        if let Some(kind) = patch.kind {
+            self.kind = kind;
+        }
+    }
+}
+
 /// A [`Tournament`] with all optional fields. This is primarly useful for `PATCH` requestsPATCH requests.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PartialTournament {
     #[cfg_attr(feature = "server", serde(skip_deserializing))]
     pub id: Option<TournamentId>,
@@ -83,6 +109,22 @@ impl Display for EntrantKind {
                 Self::Team => "Team",
             }
         )
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("invalid entrant kind")]
+pub struct InvalidEntrantKind;
+
+impl FromStr for EntrantKind {
+    type Err = InvalidEntrantKind;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "player" => Ok(Self::Player),
+            "team" => Ok(Self::Team),
+            _ => Err(InvalidEntrantKind),
+        }
     }
 }
 
@@ -172,7 +214,7 @@ impl<'a> TournamentsClient<'a> {
             .client
             .request()
             .post()
-            .uri("/v2/tournaments")
+            .uri("/v3/tournaments")
             .body(tournament)
             .build();
 

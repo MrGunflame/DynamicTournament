@@ -5,32 +5,31 @@ use hyper::{Body, Method, Response, StatusCode};
 use crate::method;
 use crate::{
     http::{Request, RequestUri},
-    Error, State,
+    Error,
 };
 
 pub async fn route(
     req: Request,
     mut uri: RequestUri<'_>,
-    state: State,
     tournament_id: TournamentId,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req, state, tournament_id).await,
-            Method::POST => create(req, state, tournament_id).await,
+            Method::GET => list(req, tournament_id).await,
+            Method::POST => create(req, tournament_id).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             method!(req, {
-                Method::GET => get(req, state, tournament_id, id).await,
+                Method::GET => get(req, tournament_id, id).await,
             })
         }
     }
 }
 
-async fn list(_req: Request, state: State, id: TournamentId) -> Result<Response<Body>, Error> {
-    let entrants = state.store.get_entrants(id).await?;
+async fn list(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    let entrants = req.state().store.get_entrants(id).await?;
 
     let body = serde_json::to_vec(&entrants)?;
 
@@ -41,12 +40,11 @@ async fn list(_req: Request, state: State, id: TournamentId) -> Result<Response<
 }
 
 async fn get(
-    _req: Request,
-    state: State,
+    req: Request,
     tournament_id: TournamentId,
     id: EntrantId,
 ) -> Result<Response<Body>, Error> {
-    let entrant = state.store.get_entrant(tournament_id, id).await?;
+    let entrant = req.state().store.get_entrant(tournament_id, id).await?;
 
     let mut resp = Response::new(Body::empty());
     match entrant {
@@ -63,12 +61,8 @@ async fn get(
     Ok(resp)
 }
 
-async fn create(
-    req: Request,
-    state: State,
-    tournament_id: TournamentId,
-) -> Result<Response<Body>, Error> {
-    let tournament = state.store.get_tournament(tournament_id).await?;
+async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
+    let tournament = req.state().store.get_tournament(tournament_id).await?;
 
     let body: Entrant = req.json().await?;
 
@@ -76,7 +70,11 @@ async fn create(
     match tournament {
         Some(tournament) => {
             if tournament.kind == body.kind() {
-                let id = state.store.insert_entrant(tournament_id, body).await?;
+                let id = req
+                    .state()
+                    .store
+                    .insert_entrant(tournament_id, body)
+                    .await?;
 
                 *resp.status_mut() = StatusCode::OK;
                 *resp.body_mut() = Body::from(id.to_string());

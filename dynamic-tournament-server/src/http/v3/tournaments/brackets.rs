@@ -10,36 +10,35 @@ use hyper::{Body, Method, Response, StatusCode};
 use crate::method;
 use crate::{
     http::{Request, RequestUri},
-    Error, State, StatusCodeError,
+    Error, StatusCodeError,
 };
 
 pub async fn route(
     req: Request,
     mut uri: RequestUri<'_>,
-    state: State,
     tournament_id: TournamentId,
 ) -> Result<Response<Body>, Error> {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req, state, tournament_id).await,
-            Method::POST => create(req, state, tournament_id).await,
+            Method::GET => list(req, tournament_id).await,
+            Method::POST => create(req, tournament_id).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             match uri.take_str() {
                 None => method!(req, {
-                    Method::GET => get(req, state, tournament_id, id).await,
+                    Method::GET => get(req, tournament_id, id).await,
                 }),
-                Some("matches") => matches::route(req, uri, state, tournament_id, id).await,
+                Some("matches") => matches::route(req, uri, tournament_id, id).await,
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
         }
     }
 }
 
-async fn list(_req: Request, state: State, id: TournamentId) -> Result<Response<Body>, Error> {
-    let brackets = state.store.list_brackets(id).await?;
+async fn list(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    let brackets = req.state().store.list_brackets(id).await?;
 
     let resp = Response::builder()
         .header("Content-Type", "application/json")
@@ -50,12 +49,11 @@ async fn list(_req: Request, state: State, id: TournamentId) -> Result<Response<
 }
 
 async fn get(
-    _req: Request,
-    state: State,
+    req: Request,
     tournament_id: TournamentId,
     id: BracketId,
 ) -> Result<Response<Body>, Error> {
-    let bracket = state.store.get_bracket(tournament_id, id).await?;
+    let bracket = req.state().store.get_bracket(tournament_id, id).await?;
 
     let bracket = match bracket {
         Some(bracket) => bracket,
@@ -65,19 +63,15 @@ async fn get(
     Ok(Response::new(Body::from(serde_json::to_vec(&bracket)?)))
 }
 
-async fn create(
-    req: Request,
-    state: State,
-    tournament_id: TournamentId,
-) -> Result<Response<Body>, Error> {
-    if !state.is_authenticated(&req) {
+async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
     let mut bracket: Bracket = req.json().await?;
 
     // Make sure all entrants in the bracket actually exist.
-    let entrants = state.store.get_entrants(tournament_id).await?;
+    let entrants = req.state().store.get_entrants(tournament_id).await?;
 
     // Keep track of consumed ids to deny duplicates.
     let mut consumed = Vec::with_capacity(bracket.entrants.len());
@@ -118,7 +112,11 @@ async fn create(
         }
     };
 
-    let id = state.store.insert_bracket(tournament_id, &bracket).await?;
+    let id = req
+        .state()
+        .store
+        .insert_bracket(tournament_id, &bracket)
+        .await?;
 
     Ok(Response::new(Body::from(id.to_string())))
 }

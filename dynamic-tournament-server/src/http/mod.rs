@@ -14,6 +14,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{HeaderValue, CONTENT_TYPE};
+use hyper::http::request::Parts;
 use hyper::server::conn::Http;
 use hyper::service::Service;
 use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
@@ -132,7 +133,7 @@ async fn service_root(
     log::trace!("Headers: {:?}", req.headers());
     log::trace!("Body: {:?}", req.body());
 
-    let req = Request { request: req };
+    let req = Request::new(req, state);
 
     if req.method() == Method::POST {
         let mut resp = Response::new(Body::empty());
@@ -179,8 +180,8 @@ async fn service_root(
 
     let res = match uri.take_str() {
         Some("v1") => v1::route().await,
-        Some("v2") => v2::route(req, uri, state).await,
-        Some("v3") => v3::route(req, uri, state).await,
+        Some("v2") => v2::route(req, uri).await,
+        Some("v3") => v3::route(req, uri).await,
         _ => Err(Error::NotFound),
     };
 
@@ -192,13 +193,10 @@ async fn service_root(
                     .append("Access-Control-Allow-Origin", origin);
             }
 
-            for (k, v) in [
-                ("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT"),
-                (
-                    "Access-Control-Allow-Headers",
-                    "content-type, authorization",
-                ),
-            ] {
+            for (k, v) in [(
+                "Access-Control-Allow-Headers",
+                "content-type, authorization",
+            )] {
                 resp.headers_mut().append(k, HeaderValue::from_static(v));
             }
 
@@ -247,23 +245,44 @@ async fn service_root(
 
 #[derive(Debug)]
 pub struct Request {
-    pub request: hyper::Request<Body>,
+    pub parts: Parts,
+    pub body: Option<Body>,
+    state: State,
 }
 
 impl Request {
+    #[inline]
+    fn new(req: hyper::Request<Body>, state: State) -> Self {
+        let (parts, body) = req.into_parts();
+
+        Self {
+            parts,
+            body: Some(body),
+            state,
+        }
+    }
+
+    #[inline]
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
+    #[inline]
     pub fn method(&self) -> &Method {
-        self.request.method()
+        &self.parts.method
     }
 
+    #[inline]
     pub fn headers(&self) -> &HeaderMap<HeaderValue> {
-        self.request.headers()
+        &self.parts.headers
     }
 
+    #[inline]
     pub fn uri(&self) -> &Uri {
-        self.request.uri()
+        &self.parts.uri
     }
 
-    pub async fn json<T>(self) -> Result<T, Error>
+    pub async fn json<T>(&mut self) -> Result<T, Error>
     where
         T: DeserializeOwned,
     {
@@ -272,7 +291,7 @@ impl Request {
         let deadline = Instant::now() + DUR;
 
         let bytes = tokio::select! {
-            res = hyper::body::to_bytes(self.request.into_body()) => {
+            res = hyper::body::to_bytes(self.body.take().unwrap()) => {
                 res?
             }
             _ = tokio::time::sleep_until(deadline) => {
@@ -290,7 +309,7 @@ impl Request {
     /// Returns the value of the "Content-Length" header. If the header is not present or has an
     /// invalid value an error is returned.
     pub fn content_length(&self) -> Result<u64, Error> {
-        match self.request.headers().get("Content-Length") {
+        match self.headers().get("Content-Length") {
             Some(value) => match value.to_str() {
                 Ok(value) => match value.parse() {
                     Ok(value) => Ok(value),

@@ -6,7 +6,7 @@ use jsonwebtoken::{EncodingKey, Header};
 use crate::method;
 use crate::{
     http::{Request, RequestUri},
-    Error, State, StatusCodeError,
+    Error, StatusCodeError,
 };
 
 use dynamic_tournament_api::auth::{Claims, RefreshToken, TokenPair};
@@ -18,28 +18,24 @@ const REFRESH_TOKEN_EXPR: u64 = 60 * 60 * 24;
 
 pub const SECRET: &[u8] = include_bytes!("../../../jwt-secret");
 
-pub async fn route(
-    req: Request,
-    uri: RequestUri<'_>,
-    state: State,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
     match uri.take_all() {
         Some("login") => method!(req, {
-            Method::POST => login(req, state).await,
+            Method::POST => login(req).await,
         }),
         Some("refresh") => method!(req, {
-            Method::POST => refresh(req, state).await,
+            Method::POST => refresh(req).await,
         }),
         _ => Err(StatusCodeError::not_found().into()),
     }
 }
 
-async fn login(req: Request, state: State) -> Result<Response<Body>, Error> {
+async fn login(mut req: Request) -> Result<Response<Body>, Error> {
     let data = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
 
-    if state.is_allowed(&data) {
+    if req.state().is_allowed(&data) {
         let tokens = create_token_pair(Claims::new(0))?;
 
         *resp.status_mut() = StatusCode::OK;
@@ -52,12 +48,12 @@ async fn login(req: Request, state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn refresh(req: Request, state: State) -> Result<Response<Body>, Error> {
+async fn refresh(mut req: Request) -> Result<Response<Body>, Error> {
     let body: RefreshToken = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
 
-    let claims = match state.decode_token(&body.refresh_token) {
+    let claims = match req.state().decode_token(&body.refresh_token) {
         Ok(claims) => claims,
         Err(err) => {
             log::info!("Failed to decode jwt token: {:?}", err);

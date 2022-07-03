@@ -8,28 +8,25 @@ use hyper::{Body, Method, Response, StatusCode};
 use crate::method;
 use crate::{
     http::{Request, RequestUri},
-    Error, State, StatusCodeError,
+    Error, StatusCodeError,
 };
 
-pub async fn route(
-    req: Request,
-    mut uri: RequestUri<'_>,
-    state: State,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req, state).await,
-            Method::POST => create(req, state).await,
+            Method::GET => list(req).await,
+            Method::POST => create(req).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             match uri.take_str() {
-                Some("entrants") => entrants::route(req, uri, state, id).await,
-                Some("brackets") => brackets::route(req, uri, state, id).await,
-                Some("roles") => roles::route(req, uri, state, id).await,
+                Some("entrants") => entrants::route(req, uri, id).await,
+                Some("brackets") => brackets::route(req, uri, id).await,
+                Some("roles") => roles::route(req, uri, id).await,
                 None => method!(req, {
-                    Method::GET => get(req, state, id).await,
+                    Method::GET => get(req, id).await,
+                    Method::PATCH => patch(req, id).await,
                 }),
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
@@ -37,8 +34,8 @@ pub async fn route(
     }
 }
 
-async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
-    let tournaments = state.store.list_tournaments().await?;
+async fn list(req: Request) -> Result<Response<Body>, Error> {
+    let tournaments = req.state().store.tournaments().list().await?;
 
     let body = serde_json::to_vec(&tournaments)?;
 
@@ -51,22 +48,42 @@ async fn list(_req: Request, state: State) -> Result<Response<Body>, Error> {
     Ok(resp)
 }
 
-async fn get(_req: Request, state: State, id: TournamentId) -> Result<Response<Body>, Error> {
-    let tournament = state.store.get_tournament(id).await?;
+async fn get(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    let tournament = req.state().store.tournaments().get(id).await?;
 
     let tournament = tournament.ok_or_else(StatusCodeError::not_found)?;
 
     Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
 }
 
-async fn create(req: Request, state: State) -> Result<Response<Body>, Error> {
-    if !state.is_authenticated(&req) {
+async fn create(mut req: Request) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
     let tournament = req.json().await?;
 
-    let id = state.store.insert_tournament(&tournament).await?;
+    let id = req.state().store.tournaments().insert(&tournament).await?;
 
     Ok(Response::new(Body::from(id.to_string())))
+}
+
+async fn patch(mut req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
+    // Check if the tournament exists.
+    let mut tournament = match req.state().store.tournaments().get(id).await? {
+        Some(tournament) => tournament,
+        None => return Err(StatusCodeError::not_found().into()),
+    };
+
+    let partial = req.json().await?;
+    req.state().store.tournaments().update(id, &partial).await?;
+
+    // Merge the patch.
+    tournament.update(partial);
+
+    Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
 }

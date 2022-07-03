@@ -17,10 +17,12 @@ pub unsafe fn init() {
 pub struct Logger;
 
 impl Log for Logger {
+    #[inline]
     fn enabled(&self, _metadata: &Metadata) -> bool {
         true
     }
 
+    #[inline]
     fn log(&self, record: &Record) {
         let message = record.args().to_string();
 
@@ -33,5 +35,6 @@ impl Log for Logger {
         }
     }
 
+    #[inline]
     fn flush(&self) {}
 }

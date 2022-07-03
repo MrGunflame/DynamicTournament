@@ -177,7 +177,7 @@ pub struct Node<D> {
 impl<D> Node<D> {
     /// Creates a new `Node` using the given `index` and the default value for `D`.
     #[inline]
-    pub(crate) fn new(index: usize) -> Self
+    pub fn new(index: usize) -> Self
     where
         D: Default,
     {
@@ -188,7 +188,7 @@ impl<D> Node<D> {
     }
 
     #[inline]
-    pub(crate) fn new_with_data(index: usize, data: D) -> Self {
+    pub fn new_with_data(index: usize, data: D) -> Self {
         Self { index, data }
     }
 
