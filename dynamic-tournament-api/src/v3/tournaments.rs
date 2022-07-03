@@ -9,10 +9,14 @@ use crate::{Client, Result};
 
 use entrants::{Player, Team};
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    str::FromStr,
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TournamentOverview {
@@ -108,6 +112,22 @@ impl Display for EntrantKind {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+#[error("invalid entrant kind")]
+pub struct InvalidEntrantKind;
+
+impl FromStr for EntrantKind {
+    type Err = InvalidEntrantKind;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "player" => Ok(Self::Player),
+            "team" => Ok(Self::Team),
+            _ => Err(InvalidEntrantKind),
+        }
+    }
+}
+
 /// A list of entrants in a [`Tournament`]. `Entrants` can either be a list of [`Player`]s or a
 /// list of [`Team`]s.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -194,7 +214,7 @@ impl<'a> TournamentsClient<'a> {
             .client
             .request()
             .post()
-            .uri("/v2/tournaments")
+            .uri("/v3/tournaments")
             .body(tournament)
             .build();
 
