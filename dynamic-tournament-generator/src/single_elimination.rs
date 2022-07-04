@@ -31,6 +31,8 @@ where
     where
         I: Iterator<Item = T>,
     {
+        log::debug!("Using options: {:?}", options);
+
         let entrants: Entrants<T> = entrants.collect();
 
         log::debug!(
@@ -138,6 +140,12 @@ where
         matches: Matches<D>,
         options: TournamentOptions,
     ) -> Result<Self> {
+        log::debug!(
+            "Trying to resume SingleElimination bracket with {} entrants and {} matches",
+            entrants.len(),
+            matches.len()
+        );
+
         let expected = Self::calculate_matches(entrants.len());
         let found = matches.len();
 
@@ -176,6 +184,8 @@ where
         matches: Matches<D>,
         options: TournamentOptions,
     ) -> Self {
+        log::debug!("Using options: {:?}", options);
+
         log::debug!(
             "Resuming SingleElimination bracket with {} entrants and {} matches",
             entrants.len(),

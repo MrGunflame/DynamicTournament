@@ -141,11 +141,22 @@ impl Component for Bracket {
 
                         let entrants = ctx
                             .props()
+                            .bracket
                             .entrants
                             .iter()
-                            .map(|entrant| match &entrant.inner {
-                                EntrantVariant::Player(player) => player.name.clone(),
-                                EntrantVariant::Team(team) => team.name.clone(),
+                            .map(|id| {
+                                // Map the EntrantId to an entrant name (from props).
+                                for e in ctx.props().entrants.iter() {
+                                    if e.id == *id {
+                                        return match &e.inner {
+                                            EntrantVariant::Player(player) => player.name.clone(),
+                                            EntrantVariant::Team(team) => team.name.clone(),
+                                        };
+                                    }
+                                }
+
+                                // Id was not found in entrants.
+                                String::from("Unknown")
                             })
                             .collect();
 

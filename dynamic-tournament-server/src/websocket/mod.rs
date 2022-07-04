@@ -288,6 +288,15 @@ impl LiveBracket {
         bracket: Bracket,
         state: Option<Matches<EntrantScore<u64>>>,
     ) -> Result<(Self, broadcast::Receiver<Frame>), crate::Error> {
+        log::debug!(
+            "Creating new LiveBracket with {} entrants and {} state",
+            bracket.entrants.len(),
+            match state {
+                Some(_) => "existing",
+                None => "no",
+            }
+        );
+
         // Only take the entrants in the bracket.
         let mut bracket_entrants = Vec::with_capacity(bracket.entrants.len());
         for entrant in entrants.into_iter() {
