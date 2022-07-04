@@ -1,4 +1,4 @@
-use crate::options::TournamentOptions;
+use crate::options::{TournamentOptionValues, TournamentOptions};
 use crate::render::Position;
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
@@ -12,7 +12,7 @@ use std::ptr;
 pub struct SingleElimination<T, D> {
     entrants: Entrants<T>,
     matches: Matches<D>,
-    options: TournamentOptions,
+    options: SingleEliminationOptions,
 }
 
 impl<T, D> SingleElimination<T, D>
@@ -27,10 +27,12 @@ where
     }
 
     /// Creates a new `SingleElimination`.
-    pub fn new_with_options<I>(entrants: I, options: TournamentOptions) -> Self
+    pub fn new_with_options<I, O>(entrants: I, options: O) -> Self
     where
         I: Iterator<Item = T>,
+        O: Into<TournamentOptionValues>,
     {
+        let options = SingleEliminationOptions::new(options.into());
         log::debug!("Using options: {:?}", options);
 
         let entrants: Entrants<T> = entrants.collect();
@@ -46,10 +48,8 @@ where
         };
 
         let mut num_matches = (initial_matches * 2).saturating_sub(1);
-        if let Some(opt) = options.get("third_place_match") {
-            if opt.value.unwrap_bool() {
-                num_matches += 1;
-            }
+        if options.third_place_match {
+            num_matches += 1;
         }
 
         let mut matches = Matches::with_capacity(num_matches);
@@ -135,18 +135,26 @@ where
     ///
     /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or an
     /// [`Node`] in `matches` pointed to a value that is out-of-bounds.
-    pub fn resume(
-        entrants: Entrants<T>,
-        matches: Matches<D>,
-        options: TournamentOptions,
-    ) -> Result<Self> {
+    pub fn resume<O>(entrants: Entrants<T>, matches: Matches<D>, options: O) -> Result<Self>
+    where
+        O: Into<TournamentOptionValues>,
+    {
+        let options = options.into();
         log::debug!(
             "Trying to resume SingleElimination bracket with {} entrants and {} matches",
             entrants.len(),
             matches.len()
         );
 
-        let expected = Self::calculate_matches(entrants.len());
+        let mut expected = Self::calculate_matches(entrants.len());
+
+        // Add third_place_match is set in options.
+        if let Some(opt) = options.get("third_place_match") {
+            if opt.unwrap_bool() {
+                expected += 1;
+            }
+        }
+
         let found = matches.len();
 
         if found != expected {
@@ -179,11 +187,15 @@ where
     /// of that invalid object can cause all sorts behavoir including infinite loops, wrong
     /// returned data and potentially undefined behavoir.
     #[inline]
-    pub unsafe fn resume_unchecked(
+    pub unsafe fn resume_unchecked<O>(
         entrants: Entrants<T>,
         matches: Matches<D>,
-        options: TournamentOptions,
-    ) -> Self {
+        options: O,
+    ) -> Self
+    where
+        O: Into<TournamentOptionValues>,
+    {
+        let options = SingleEliminationOptions::new(options.into());
         log::debug!("Using options: {:?}", options);
 
         log::debug!(
@@ -252,86 +264,6 @@ where
     #[inline]
     pub fn into_matches(self) -> Matches<D> {
         self.matches
-    }
-
-    /// Returns the [`NextMatches`] of the match with the given `index`.
-    pub fn next_matches(&self, index: usize) -> NextMatches {
-        let winner_index = self.entrants.len().next_power_of_two() / 2 + index / 2;
-
-        if self.matches.len() > winner_index {
-            NextMatches::new(Some((winner_index, index % 2)), None)
-        } else {
-            NextMatches::default()
-        }
-    }
-
-    /// Updates the match at `index` by applying `f` on it. The next match is updating using the
-    /// result. If `index` is out-of-bounds the function is never called.
-    pub fn update_match<F>(&mut self, index: usize, f: F)
-    where
-        F: FnOnce(&mut Match<Node<D>>, &mut MatchResult<D>),
-    {
-        // Get the match at `index` or abort.
-        // Note: This will borrow `self.matches` mutably until the end of the scope. All
-        // operations that access `self.matches` at an index that is **not `index`** are still
-        // safe.
-
-        let r#match = match self.matches.get_mut(index) {
-            Some(r#match) => r#match,
-            None => return,
-        };
-
-        let mut res = MatchResult::default();
-
-        f(r#match, &mut res);
-
-        let next_matches = self.next_matches(index);
-
-        log::debug!(
-            "Got match results: winner: {:?}, loser: {:?}",
-            res.winner.as_ref().map(|(e, _)| e),
-            res.loser.as_ref().map(|(e, _)| e),
-        );
-
-        if let Some((entrant, data)) = res.winner {
-            // Only update the next match if it actually exists.
-            if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                log::debug!("Next winner match is {}", *next_matches.winner_index);
-
-                *spot = match entrant {
-                    EntrantSpot::Entrant(index) => {
-                        EntrantSpot::Entrant(Node::new_with_data(index, data))
-                    }
-                    EntrantSpot::Empty => EntrantSpot::Empty,
-                    EntrantSpot::TBD => EntrantSpot::TBD,
-                };
-            }
-        }
-
-        let mut next_index = index;
-        if res.reset {
-            let r#match = self.matches.get_mut(index).unwrap();
-
-            for entrant in r#match.entrants.iter_mut() {
-                if let EntrantSpot::Entrant(entrant) = entrant {
-                    entrant.data = D::default();
-                }
-            }
-
-            // Reset all following matches.
-            loop {
-                let next_matches = self.next_matches(next_index);
-                if next_matches.winner_index.is_none() {
-                    break;
-                }
-
-                next_index = *next_matches.winner_index;
-
-                let r#match = self.matches.get_mut(next_index).unwrap();
-
-                r#match[next_matches.winner_position] = EntrantSpot::TBD;
-            }
-        }
     }
 
     /// Calculates the number of matches required to build a [`SingleElimination`] tournament
@@ -422,6 +354,21 @@ where
             }
         }
 
+        if let Some((entrant, data)) = res.loser {
+            if let Some(spot) = next_matches.loser_mut(&mut self.matches) {
+                log::debug!("Next loser match is {}", *next_matches.loser_index);
+
+                *spot = match entrant {
+                    EntrantSpot::Entrant(index) => {
+                        EntrantSpot::Entrant(Node::new_with_data(index, data))
+                    }
+                    EntrantSpot::Empty => EntrantSpot::Empty,
+                    EntrantSpot::TBD => EntrantSpot::TBD,
+                };
+            }
+        }
+
+        let mut next_index = index;
         if res.reset {
             let r#match = self.matches.get_mut(index).unwrap();
 
@@ -430,16 +377,49 @@ where
                     entrant.data = D::default();
                 }
             }
+
+            // Reset all following matches.
+            loop {
+                let next_matches = self.next_matches(next_index);
+                if next_matches.winner_index.is_none() {
+                    break;
+                }
+
+                // Note: Loser matches don't have any following matches.
+                if next_matches.loser_index.is_some() {
+                    let r#match = self.matches.get_mut(*next_matches.loser_index).unwrap();
+                    r#match[next_matches.loser_position] = EntrantSpot::TBD;
+                }
+
+                next_index = *next_matches.winner_index;
+
+                let r#match = self.matches.get_mut(next_index).unwrap();
+                r#match[next_matches.winner_position] = EntrantSpot::TBD;
+            }
         }
     }
 
     fn next_matches(&self, index: usize) -> NextMatches {
-        let winner_index = self.entrants.len().next_power_of_two() / 2 + index / 2;
-
-        if self.matches.len() > winner_index {
-            NextMatches::new(Some((winner_index, index % 2)), None)
+        let is_final_match = if self.options.third_place_match {
+            index >= self.matches().len() - 2
         } else {
+            index >= self.matches().len() - 1
+        };
+
+        let winner_index = self.entrants.len().next_power_of_two() / 2 + index / 2;
+        let loser = if self.options.third_place_match
+            && index >= self.matches().len() - 4
+            && index != self.matches().len() - 2
+        {
+            Some((self.matches().len() - 1, index % 2))
+        } else {
+            None
+        };
+
+        if is_final_match {
             NextMatches::default()
+        } else {
+            NextMatches::new(Some((winner_index, index % 2)), loser)
         }
     }
 
@@ -463,6 +443,7 @@ where
         }
     }
 
+    #[inline]
     fn next_round(&self, range: Range<usize>) -> Range<usize> {
         // Start from default.
         if range.start == 0 {
@@ -471,18 +452,23 @@ where
                 n => 0..n.next_power_of_two() / 2,
             }
         } else {
-            range.start..self.entrants().len().next_power_of_two() / 2 + range.start / 2
+            let end = self.entrants().len().next_power_of_two() / 2 + range.start / 2;
+
+            if end == self.matches().len() - 1 && self.options.third_place_match {
+                range.start..end + 1
+            } else {
+                range.start..end
+            }
         }
     }
 
+    #[inline]
     fn render_match_position(&self, index: usize) -> Position {
-        if let Some(opt) = self.options.get("third_place_match") {
-            if opt.value.unwrap_bool() && index == self.matches().len() - 1 {
-                return Position::bottom(0);
-            }
+        if self.options.third_place_match && index == self.matches().len() - 1 {
+            Position::bottom(0)
+        } else {
+            Position::default()
         }
-
-        Position::default()
     }
 }
 
@@ -495,6 +481,23 @@ impl<T, D> Borrow<Entrants<T>> for SingleElimination<T, D> {
 impl<T, D> Borrow<Matches<D>> for SingleElimination<T, D> {
     fn borrow(&self) -> &Matches<D> {
         &self.matches
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct SingleEliminationOptions {
+    third_place_match: bool,
+}
+
+impl SingleEliminationOptions {
+    fn new(options: TournamentOptionValues) -> Self {
+        let mut this = Self::default();
+
+        if let Some(val) = options.get("third_place_match") {
+            this.third_place_match = val.unwrap_bool_or(false);
+        }
+
+        this
     }
 }
 
@@ -720,6 +723,136 @@ mod tests {
                 Match::new([
                     EntrantSpot::Entrant(Node::new(0)),
                     EntrantSpot::Entrant(Node::new(3))
+                ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_update_match_third_place_match() {
+        let entrants = entrants![0, 1, 2, 3];
+        let mut options = SingleElimination::<i32, u32>::options();
+        options.set("third_place_match", true);
+
+        let mut tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options);
+
+        assert_eq!(tournament.entrants, vec![0, 1, 2, 3]);
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(0, |r#match, result| {
+            result.winner_default(&r#match[0]);
+            result.loser_default(&r#match[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(1, |r#match, result| {
+            result.winner_default(&r#match[1]);
+            result.loser_default(&r#match[0]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+            ]
+        );
+
+        // Index 2 is the final match and no changes should happen.
+        tournament.update_match(2, |r#match, result| {
+            result.winner_default(&r#match[0]);
+            result.loser_default(&r#match[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+            ]
+        );
+
+        // Index 3 is the final match (third place) and no changes should happen.
+        tournament.update_match(3, |r#match, result| {
+            result.winner_default(&r#match[0]);
+            result.loser_default(&r#match[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(1)),
                 ]),
             ]
         );

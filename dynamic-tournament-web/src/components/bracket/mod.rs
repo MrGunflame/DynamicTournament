@@ -3,7 +3,7 @@ mod r#match;
 
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
-use dynamic_tournament_generator::options::TournamentOptions;
+use dynamic_tournament_generator::options::TournamentOptionValues;
 use dynamic_tournament_generator::tournament::TournamentKind;
 use dynamic_tournament_generator::{
     EntrantScore, EntrantSpot, Match, Node, SingleElimination, System,
@@ -133,10 +133,14 @@ impl Component for Bracket {
                         };
 
                         let options = match system_kind {
-                            TournamentKind::SingleElimination => {
-                                SingleElimination::<u8, EntrantScore<u8>>::options()
-                            }
-                            TournamentKind::DoubleElimination => TournamentOptions::default(),
+                            TournamentKind::SingleElimination => ctx
+                                .props()
+                                .bracket
+                                .options
+                                .clone()
+                                .merge(SingleElimination::<u8, EntrantScore<u8>>::options())
+                                .unwrap(),
+                            TournamentKind::DoubleElimination => TournamentOptionValues::default(),
                         };
 
                         let entrants = ctx

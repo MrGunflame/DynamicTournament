@@ -5,7 +5,7 @@ use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
 use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use dynamic_tournament_generator::{
-    DoubleElimination, EntrantScore, EntrantSpot, Matches, SingleElimination,
+    DoubleElimination, EntrantScore, EntrantSpot, Matches, SingleElimination, System,
 };
 
 use futures::SinkExt;
@@ -307,13 +307,21 @@ impl LiveBracket {
 
         let bracket = match bracket.system {
             SystemId(1) => {
-                let bracket = match state {
-                    Some(bracket) => SingleElimination::resume(
-                        bracket_entrants.into(),
-                        bracket,
-                        SingleElimination::<u8, EntrantScore<u64>>::options(),
-                    )?,
-                    None => SingleElimination::new(bracket_entrants.into_iter()),
+                let bracket = {
+                    let options = bracket
+                        .options
+                        .merge(SingleElimination::<(), EntrantScore<u8>>::options())
+                        .unwrap();
+
+                    match state {
+                        Some(bracket) => {
+                            SingleElimination::resume(bracket_entrants.into(), bracket, options)?
+                        }
+                        None => SingleElimination::new_with_options(
+                            bracket_entrants.into_iter(),
+                            options,
+                        ),
+                    }
                 };
 
                 TournamentBracket::SingleElimination(bracket)

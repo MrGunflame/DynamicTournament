@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::options::TournamentOptions;
+use crate::options::{TournamentOptionValues, TournamentOptions};
 use crate::{
     DoubleElimination, EntrantData, Entrants, Match, MatchResult, Matches, Node, Result,
     SingleElimination, System,
@@ -20,7 +20,7 @@ where
     T: Clone,
     D: EntrantData + Clone,
 {
-    pub fn new(kind: TournamentKind, options: TournamentOptions) -> Self {
+    pub fn new(kind: TournamentKind, options: TournamentOptionValues) -> Self {
         let inner = match kind {
             TournamentKind::SingleElimination => InnerTournament::SingleElimination(
                 SingleElimination::new_with_options(vec![].into_iter(), options),
@@ -44,7 +44,7 @@ where
         kind: TournamentKind,
         entrants: Entrants<T>,
         matches: Matches<D>,
-        options: TournamentOptions,
+        options: TournamentOptionValues,
     ) -> Result<Self> {
         let inner = match kind {
             TournamentKind::SingleElimination => InnerTournament::SingleElimination(

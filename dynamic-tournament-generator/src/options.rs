@@ -47,6 +47,27 @@ impl TournamentOptions {
         self.0.get(key)
     }
 
+    pub fn set<K, V>(&mut self, key: K, value: V)
+    where
+        K: ToString,
+        V: Into<OptionValue>,
+    {
+        let key = key.to_string();
+
+        match self.0.get_mut(&key) {
+            Some(val) => val.value = value.into(),
+            None => {
+                self.0.insert(
+                    key,
+                    TournamentOption {
+                        name: String::new(),
+                        value: value.into(),
+                    },
+                );
+            }
+        }
+    }
+
     pub fn insert<K>(&mut self, key: K, option: TournamentOption)
     where
         K: ToString,
@@ -67,12 +88,30 @@ impl TournamentOptions {
     }
 }
 
+impl From<TournamentOptions> for TournamentOptionValues {
+    fn from(this: TournamentOptions) -> Self {
+        TournamentOptionValues::default().merge(this).unwrap()
+    }
+}
+
 /// A list of optional key-values for a tournament which only contains the values.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TournamentOptionValues(HashMap<String, OptionValue>);
 
 impl TournamentOptionValues {
+    pub fn get(&self, key: &str) -> Option<&OptionValue> {
+        self.0.get(key)
+    }
+
+    pub fn set<K, V>(&mut self, key: K, value: V)
+    where
+        K: ToString,
+        V: Into<OptionValue>,
+    {
+        self.0.insert(key.to_string(), value.into());
+    }
+
     pub fn iter(&self) -> Iter<'_, String, OptionValue> {
         self.0.iter()
     }
@@ -135,6 +174,13 @@ impl OptionValue {
         match self {
             Self::Bool(value) => *value,
             _ => panic!("err"),
+        }
+    }
+
+    pub fn unwrap_bool_or(&self, val: bool) -> bool {
+        match self {
+            Self::Bool(val) => *val,
+            _ => val,
         }
     }
 }
