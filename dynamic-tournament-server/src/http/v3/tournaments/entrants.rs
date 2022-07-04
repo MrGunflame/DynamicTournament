@@ -1,5 +1,5 @@
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
+use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use hyper::{Body, Method, Response, StatusCode};
 
 use crate::method;
@@ -62,32 +62,54 @@ async fn get(
 }
 
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
-    let tournament = req.state().store.get_tournament(tournament_id).await?;
+    let tournament = req
+        .state()
+        .store
+        .get_tournament(tournament_id)
+        .await?
+        .unwrap();
 
-    let body: Entrant = req.json().await?;
+    let mut body: Entrant = req.json().await?;
 
     let mut resp = Response::new(Body::empty());
-    match tournament {
-        Some(tournament) => {
-            if tournament.kind == body.kind() {
-                let id = req
-                    .state()
-                    .store
-                    .insert_entrant(tournament_id, body)
-                    .await?;
+    if tournament.kind != body.kind() {
+        *resp.status_mut() = StatusCode::BAD_REQUEST;
+        *resp.body_mut() = Body::from("invalid entrant kind for this tournament");
+        return Ok(resp);
+    }
 
-                *resp.status_mut() = StatusCode::OK;
-                *resp.body_mut() = Body::from(id.to_string());
-            } else {
+    // Check if the roles for all players exist.
+    let roles = req.state().store.roles(tournament_id).list().await?;
+    match &body.inner {
+        EntrantVariant::Player(player) => {
+            if !roles.iter().any(|role| player.role == role.id) {
                 *resp.status_mut() = StatusCode::BAD_REQUEST;
-                *resp.body_mut() = Body::from("invalid entrant kind for this tournament");
+                *resp.body_mut() = Body::from(format!("invalid role {} for player", player.role));
+                return Ok(resp);
             }
         }
-        None => {
-            *resp.status_mut() = StatusCode::NOT_FOUND;
-            *resp.body_mut() = Body::from("invalid tournament id");
+        EntrantVariant::Team(team) => {
+            for player in &team.players {
+                if !roles.iter().any(|role| player.role == role.id) {
+                    *resp.status_mut() = StatusCode::BAD_REQUEST;
+                    *resp.body_mut() =
+                        Body::from(format!("invalid role {} for player", player.role));
+                    return Ok(resp);
+                }
+            }
         }
     }
+
+    // Insert the entrant.
+    body.id = req
+        .state()
+        .store
+        .entrants(tournament_id)
+        .insert(&body)
+        .await?;
+
+    *resp.status_mut() = StatusCode::OK;
+    *resp.body_mut() = Body::from(serde_json::to_vec(&body)?);
 
     Ok(resp)
 }

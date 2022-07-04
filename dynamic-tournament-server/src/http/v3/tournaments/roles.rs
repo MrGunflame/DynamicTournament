@@ -22,13 +22,14 @@ pub async fn route(
 
             method!(req, {
                 Method::GET => get(req, tournament_id, id).await,
+                Method::DELETE => delete(req, tournament_id, id).await,
             })
         }
     }
 }
 
 async fn list(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
-    let roles = req.state().store.get_roles(id).await?;
+    let roles = req.state().store.roles(id).list().await?;
 
     let body = serde_json::to_vec(&roles)?;
 
@@ -44,7 +45,7 @@ async fn get(
     tournament_id: TournamentId,
     id: RoleId,
 ) -> Result<Response<Body>, Error> {
-    let role = req.state().store.get_role(id, tournament_id).await?;
+    let role = req.state().store.roles(tournament_id).get(id).await?;
     if role.is_none() {
         return Err(StatusCodeError::not_found().into());
     }
@@ -59,11 +60,6 @@ async fn get(
 }
 
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
-    let tournament = req.state().store.get_tournament(tournament_id).await?;
-    if tournament.is_none() {
-        return Err(StatusCodeError::not_found().into());
-    }
-
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
@@ -74,6 +70,23 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Respons
 
     Ok(Response::builder()
         .status(StatusCode::CREATED)
+        .body(Body::empty())
+        .unwrap())
+}
+
+async fn delete(
+    req: Request,
+    tournament_id: TournamentId,
+    id: RoleId,
+) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
+    req.state().store.roles(tournament_id).delete(id).await?;
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
         .body(Body::empty())
         .unwrap())
 }

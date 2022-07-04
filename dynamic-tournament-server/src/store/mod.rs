@@ -29,6 +29,11 @@ impl Store {
         EntrantsClient { store: self, id }
     }
 
+    #[inline]
+    pub fn roles(&self, id: TournamentId) -> RolesClient<'_> {
+        RolesClient { store: self, id }
+    }
+
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
         let res = sqlx::query(
             "INSERT INTO tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
@@ -499,5 +504,74 @@ impl<'a> EntrantsClient<'a> {
         }
 
         Ok(entrants)
+    }
+
+    pub async fn insert(&self, entrant: &Entrant) -> Result<EntrantId, Error> {
+        let res = sqlx::query("INSERT INTO entrants (tournament_id, data) VALUES (?, ?)")
+            .bind(self.id.0)
+            .bind(serde_json::to_vec(entrant)?)
+            .execute(&self.store.pool)
+            .await?;
+
+        Ok(EntrantId(res.last_insert_id()))
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct RolesClient<'a> {
+    store: &'a Store,
+    id: TournamentId,
+}
+
+impl<'a> RolesClient<'a> {
+    pub async fn list(&self) -> Result<Vec<Role>, Error> {
+        let mut rows = sqlx::query("SELECT id, name FROM roles WHERE tournament_id = ?")
+            .bind(self.id.0)
+            .fetch(&self.store.pool);
+
+        let mut roles = Vec::new();
+        while let Some(row) = rows.try_next().await? {
+            let id = row.try_get("id")?;
+            let name = row.try_get("name")?;
+
+            roles.push(Role {
+                id: RoleId(id),
+                name,
+            });
+        }
+
+        Ok(roles)
+    }
+
+    pub async fn get(&self, id: RoleId) -> Result<Option<Role>, Error> {
+        let row = get_one!(
+            sqlx::query("SELECT name FROM roles WHERE tournament_id = ? AND id = ?")
+                .bind(self.id.0)
+                .bind(id.0)
+                .fetch_one(&self.store.pool)
+                .await
+        );
+
+        let name = row.try_get("name")?;
+
+        Ok(Some(Role { id, name }))
+    }
+
+    pub async fn insert(&self, role: &Role) -> Result<RoleId, Error> {
+        let res = sqlx::query("INSERT INTO roles (name) VALUES (?)")
+            .bind(&role.name)
+            .execute(&self.store.pool)
+            .await?;
+
+        Ok(RoleId(res.last_insert_id()))
+    }
+
+    pub async fn delete(&self, id: RoleId) -> Result<(), Error> {
+        sqlx::query("DELETE FROM roles WHERE id = ?")
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
+
+        Ok(())
     }
 }

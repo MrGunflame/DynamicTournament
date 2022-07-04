@@ -20,6 +20,13 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
         Some(part) => {
             let id = part.parse()?;
 
+            // Check if the tournament exists before continuing.
+            if req.state().store.tournaments().get(id).await?.is_none() {
+                return Err(StatusCodeError::not_found()
+                    .message("Invalid tournament id")
+                    .into());
+            }
+
             match uri.take_str() {
                 Some("entrants") => entrants::route(req, uri, id).await,
                 Some("brackets") => brackets::route(req, uri, id).await,
