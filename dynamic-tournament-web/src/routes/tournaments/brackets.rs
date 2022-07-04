@@ -70,7 +70,9 @@ impl Component for Brackets {
 
                 // Redirect to the bracket when there's only one avaliable.
                 self.brackets.as_ref().map(|brackets| {
-                    if let Some(bracket) = brackets.get(0) {
+                    if brackets.len() == 1 {
+                        let bracket = &brackets[0];
+
                         log::debug!("Redirecting to bracket {}", bracket.id);
 
                         ctx.link()
