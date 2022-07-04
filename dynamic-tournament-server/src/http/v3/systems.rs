@@ -1,14 +1,14 @@
 use dynamic_tournament_generator::options::TournamentOptions;
-use hyper::{Body, Method, Response, StatusCode};
+use hyper::Method;
 
-use crate::http::{Request, RequestUri};
-use crate::{method, Error, StatusCodeError};
+use crate::http::{Request, RequestUri, Response, Result};
+use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
 use dynamic_tournament_generator::{EntrantScore, SingleElimination};
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take() {
         None => method!(req, {
             Method::GET => list(req).await,
@@ -23,7 +23,7 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
     }
 }
 
-async fn list(_req: Request) -> Result<Response<Body>, Error> {
+async fn list(_req: Request) -> Result {
     // Hardcoded for now.
     let systems = [
         SystemOverview {
@@ -36,18 +36,10 @@ async fn list(_req: Request) -> Result<Response<Body>, Error> {
         },
     ];
 
-    let body = serde_json::to_vec(&systems)?;
-
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Body::from(body))
-        .unwrap();
-
-    Ok(resp)
+    Ok(Response::ok().json(&systems))
 }
 
-async fn get(_req: Request, id: SystemId) -> Result<Response<Body>, Error> {
+async fn get(_req: Request, id: SystemId) -> Result {
     let system = match id.as_ref() {
         1 => Some(System {
             id: SystemId(1),
@@ -63,15 +55,7 @@ async fn get(_req: Request, id: SystemId) -> Result<Response<Body>, Error> {
     };
 
     match system {
-        Some(system) => {
-            let body = serde_json::to_vec(&system)?;
-
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .body(Body::from(body))
-                .unwrap())
-        }
+        Some(system) => Ok(Response::ok().json(&system)),
         None => Err(StatusCodeError::not_found().into()),
     }
 }

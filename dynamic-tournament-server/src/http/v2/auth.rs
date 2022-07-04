@@ -1,13 +1,9 @@
 use chrono::Utc;
-use hyper::{Body, Response};
-use hyper::{Method, StatusCode};
+use hyper::Method;
 use jsonwebtoken::{EncodingKey, Header};
 
-use crate::method;
-use crate::{
-    http::{Request, RequestUri},
-    Error, StatusCodeError,
-};
+use crate::http::{Request, RequestUri, Response, Result};
+use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::auth::{Claims, RefreshToken, TokenPair};
 
@@ -18,7 +14,7 @@ const REFRESH_TOKEN_EXPR: u64 = 60 * 60 * 24;
 
 pub const SECRET: &[u8] = include_bytes!("../../../jwt-secret");
 
-pub async fn route(req: Request, uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, uri: RequestUri<'_>) -> Result {
     match uri.take_all() {
         Some("login") => method!(req, {
             Method::POST => login(req).await,
@@ -30,49 +26,38 @@ pub async fn route(req: Request, uri: RequestUri<'_>) -> Result<Response<Body>, 
     }
 }
 
-async fn login(mut req: Request) -> Result<Response<Body>, Error> {
+async fn login(mut req: Request) -> Result {
     let data = req.json().await?;
-
-    let mut resp = Response::new(Body::empty());
 
     if req.state().is_allowed(&data) {
         let tokens = create_token_pair(Claims::new(0))?;
 
-        *resp.status_mut() = StatusCode::OK;
-        *resp.body_mut() = Body::from(serde_json::to_vec(&tokens)?);
+        Ok(Response::ok().json(&tokens))
     } else {
-        *resp.status_mut() = StatusCode::UNAUTHORIZED;
-        *resp.body_mut() = Body::from("Unauthorized");
+        Err(StatusCodeError::unauthorized().into())
     }
-
-    Ok(resp)
 }
 
-async fn refresh(mut req: Request) -> Result<Response<Body>, Error> {
+async fn refresh(mut req: Request) -> Result {
     let body: RefreshToken = req.json().await?;
-
-    let mut resp = Response::new(Body::empty());
 
     let claims = match req.state().decode_token(&body.refresh_token) {
         Ok(claims) => claims,
         Err(err) => {
             log::info!("Failed to decode jwt token: {:?}", err);
 
-            *resp.status_mut() = StatusCode::UNAUTHORIZED;
-            *resp.body_mut() = Body::from("Unauthorized");
-            return Ok(resp);
+            return Err(StatusCodeError::unauthorized().into());
         }
     };
 
     let body = create_token_pair(claims)?;
 
-    *resp.status_mut() = StatusCode::OK;
-    *resp.body_mut() = Body::from(serde_json::to_vec(&body)?);
-
-    Ok(resp)
+    Ok(Response::ok().json(&body))
 }
 
-fn create_token_pair(mut claims: Claims) -> Result<TokenPair, jsonwebtoken::errors::Error> {
+fn create_token_pair(
+    mut claims: Claims,
+) -> std::result::Result<TokenPair, jsonwebtoken::errors::Error> {
     let now = Utc::now().timestamp() as u64;
 
     claims.iat = now;

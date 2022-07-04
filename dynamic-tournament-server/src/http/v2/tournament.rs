@@ -1,5 +1,5 @@
-use crate::http::{Request, RequestUri};
-use crate::{method, Error, StatusCodeError};
+use crate::http::{Request, RequestUri, Response, Result};
+use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
@@ -11,10 +11,9 @@ use dynamic_tournament_api::v3::tournaments::entrants::{Player as Player2, Team 
 use dynamic_tournament_api::v3::tournaments::{EntrantKind, Tournament as Tournament2};
 use dynamic_tournament_generator::options::TournamentOptionValues;
 use dynamic_tournament_generator::{EntrantScore, SingleElimination};
-use hyper::header::HeaderValue;
-use hyper::{Body, Method, Response, StatusCode};
+use hyper::Method;
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take() {
         None => method!(req, {
             Method::GET => list(req).await,
@@ -30,7 +29,7 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
     }
 }
 
-async fn list(req: Request) -> Result<Response<Body>, Error> {
+async fn list(req: Request) -> Result {
     let tournaments = req.state().store.list_tournaments().await?;
     let mut entrants = Vec::with_capacity(tournaments.len());
     let mut brackets = Vec::with_capacity(tournaments.len());
@@ -65,18 +64,10 @@ async fn list(req: Request) -> Result<Response<Body>, Error> {
         })
         .collect();
 
-    let body = serde_json::to_string(&body)?;
-
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Body::from(body))
-        .unwrap();
-
-    Ok(resp)
+    Ok(Response::ok().json(&body))
 }
 
-async fn create(mut req: Request) -> Result<Response<Body>, Error> {
+async fn create(mut req: Request) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
@@ -154,14 +145,10 @@ async fn create(mut req: Request) -> Result<Response<Body>, Error> {
 
     req.state().store.insert_bracket(id, &bracket).await?;
 
-    let mut resp = Response::new(Body::empty());
-    *resp.status_mut() = StatusCode::CREATED;
-    *resp.body_mut() = Body::from(id.to_string());
-
-    Ok(resp)
+    Ok(Response::created().body(id.to_string()))
 }
 
-async fn get(req: Request, id: u64) -> Result<Response<Body>, Error> {
+async fn get(req: Request, id: u64) -> Result {
     let tournament = match req.state().store.get_tournament(id.into()).await? {
         Some(t) => t,
         None => return Err(StatusCodeError::not_found().into()),
@@ -208,20 +195,14 @@ async fn get(req: Request, id: u64) -> Result<Response<Body>, Error> {
         None => Entrants::Teams(Vec::new()),
     };
 
-    let body = serde_json::to_vec(&Tournament {
+    let body = Tournament {
         id: TournamentId(id),
         name: tournament.name,
         description: tournament.description,
         date: tournament.date,
         bracket_type: BracketType::SingleElimination,
         entrants,
-    })?;
+    };
 
-    let mut resp = Response::new(Body::empty());
-    resp.headers_mut()
-        .append("Content-Type", HeaderValue::from_static("application/json"));
-
-    *resp.body_mut() = Body::from(body);
-
-    Ok(resp)
+    Ok(Response::ok().json(&body))
 }

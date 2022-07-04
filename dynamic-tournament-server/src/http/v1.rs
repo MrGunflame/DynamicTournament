@@ -1,8 +1,7 @@
-use crate::{Error, StatusCodeError};
+use crate::http::Result;
+use crate::StatusCodeError;
 
-use hyper::{Body, Response};
-
-pub async fn route() -> Result<Response<Body>, Error> {
+pub async fn route() -> Result {
     Err(StatusCodeError::gone()
         .message("v1 is depreciated. Use v2 instead")
         .into())

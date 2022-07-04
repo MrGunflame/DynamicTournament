@@ -13,17 +13,22 @@ use std::time::Duration;
 
 use futures::future::BoxFuture;
 use futures::Future;
-use hyper::header::{HeaderValue, CONTENT_TYPE};
+use hyper::header::{
+    HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_EXPOSE_HEADERS,
+    CONTENT_TYPE,
+};
 use hyper::http::request::Parts;
 use hyper::server::conn::Http;
 use hyper::service::Service;
-use hyper::{Body, HeaderMap, Method, Response, StatusCode, Uri};
+use hyper::{Body, HeaderMap, Method, StatusCode, Uri};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpSocket;
 use tokio::time::Instant;
 
-pub async fn bind(addr: SocketAddr, state: State) -> Result<(), crate::Error> {
+pub type Result = std::result::Result<Response, Error>;
+
+pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
     let mut shutdown_rx = state.shutdown_rx.clone();
 
     let service = RootService { state };
@@ -91,11 +96,11 @@ struct RootService {
 }
 
 impl Service<hyper::Request<Body>> for RootService {
-    type Response = Response<Body>;
+    type Response = hyper::Response<Body>;
     type Error = crate::Error;
     type Future = RootServiceFuture;
 
-    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<std::result::Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -105,7 +110,9 @@ impl Service<hyper::Request<Body>> for RootService {
     }
 }
 
-struct RootServiceFuture(BoxFuture<'static, Result<Response<Body>, crate::Error>>);
+struct RootServiceFuture(
+    BoxFuture<'static, std::result::Result<hyper::Response<Body>, crate::Error>>,
+);
 
 impl RootServiceFuture {
     fn new(req: hyper::Request<Body>, state: State) -> Self {
@@ -116,7 +123,7 @@ impl RootServiceFuture {
 }
 
 impl Future for RootServiceFuture {
-    type Output = Result<Response<Body>, crate::Error>;
+    type Output = std::result::Result<hyper::Response<Body>, crate::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let future = unsafe { self.map_unchecked_mut(|this| &mut this.0) };
@@ -127,7 +134,7 @@ impl Future for RootServiceFuture {
 async fn service_root(
     req: hyper::Request<Body>,
     state: State,
-) -> Result<Response<Body>, Infallible> {
+) -> std::result::Result<hyper::Response<Body>, Infallible> {
     log::trace!("Received Request:");
     log::trace!("Head: {} {}", req.method(), req.uri());
     log::trace!("Headers: {:?}", req.headers());
@@ -136,7 +143,7 @@ async fn service_root(
     let req = Request::new(req, state);
 
     if req.method() == Method::POST {
-        let mut resp = Response::new(Body::empty());
+        let mut resp = hyper::Response::new(Body::empty());
         match req.headers().get("Content-Length") {
             Some(value) => match value.to_str() {
                 Ok(s) => match s.parse::<u64>() {
@@ -189,56 +196,47 @@ async fn service_root(
         Ok(mut resp) => {
             log::debug!("Settings CORS for origin: {:?}", origin);
             if let Some(origin) = origin {
-                resp.headers_mut()
-                    .append("Access-Control-Allow-Origin", origin);
+                resp = resp.header(ACCESS_CONTROL_ALLOW_ORIGIN, origin);
             }
 
-            for (k, v) in [(
-                "Access-Control-Allow-Headers",
-                "content-type, authorization",
-            )] {
-                resp.headers_mut().append(k, HeaderValue::from_static(v));
-            }
+            resp = resp.header(
+                ACCESS_CONTROL_EXPOSE_HEADERS,
+                HeaderValue::from_static("content-type,authorization"),
+            );
 
-            Ok(resp)
+            Ok(resp.build())
         }
         Err(err) => {
-            let mut resp = Response::new(Body::empty());
+            let mut resp = Response::ok();
 
             match err {
                 Error::NotFound => {
-                    *resp.status_mut() = StatusCode::NOT_FOUND;
-                    *resp.body_mut() = Body::from("Not Found");
+                    resp = resp.status(StatusCode::NOT_FOUND).body("Not Found");
                 }
                 Error::BadRequest => {
-                    *resp.status_mut() = StatusCode::BAD_REQUEST;
-                    *resp.body_mut() = Body::from("Bad Request");
+                    resp = resp.status(StatusCode::BAD_REQUEST).body("Bad Request");
                 }
                 Error::MethodNotAllowed => {
-                    *resp.status_mut() = StatusCode::METHOD_NOT_ALLOWED;
-                    *resp.body_mut() = Body::from("Method Not Allowed");
+                    resp = resp
+                        .status(StatusCode::METHOD_NOT_ALLOWED)
+                        .body("Method Not Allowed");
                 }
                 Error::StatusCodeError(err) => {
-                    let body = serde_json::to_vec(&ErrorResponse {
+                    resp = resp.status(err.code).json(&ErrorResponse {
                         code: err.code.as_u16(),
                         message: err.message,
-                    })
-                    .unwrap();
-
-                    *resp.status_mut() = err.code;
-                    resp.headers_mut()
-                        .append(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-                    *resp.body_mut() = Body::from(body);
+                    });
                 }
                 err => {
                     log::error!("{:?}", err);
 
-                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    *resp.body_mut() = Body::from("Internal Server Error");
+                    resp = resp
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body("Internal Server Error");
                 }
             }
 
-            Ok(resp)
+            Ok(resp.build())
         }
     }
 }
@@ -282,7 +280,7 @@ impl Request {
         &self.parts.uri
     }
 
-    pub async fn json<T>(&mut self) -> Result<T, Error>
+    pub async fn json<T>(&mut self) -> std::result::Result<T, Error>
     where
         T: DeserializeOwned,
     {
@@ -308,7 +306,7 @@ impl Request {
 
     /// Returns the value of the "Content-Length" header. If the header is not present or has an
     /// invalid value an error is returned.
-    pub fn content_length(&self) -> Result<u64, Error> {
+    pub fn content_length(&self) -> std::result::Result<u64, Error> {
         match self.headers().get("Content-Length") {
             Some(value) => match value.to_str() {
                 Ok(value) => match value.parse() {
@@ -385,7 +383,7 @@ pub struct UriPart<'a> {
 }
 
 impl<'a> UriPart<'a> {
-    pub fn parse<T>(&self) -> Result<T, Error>
+    pub fn parse<T>(&self) -> std::result::Result<T, Error>
     where
         T: FromStr,
     {
@@ -414,6 +412,87 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
+#[derive(Debug)]
+pub struct Response {
+    status: StatusCode,
+    headers: HeaderMap,
+    body: Body,
+}
+
+impl Response {
+    /// 101 Switching Protocols
+    pub fn switching_protocols() -> Self {
+        Self {
+            status: StatusCode::SWITCHING_PROTOCOLS,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
+    /// 200 OK
+    pub fn ok() -> Self {
+        Self {
+            status: StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
+    /// 201 Created
+    pub fn created() -> Self {
+        Self {
+            status: StatusCode::CREATED,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
+    /// 204 No Content
+    pub fn no_content() -> Self {
+        Self {
+            status: StatusCode::NO_CONTENT,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
+    pub fn status(mut self, status: StatusCode) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn body<T>(mut self, body: T) -> Self
+    where
+        T: Into<Body>,
+    {
+        self.body = body.into();
+        self
+    }
+
+    pub fn json<T>(mut self, body: &T) -> Self
+    where
+        T: Serialize,
+    {
+        self.body = Body::from(serde_json::to_vec(body).unwrap());
+        self.header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+    }
+
+    pub fn header<K>(mut self, key: K, value: HeaderValue) -> Self
+    where
+        K: IntoHeaderName,
+    {
+        self.headers.append(key, value);
+        self
+    }
+
+    fn build(self) -> hyper::Response<Body> {
+        let mut resp = hyper::Response::new(self.body);
+        *resp.status_mut() = self.status;
+        *resp.headers_mut() = self.headers;
+        resp
+    }
+}
+
 /// Checks the request method and runs the specified path. If no matching method is found
 /// an method_not_allowed error is returned.
 #[macro_export]
@@ -424,20 +503,15 @@ macro_rules! method {
                 method if method == $method => $branch,
             )*
             method if method == hyper::Method::OPTIONS => {
-                use hyper::{Response, Body};
+                use crate::http::Response;
                 use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
 
                 let allow = vec![$($method.as_str()),*];
                 let allow = HeaderValue::from_bytes(allow.join(",").as_bytes()).unwrap();
 
-                let mut resp = Response::new(Body::empty());
-                *resp.status_mut() = hyper::StatusCode::NO_CONTENT;
-
-                let headers = &mut *resp.headers_mut();
-                headers.insert(ALLOW, allow.clone());
-                headers.insert(ACCESS_CONTROL_ALLOW_METHODS, allow);
-
-                Ok(resp)
+                Ok(Response::no_content()
+                    .header(ALLOW, allow.clone())
+                    .header(ACCESS_CONTROL_ALLOW_METHODS,allow))
             }
             _ => Err(crate::StatusCodeError::method_not_allowed().into()),
         }

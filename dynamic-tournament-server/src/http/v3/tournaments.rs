@@ -3,15 +3,16 @@ mod entrants;
 mod roles;
 
 use dynamic_tournament_api::v3::id::TournamentId;
-use hyper::{Body, Method, Response, StatusCode};
+use dynamic_tournament_api::v3::tournaments::Tournament;
+use hyper::Method;
 
 use crate::method;
 use crate::{
-    http::{Request, RequestUri},
-    Error, StatusCodeError,
+    http::{Request, RequestUri, Response, Result},
+    StatusCodeError,
 };
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take() {
         None => method!(req, {
             Method::GET => list(req).await,
@@ -42,41 +43,33 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
     }
 }
 
-async fn list(req: Request) -> Result<Response<Body>, Error> {
+async fn list(req: Request) -> Result {
     let tournaments = req.state().store.tournaments().list().await?;
 
-    let body = serde_json::to_vec(&tournaments)?;
-
-    let resp = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Body::from(body))
-        .unwrap();
-
-    Ok(resp)
+    Ok(Response::ok().json(&tournaments))
 }
 
-async fn get(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+async fn get(req: Request, id: TournamentId) -> Result {
     let tournament = req.state().store.tournaments().get(id).await?;
 
     let tournament = tournament.ok_or_else(StatusCodeError::not_found)?;
 
-    Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
+    Ok(Response::ok().json(&tournament))
 }
 
-async fn create(mut req: Request) -> Result<Response<Body>, Error> {
+async fn create(mut req: Request) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
-    let tournament = req.json().await?;
+    let mut tournament: Tournament = req.json().await?;
 
-    let id = req.state().store.tournaments().insert(&tournament).await?;
+    tournament.id = req.state().store.tournaments().insert(&tournament).await?;
 
-    Ok(Response::new(Body::from(id.to_string())))
+    Ok(Response::created().json(&tournament))
 }
 
-async fn patch(mut req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+async fn patch(mut req: Request, id: TournamentId) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
@@ -93,15 +86,15 @@ async fn patch(mut req: Request, id: TournamentId) -> Result<Response<Body>, Err
     // Merge the patch.
     tournament.update(partial);
 
-    Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
+    Ok(Response::ok().json(&tournament))
 }
 
-async fn delete(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+async fn delete(req: Request, id: TournamentId) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
     req.state().store.tournaments().delete(id).await?;
 
-    Ok(Response::new(Body::empty()))
+    Ok(Response::ok())
 }

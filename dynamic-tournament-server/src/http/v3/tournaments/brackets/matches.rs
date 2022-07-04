@@ -1,13 +1,13 @@
-use crate::http::{Request, RequestUri};
+use crate::http::{Request, RequestUri, Response, Result};
 use crate::method;
-use crate::{Error, StatusCodeError};
+use crate::StatusCodeError;
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use hyper::header::{
     HeaderValue, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION,
     UPGRADE,
 };
-use hyper::{Body, Method, Response, StatusCode};
+use hyper::Method;
 use sha1::{Digest, Sha1};
 
 use tokio::task;
@@ -17,7 +17,7 @@ pub async fn route(
     mut uri: RequestUri<'_>,
     id: TournamentId,
     bracket_id: BracketId,
-) -> Result<Response<Body>, Error> {
+) -> Result {
     if uri.take().is_none() {
         method!(req, {
             Method::GET => serve(req, id, bracket_id).await,
@@ -27,11 +27,7 @@ pub async fn route(
     }
 }
 
-async fn serve(
-    req: Request,
-    id: TournamentId,
-    bracket_id: BracketId,
-) -> Result<Response<Body>, Error> {
+async fn serve(req: Request, id: TournamentId, bracket_id: BracketId) -> Result {
     // Check that the tournament and bracket exist.
     if req.state().store.get_tournament(id).await?.is_none()
         || req
@@ -48,7 +44,7 @@ async fn serve(
         return Err(StatusCodeError::upgrade_required().into());
     }
 
-    let mut resp = Response::new(Body::empty());
+    let mut resp = Response::switching_protocols();
 
     // Set the `Sec-WebSocket-Accept` header when the request contains the `Sec-WebSocket-Key`
     // header.
@@ -62,7 +58,7 @@ async fn serve(
         let res = base64::encode(hasher.finalize());
         let header = HeaderValue::from_str(&res).unwrap();
 
-        resp.headers_mut().insert(SEC_WEBSOCKET_ACCEPT, header);
+        resp = resp.header(SEC_WEBSOCKET_ACCEPT, header)
     }
 
     log::debug!("Upgrading connection");
@@ -77,12 +73,10 @@ async fn serve(
         }
     });
 
-    *resp.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
-
-    let headers = resp.headers_mut();
-    headers.insert(CONNECTION, HeaderValue::from_static("Upgrade"));
-    headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
-    headers.insert(SEC_WEBSOCKET_VERSION, HeaderValue::from_static("13"));
+    resp = resp
+        .header(CONNECTION, HeaderValue::from_static("Upgrade"))
+        .header(UPGRADE, HeaderValue::from_static("websocket"))
+        .header(SEC_WEBSOCKET_VERSION, HeaderValue::from_static("13"));
 
     log::debug!("Upgraded connection");
 

@@ -5,19 +5,15 @@ use dynamic_tournament_api::v3::{
     tournaments::brackets::Bracket,
 };
 use dynamic_tournament_generator::{options::TournamentOptions, EntrantScore, SingleElimination};
-use hyper::{Body, Method, Response, StatusCode};
+use hyper::Method;
 
 use crate::method;
 use crate::{
-    http::{Request, RequestUri},
-    Error, StatusCodeError,
+    http::{Request, RequestUri, Response, Result},
+    StatusCodeError,
 };
 
-pub async fn route(
-    req: Request,
-    mut uri: RequestUri<'_>,
-    tournament_id: TournamentId,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: TournamentId) -> Result {
     match uri.take() {
         None => method!(req, {
             Method::GET => list(req, tournament_id).await,
@@ -37,33 +33,22 @@ pub async fn route(
     }
 }
 
-async fn list(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+async fn list(req: Request, id: TournamentId) -> Result {
     let brackets = req.state().store.list_brackets(id).await?;
 
-    let resp = Response::builder()
-        .header("Content-Type", "application/json")
-        .body(Body::from(serde_json::to_vec(&brackets)?))
-        .unwrap();
-
-    Ok(resp)
+    Ok(Response::ok().json(&brackets))
 }
 
-async fn get(
-    req: Request,
-    tournament_id: TournamentId,
-    id: BracketId,
-) -> Result<Response<Body>, Error> {
+async fn get(req: Request, tournament_id: TournamentId, id: BracketId) -> Result {
     let bracket = req.state().store.get_bracket(tournament_id, id).await?;
 
-    let bracket = match bracket {
-        Some(bracket) => bracket,
-        None => return Err(StatusCodeError::not_found().into()),
-    };
-
-    Ok(Response::new(Body::from(serde_json::to_vec(&bracket)?)))
+    match bracket {
+        Some(bracket) => Ok(Response::ok().json(&bracket)),
+        None => Err(StatusCodeError::not_found().into()),
+    }
 }
 
-async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
+async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
@@ -76,24 +61,20 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Respons
     // Keep track of consumed ids to deny duplicates.
     let mut consumed = Vec::with_capacity(bracket.entrants.len());
 
-    let mut resp = Response::new(Body::empty());
-
     for id in bracket.entrants.iter() {
         if consumed.contains(id) {
-            *resp.status_mut() = StatusCode::BAD_REQUEST;
-            *resp.body_mut() = Body::from(format!("found entrant {} multiple times", id));
-
-            return Ok(resp);
+            return Err(StatusCodeError::bad_request()
+                .message(format!("found entrant {} multiple times", id))
+                .into());
         }
 
         if !entrants.iter().any(|e| e.id == *id) {
-            *resp.status_mut() = StatusCode::BAD_REQUEST;
-            *resp.body_mut() = Body::from(format!(
-                "invalid entrant {}, does not exist for tournament",
-                id
-            ));
-
-            return Ok(resp);
+            return Err(StatusCodeError::bad_request()
+                .message(format!(
+                    "invalid entrant {}, does not exist for tournament",
+                    id
+                ))
+                .into());
         }
 
         consumed.push(*id);
@@ -117,6 +98,7 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Respons
         .store
         .insert_bracket(tournament_id, &bracket)
         .await?;
+    bracket.id = id;
 
-    Ok(Response::new(Body::from(id.to_string())))
+    Ok(Response::created().json(&bracket))
 }

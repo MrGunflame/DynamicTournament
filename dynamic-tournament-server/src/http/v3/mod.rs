@@ -1,14 +1,12 @@
 mod systems;
 mod tournaments;
 
-use hyper::{Body, Response};
-
-use crate::http::{Request, RequestUri};
-use crate::{Error, StatusCodeError};
+use crate::http::{Request, RequestUri, Result};
+use crate::StatusCodeError;
 
 use super::v2;
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take_str() {
         // /v3/auth uses the same endpoint as /v2/auth.
         Some("auth") => v2::auth::route(req, uri).await,

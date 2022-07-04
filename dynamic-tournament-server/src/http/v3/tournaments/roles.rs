@@ -1,17 +1,14 @@
 use dynamic_tournament_api::v3::id::{RoleId, TournamentId};
-use hyper::{header::CONTENT_TYPE, Body, Method, Response, StatusCode};
+use dynamic_tournament_api::v3::tournaments::roles::Role;
+use hyper::Method;
 
 use crate::method;
 use crate::{
-    http::{Request, RequestUri},
-    Error, StatusCodeError,
+    http::{Request, RequestUri, Response, Result},
+    StatusCodeError,
 };
 
-pub async fn route(
-    req: Request,
-    mut uri: RequestUri<'_>,
-    tournament_id: TournamentId,
-) -> Result<Response<Body>, Error> {
+pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: TournamentId) -> Result {
     match uri.take() {
         None => method!(req, {
             Method::GET => list(req, tournament_id).await,
@@ -28,65 +25,39 @@ pub async fn route(
     }
 }
 
-async fn list(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+async fn list(req: Request, id: TournamentId) -> Result {
     let roles = req.state().store.roles(id).list().await?;
 
-    let body = serde_json::to_vec(&roles)?;
-
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header(CONTENT_TYPE, "application/json")
-        .body(Body::from(body))
-        .unwrap())
+    Ok(Response::ok().json(&roles))
 }
 
-async fn get(
-    req: Request,
-    tournament_id: TournamentId,
-    id: RoleId,
-) -> Result<Response<Body>, Error> {
+async fn get(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {
     let role = req.state().store.roles(tournament_id).get(id).await?;
-    if role.is_none() {
-        return Err(StatusCodeError::not_found().into());
+
+    match role {
+        Some(role) => Ok(Response::ok().json(&role)),
+        None => Err(StatusCodeError::not_found().into()),
     }
-
-    let body = serde_json::to_vec(&role.unwrap())?;
-
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header(CONTENT_TYPE, "application/json")
-        .body(Body::from(body))
-        .unwrap())
 }
 
-async fn create(mut req: Request, tournament_id: TournamentId) -> Result<Response<Body>, Error> {
+async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
-    let body = req.json().await?;
+    let mut role: Role = req.json().await?;
 
-    req.state().store.insert_role(body, tournament_id).await?;
+    role.id = req.state().store.roles(tournament_id).insert(&role).await?;
 
-    Ok(Response::builder()
-        .status(StatusCode::CREATED)
-        .body(Body::empty())
-        .unwrap())
+    Ok(Response::created().json(&role))
 }
 
-async fn delete(
-    req: Request,
-    tournament_id: TournamentId,
-    id: RoleId,
-) -> Result<Response<Body>, Error> {
+async fn delete(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {
     if !req.state().is_authenticated(&req) {
         return Err(StatusCodeError::unauthorized().into());
     }
 
     req.state().store.roles(tournament_id).delete(id).await?;
 
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::empty())
-        .unwrap())
+    Ok(Response::ok())
 }
