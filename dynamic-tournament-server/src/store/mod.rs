@@ -394,7 +394,23 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn delete(&self, id: TournamentId) -> Result<(), Error> {
+        // FIXME: Join all futures for better speeeed.
         sqlx::query("DELETE FROM tournaments WHERE id = ?")
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
+
+        sqlx::query("DELETE FROM entrants WHERE tournament_id = ?")
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
+
+        sqlx::query("DELETE FROM brackets WHERE tournament_id = ?")
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
+
+        sqlx::query("DELETE FROM roles WHERE tournament_id = ?")
             .bind(id.0)
             .execute(&self.store.pool)
             .await?;

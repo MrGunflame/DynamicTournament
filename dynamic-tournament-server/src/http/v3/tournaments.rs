@@ -27,6 +27,7 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result<Response<Bod
                 None => method!(req, {
                     Method::GET => get(req, id).await,
                     Method::PATCH => patch(req, id).await,
+                    Method::DELETE => delete(req, id).await,
                 }),
                 Some(_) => Err(StatusCodeError::not_found().into()),
             }
@@ -86,4 +87,14 @@ async fn patch(mut req: Request, id: TournamentId) -> Result<Response<Body>, Err
     tournament.update(partial);
 
     Ok(Response::new(Body::from(serde_json::to_vec(&tournament)?)))
+}
+
+async fn delete(req: Request, id: TournamentId) -> Result<Response<Body>, Error> {
+    if !req.state().is_authenticated(&req) {
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
+    req.state().store.tournaments().delete(id).await?;
+
+    Ok(Response::new(Body::empty()))
 }
