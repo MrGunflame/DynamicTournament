@@ -114,10 +114,8 @@ impl Component for Bracket {
                 let tournament_name = ctx.props().tournament.name.clone();
 
                 // Don't update when requesting the same bracket.
-                if self.bracket.has_value() {
-                    if self.bracket.as_ref().unwrap().id == id {
-                        return false;
-                    }
+                if self.bracket.has_value() && self.bracket.as_ref().unwrap().id == id {
+                    return false;
                 }
 
                 let (client, _) = ctx
@@ -162,7 +160,6 @@ impl Component for Bracket {
             let entrants = self.entrants.clone().unwrap();
             let bracket = self.bracket.clone().unwrap();
 
-            let brackets = brackets.clone();
             let onclick = ctx
                 .link()
                 .callback(move |(_, id)| Message::OnClick(id, "a".into()));
