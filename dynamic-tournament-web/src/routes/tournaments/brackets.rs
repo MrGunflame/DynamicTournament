@@ -10,6 +10,7 @@ use dynamic_tournament_api::{
 use yew::{html, Callback, Component, Context, Html, Properties};
 use yew_router::{history::History, prelude::RouterScopeExt};
 
+use crate::components::BracketList;
 use crate::utils::FetchData;
 
 use super::Route;
@@ -29,7 +30,7 @@ impl PartialEq for Props {
 
 #[derive(Debug)]
 pub struct Brackets {
-    brackets: FetchData<Vec<BracketOverview>>,
+    brackets: FetchData<Rc<Vec<BracketOverview>>>,
 }
 
 impl Component for Brackets {
@@ -51,7 +52,7 @@ impl Component for Brackets {
                 .list()
                 .await
             {
-                Ok(brackets) => FetchData::from(brackets),
+                Ok(brackets) => FetchData::from(Rc::new(brackets)),
                 Err(err) => FetchData::from_err(err),
             };
 
@@ -107,41 +108,19 @@ impl Component for Brackets {
                 };
             }
 
-            let brackets: Html = brackets
-                .iter()
-                .map(|bracket| {
-                    let id = bracket.id;
-                    let name = bracket.name.clone();
-
-                    let onclick = ctx
-                        .link()
-                        .callback(move |_| Message::OnClick(id, name.clone()));
-
-                    html! {
-                        <tr {onclick} class="tr-link">
-                            <td>{ bracket.name.clone() }</td>
-                        </tr>
-                    }
-                })
-                .collect();
+            let brackets = brackets.clone();
+            let onclick = ctx
+                .link()
+                .callback(move |(_, id)| Message::OnClick(id, "a".into()));
 
             html! {
-                <div>
-                    <table class="table-center">
-                        <tbody>
-                            <tr>
-                                <th>{ "Name" }</th>
-                            </tr>
-                            { brackets }
-                        </tbody>
-                    </table>
-                </div>
+                <BracketList {brackets} {onclick} />
             }
         })
     }
 }
 
 pub enum Message {
-    Update(FetchData<Vec<BracketOverview>>),
+    Update(FetchData<Rc<Vec<BracketOverview>>>),
     OnClick(BracketId, String),
 }

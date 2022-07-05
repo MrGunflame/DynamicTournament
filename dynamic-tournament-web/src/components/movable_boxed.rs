@@ -130,6 +130,11 @@ impl Component for MovableBoxed {
         }
     }
 
+    // Reposition when props change.
+    fn changed(&mut self, ctx: &Context<Self>) -> bool {
+        self.update(ctx, Message::Reposition)
+    }
+
     fn view(&self, ctx: &Context<Self>) -> Html {
         let is_locked = self.is_locked;
 
@@ -170,8 +175,6 @@ impl Component for MovableBoxed {
             if is_locked {
                 return None;
             }
-
-            log::debug!("{}", e.delta_y());
 
             e.prevent_default();
             if e.delta_y().is_sign_positive() {

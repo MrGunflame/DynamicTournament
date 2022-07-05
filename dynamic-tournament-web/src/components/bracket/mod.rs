@@ -32,7 +32,7 @@ use crate::components::popup::Popup;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
 use crate::services::errorlog::ErrorLog;
-use crate::services::{EventBus, WebSocketService};
+use crate::services::{EventBus, MessageLog, WebSocketService};
 
 pub struct Bracket {
     websocket: WebSocketService,
@@ -71,6 +71,35 @@ impl Component for Bracket {
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleFrame)),
             popup: None,
         }
+    }
+
+    // When the properties change we should close the existing socket and forget the existing
+    // state and create a new one using the new properties.
+    fn changed(&mut self, ctx: &Context<Self>) -> bool {
+        self.state = None;
+
+        let client = ClientProvider::take(ctx);
+
+        let websocket =
+            match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
+            {
+                Ok(ws) => ws,
+                Err(err) => {
+                    MessageLog::error(err.to_string());
+                    panic!("{}", err)
+                }
+            };
+
+        let mut ws = websocket.clone();
+        ctx.link().send_future_batch(async move {
+            let _ = ws.send(Frame::SyncMatchesRequest).await;
+            vec![]
+        });
+
+        self.websocket = websocket;
+        self._producer = EventBus::bridge(ctx.link().callback(Message::HandleFrame));
+
+        true
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {

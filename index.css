@@ -470,3 +470,16 @@ td {
 .dt-input:disabled {
   cursor: not-allowed;
 }
+
+.dt-r-bracket {
+  padding: 5px;
+  cursor: pointer;
+}
+
+.dt-r-bracket.active {
+  border-top: 3px solid #303540;
+  border-left: 3px solid #303540;
+  border-right: 3px solid #303540;
+  color: var(--color-orange);
+  background-color: #131211;
+}
