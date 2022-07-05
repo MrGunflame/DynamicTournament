@@ -6,6 +6,9 @@ use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 
 use crate::components::button::Button;
 
+// Zoom factor for mouse/touch scroll events.
+const ZOOM_FACTOR: f32 = 0.05;
+
 pub struct MovableBoxed {
     element: NodeRef,
     listeners: Option<[EventListener; 3]>,
@@ -38,8 +41,9 @@ impl Component for MovableBoxed {
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::MoveAbsoluate(coords) => {
-                self.translate = coords;
+            Message::Reposition => {
+                self.translate = Coordinates::default();
+                self.scale = 100;
             }
             Message::Move(coords) => {
                 self.translate.x = self
@@ -162,9 +166,22 @@ impl Component for MovableBoxed {
             }
         });
 
-        let on_reposition = ctx
-            .link()
-            .callback(|_| Message::MoveAbsoluate(Coordinates::default()));
+        let on_wheel = ctx.link().batch_callback(move |e: WheelEvent| {
+            if is_locked {
+                return None;
+            }
+
+            log::debug!("{}", e.delta_y());
+
+            e.prevent_default();
+            if e.delta_y().is_sign_positive() {
+                Some(Message::ZoomOut((e.delta_y() as f32 * ZOOM_FACTOR) as u32))
+            } else {
+                Some(Message::ZoomIn((-e.delta_y() as f32 * ZOOM_FACTOR) as u32))
+            }
+        });
+
+        let on_reposition = ctx.link().callback(|_| Message::Reposition);
 
         let on_zoom_in = ctx.link().callback(|_| Message::ZoomIn(5));
 
@@ -207,7 +224,7 @@ impl Component for MovableBoxed {
         };
 
         html! {
-            <div ref={self.element.clone()} class={classes} onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} style={cursor}>
+            <div ref={self.element.clone()} class={classes} onmousedown={on_mouse_down} onmouseup={on_mouse_up} onmousemove={on_mouse_move} onwheel={on_wheel} style={cursor}>
                 <div class="movable-boxed-buttons">
                     <Button onclick={on_reposition} title="Reposition">
                         <i aria-hidden="true" class="fa-solid fa-compress"></i>
@@ -239,7 +256,7 @@ pub struct Properties {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    MoveAbsoluate(Coordinates),
+    Reposition,
     Move(Coordinates),
     MouseUp,
     MouseDown(Coordinates),
