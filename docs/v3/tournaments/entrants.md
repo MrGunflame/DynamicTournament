@@ -37,7 +37,7 @@ Returns a either a list of [Player](#player)s or [Team](#team)s.
 
 ## POST `/v3/tournaments/:id/entrants`
 
-Creates a new entrant in the tournament with the given `id`.
+Creates a new entrant in the tournament with the given `id`. Please note that all players must have valid role ids for the tournament.
 
 ### Request Headers
 
@@ -72,7 +72,7 @@ Returns the newly created entrant. If multiple entrants have been created, retur
 
 ## PATCH `/v3/tournaments/:id/entrants/:id`
 
-Updates a number of fields of the entrant with the given `id`.
+Updates a number of fields of the entrant with the given `id`. Please note that all players must have valid role ids for the tournament.
 
 | Field   | Note                                                               |
 | ------- | ------------------------------------------------------------------ |
