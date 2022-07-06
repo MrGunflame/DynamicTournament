@@ -153,6 +153,8 @@ pub enum Error {
     Bracket(#[from] dynamic_tournament_generator::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("body already consumed")]
+    BodyConsumed,
 }
 
 #[derive(Debug, Error)]

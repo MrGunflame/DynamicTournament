@@ -280,24 +280,39 @@ impl Request {
         &self.parts.uri
     }
 
-    pub async fn json<T>(&mut self) -> std::result::Result<T, Error>
-    where
-        T: DeserializeOwned,
-    {
+    /// Aggregates and returns the whole request body once it was fully recieved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] when reading the request body fails or the request times out.
+    pub async fn body(&mut self) -> std::result::Result<hyper::body::Bytes, Error> {
         const DUR: Duration = Duration::new(30, 0);
 
         let deadline = Instant::now() + DUR;
 
-        let bytes = tokio::select! {
-            res = hyper::body::to_bytes(self.body.take().unwrap()) => {
-                res?
+        let body = self.body.take().ok_or(Error::BodyConsumed)?;
+        tokio::select! {
+            res = hyper::body::to_bytes(body) => {
+                Ok(res?)
             }
             _ = tokio::time::sleep_until(deadline) => {
                 log::info!("Client failed to transmit body in {}s, dropping connection", DUR.as_secs());
-                return Err(StatusCodeError::request_timeout().into());
+                Err(StatusCodeError::request_timeout().into())
             }
-        };
+        }
+    }
 
+    /// Aggregates and returns the whole request body parsed as json once it was fully received.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] when reading the request body fails, the request times out or the
+    /// body contains an invalid json payload.
+    pub async fn json<T>(&mut self) -> std::result::Result<T, Error>
+    where
+        T: DeserializeOwned,
+    {
+        let bytes = self.body().await?;
         match serde_json::from_slice(&bytes) {
             Ok(value) => Ok(value),
             Err(err) => Err(StatusCodeError::new(StatusCode::BAD_REQUEST, err).into()),
