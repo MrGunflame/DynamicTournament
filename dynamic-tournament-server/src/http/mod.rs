@@ -14,7 +14,7 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
-    HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_EXPOSE_HEADERS,
+    HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN,
     CONTENT_TYPE,
 };
 use hyper::http::request::Parts;
@@ -200,7 +200,7 @@ async fn service_root(
             }
 
             resp = resp.header(
-                ACCESS_CONTROL_EXPOSE_HEADERS,
+                ACCESS_CONTROL_ALLOW_HEADERS,
                 HeaderValue::from_static("content-type,authorization"),
             );
 
