@@ -284,7 +284,7 @@ impl Request {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] when reading the request body fails or the request times out.
+    /// Returns an [`enum@Error`] when reading the request body fails or the request times out.
     pub async fn body(&mut self) -> std::result::Result<hyper::body::Bytes, Error> {
         const DUR: Duration = Duration::new(30, 0);
 
@@ -306,7 +306,7 @@ impl Request {
     ///
     /// # Errors
     ///
-    /// Returns an [`Error`] when reading the request body fails, the request times out or the
+    /// Returns an [`enum@Error`] when reading the request body fails, the request times out or the
     /// body contains an invalid json payload.
     pub async fn json<T>(&mut self) -> std::result::Result<T, Error>
     where
@@ -518,7 +518,7 @@ macro_rules! method {
                 method if method == $method => $branch,
             )*
             method if method == hyper::Method::OPTIONS => {
-                use crate::http::Response;
+                use $crate::http::Response;
                 use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
 
                 let allow = vec![$($method.as_str()),*];
@@ -528,7 +528,7 @@ macro_rules! method {
                     .header(ALLOW, allow.clone())
                     .header(ACCESS_CONTROL_ALLOW_METHODS,allow))
             }
-            _ => Err(crate::StatusCodeError::method_not_allowed().into()),
+            _ => Err($crate::StatusCodeError::method_not_allowed().into()),
         }
     };
 }
