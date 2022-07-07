@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+CARGO := cargo
+
 BUILD_PATH := $(shell pwd)/build
 PATH_BIN := $(BUILD_PATH)/bin
 PATH_DIST := $(BUILD_PATH)/dist
@@ -7,9 +9,15 @@ PATH_DIST := $(BUILD_PATH)/dist
 MINIFIER := $(PATH_BIN)/minifier
 MINIFIER_ARGS := --do-not-minify-doctype --ensure-spec-compliant-unquoted-attribute-values --keep-spaces-between-attributes --minify-css  --minify-js
 
-.PHONY: prerequisites build trunk setup-minify minify
+.PHONY: test prerequisites build trunk setup-minify minify
 
 all: prerequisites build minify
+
+test:
+	$(CARGO) fmt --all -- --check
+	$(CARGO) clippy --all-targets --all-features -- -D warnings
+	RUSTDOCFLAGS="-Dwarnings" $(CARGO) doc --no-deps --all-features
+	$(CARGO) test --all-features
 
 prerequisites:
 	@for path in git cargo go; \

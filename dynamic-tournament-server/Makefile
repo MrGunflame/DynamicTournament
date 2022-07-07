@@ -17,4 +17,4 @@ build:
 	@printf "\nOUTPUT FILE PATH: \e[92m../target/release/dynamic-tournament-server\e[0m\n"
 
 docker:
-	cd .. && docker build -t dynamic-tournament-server -f dynamic-tournament-server/Dockerfile .
+	cd .. && docker build --rm -t dynamic-tournament-server -f dynamic-tournament-server/Dockerfile .
