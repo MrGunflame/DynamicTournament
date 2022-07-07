@@ -126,7 +126,8 @@ impl Store {
             Err(err) => return Err(err.into()),
         };
 
-        let entrant = serde_json::from_slice(row.try_get("data")?)?;
+        let mut entrant: Entrant = serde_json::from_slice(row.try_get("data")?)?;
+        entrant.id = id;
 
         Ok(Some(entrant))
     }

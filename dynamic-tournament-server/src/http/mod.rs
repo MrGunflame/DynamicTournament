@@ -222,6 +222,8 @@ async fn service_root(
                         .body("Method Not Allowed");
                 }
                 Error::StatusCodeError(err) => {
+                    log::debug!("Responding with error: {:?}", err);
+
                     resp = resp.status(err.code).json(&ErrorResponse {
                         code: err.code.as_u16(),
                         message: err.message,
@@ -315,7 +317,11 @@ impl Request {
         let bytes = self.body().await?;
         match serde_json::from_slice(&bytes) {
             Ok(value) => Ok(value),
-            Err(err) => Err(StatusCodeError::new(StatusCode::BAD_REQUEST, err).into()),
+            Err(err) => {
+                log::debug!("Failed to read request body as json: {}", err);
+
+                Err(StatusCodeError::new(StatusCode::BAD_REQUEST, err).into())
+            }
         }
     }
 
@@ -404,7 +410,7 @@ impl<'a> UriPart<'a> {
     {
         match self.part.parse() {
             Ok(v) => Ok(v),
-            Err(_) => Err(Error::BadRequest),
+            Err(_) => Err(StatusCodeError::not_found().into()),
         }
     }
 }
