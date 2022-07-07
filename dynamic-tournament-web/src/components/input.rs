@@ -1,4 +1,5 @@
-use web_sys::Event;
+use wasm_bindgen::JsCast;
+use web_sys::{Event, HtmlInputElement};
 use yew::{html, Callback, Component, Context, Html, Properties};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
@@ -36,11 +37,11 @@ impl Component for Input {
         let value = ctx.props().value.clone();
 
         let onchange = ctx.link().callback(|event: Event| match event.target() {
-            Some(target) => target.as_string().unwrap(),
-            None => {
-                log::debug!("event missing `target`");
-                String::new()
+            Some(target) => {
+                let target: HtmlInputElement = target.dyn_into().unwrap();
+                target.value()
             }
+            None => unreachable!(),
         });
 
         html! {
