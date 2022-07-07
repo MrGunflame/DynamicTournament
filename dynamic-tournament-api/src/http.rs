@@ -277,6 +277,10 @@ mod wasm {
                 _ => unreachable!(),
             });
 
+            for (key, value) in request.headers {
+                req = req.header(key, &value);
+            }
+
             if let Some(body) = request.body {
                 req = req.body(body);
             }
