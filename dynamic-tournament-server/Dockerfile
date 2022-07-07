@@ -1,6 +1,6 @@
 FROM rust:alpine as builder
 
-RUN apk add musl-dev g++
+RUN apk add musl-dev g++ openssl-dev
 WORKDIR /app
 COPY . .
 
