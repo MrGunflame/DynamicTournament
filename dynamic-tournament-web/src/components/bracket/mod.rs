@@ -60,7 +60,7 @@ impl Component for Bracket {
 
         let mut ws = websocket.clone();
         ctx.link().send_future_batch(async move {
-            let _ = ws.send(Frame::SyncMatchesRequest).await;
+            ws.send(Frame::SyncMatchesRequest).await;
 
             vec![]
         });
@@ -92,7 +92,7 @@ impl Component for Bracket {
 
         let mut ws = websocket.clone();
         ctx.link().send_future_batch(async move {
-            let _ = ws.send(Frame::SyncMatchesRequest).await;
+            ws.send(Frame::SyncMatchesRequest).await;
             vec![]
         });
 
