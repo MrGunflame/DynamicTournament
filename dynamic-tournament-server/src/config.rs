@@ -156,7 +156,7 @@ impl Authorization {
     pub fn from_environment() -> Result<Self, ConfigError> {
         let mut this = Self::default();
 
-        from_environment_error!(this, "DT_AUTH_ALGORITHM", algorithm);
+        from_environment!(this, "DT_AUTH_ALGORITHM", algorithm);
 
         Ok(this)
     }
