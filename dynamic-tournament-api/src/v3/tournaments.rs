@@ -235,7 +235,8 @@ impl<'a> TournamentsClient<'a> {
             .uri(&format!("/v3/tournaments/{}", id))
             .build();
 
-        self.client.send(req).await?.json().await
+        self.client.send(req).await?;
+        Ok(())
     }
 
     /// Updates the tournament with the given `id` using the given tournament. Returns the updated
