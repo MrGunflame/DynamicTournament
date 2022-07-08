@@ -1,29 +1,26 @@
 mod config;
 mod http;
 mod logger;
+mod signal;
 mod store;
 mod websocket;
 
 use config::Config;
 
+use crate::websocket::live_bracket::LiveBrackets;
 use dynamic_tournament_api::auth::Claims;
-use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use hyper::StatusCode;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Validation;
 use log::LevelFilter;
-use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
+use signal::ShutdownListener;
 use sqlx::mysql::MySqlPool;
 
 use store::Store;
 use thiserror::Error;
 
-use tokio::sync::{mpsc, watch};
-use websocket::LiveBracket;
-
-use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Arc;
 
@@ -63,60 +60,55 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let store = MySqlPool::connect(&config.database.connect_string()).await?;
 
-    let (shutdown_responder_tx, mut shutdown_responder_rx) = mpsc::channel(1);
-    let (shutdown_tx, shutdown_rx) = watch::channel(None);
-
     tokio::task::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        log::info!("Interrupt");
+        let store = Store { pool: store };
 
-        let _ = shutdown_tx.send(Some(shutdown_responder_tx));
-    });
+        let live_brackets = LiveBrackets::new(store.clone());
 
-    let store = Store { pool: store };
+        let state = State {
+            store,
+            users,
+            config: Arc::new(config.clone()),
+            shutdown: Shutdown,
+            live_brackets,
+        };
 
-    let state = State {
-        store,
-        users,
-        subscribers: Arc::new(RwLock::new(HashMap::new())),
-        shutdown_rx,
-        config: Arc::new(config.clone()),
-    };
-
-    let tables = [
-        "CREATE TABLE IF NOT EXISTS tournaments (
+        let tables = [
+            "CREATE TABLE IF NOT EXISTS tournaments (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT NOT NULL,
             date TIMESTAMP NOT NULL,
             kind TINYINT UNSIGNED NOT NULL
         )",
-        "CREATE TABLE IF NOT EXISTS entrants (
+            "CREATE TABLE IF NOT EXISTS entrants (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL
         )",
-        "CREATE TABLE IF NOT EXISTS brackets (
+            "CREATE TABLE IF NOT EXISTS brackets (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL,
             state BLOB NOT NULL
         )",
-        "CREATE TABLE IF NOT EXISTS roles (
+            "CREATE TABLE IF NOT EXISTS roles (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             name TEXT NOT NULL
         )",
-    ];
+        ];
 
-    for t in tables {
-        sqlx::query(t).execute(&state.store.pool).await?;
-    }
+        for t in tables {
+            sqlx::query(t).execute(&state.store.pool).await.unwrap();
+        }
 
-    http::bind(config.bind, state).await.unwrap();
+        http::bind(config.bind, state).await.unwrap();
+    });
 
-    // Wait for all shutdown listeners to complete.
-    while (shutdown_responder_rx.recv().await).is_some() {}
+    tokio::signal::ctrl_c().await.unwrap();
+    log::info!("Interrupt");
+    signal::terminate().await;
 
     Ok(())
 }
@@ -125,10 +117,19 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 pub struct State {
     pub store: Store,
     users: Vec<LoginData>,
-    pub subscribers: Arc<RwLock<HashMap<(TournamentId, BracketId), LiveBracket>>>,
     // Note: Clone before polling.
-    pub shutdown_rx: watch::Receiver<Option<mpsc::Sender<bool>>>,
+    pub shutdown: Shutdown,
     pub config: Arc<Config>,
+    pub live_brackets: LiveBrackets,
+}
+
+#[derive(Clone, Debug)]
+pub struct Shutdown;
+
+impl Shutdown {
+    pub fn listen(&self) -> ShutdownListener<'static> {
+        signal::ShutdownListener::new()
+    }
 }
 
 #[derive(Debug, Error)]

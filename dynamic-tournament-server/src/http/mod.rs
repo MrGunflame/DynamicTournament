@@ -29,7 +29,7 @@ use tokio::time::Instant;
 pub type Result = std::result::Result<Response, Error>;
 
 pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
-    let mut shutdown_rx = state.shutdown_rx.clone();
+    let mut shutdown = state.shutdown.listen();
 
     let service = RootService { state };
 
@@ -59,7 +59,7 @@ pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), cra
                 log::info!("Accepting new connection from {:?}", addr);
 
                 let service = service.clone();
-                let mut shutdown_rx = shutdown_rx.clone();
+                let shutdown = shutdown.clone();
                 tokio::task::spawn(async move {
                     let mut conn = Http::new()
                         .http1_keep_alive(true)
@@ -74,7 +74,7 @@ pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), cra
                                 log::warn!("Http error: {:?}", err);
                             }
                         }
-                        _ = shutdown_rx.changed() => {
+                        _ = shutdown => {
                             log::debug!("Shutting down connection");
                             conn.graceful_shutdown();
                         }
@@ -82,7 +82,7 @@ pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), cra
                 });
             }
             // Shut down the server.
-            _ = shutdown_rx.changed() => {
+            _ = &mut shutdown => {
                 log::debug!("Shutting down http server");
                 return Ok(());
             }
