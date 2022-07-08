@@ -280,50 +280,34 @@ async fn handle_frame(frame: Frame, state: Arc<ConnectionState>) {
         Frame::Authorize(string) => {
             if state.state.is_authenticated_string(&string) {
                 *state.is_authenticated.lock() = true;
-            } else {
-                return;
             }
         }
         Frame::UpdateMatch { index, nodes } => {
             if *state.is_authenticated.lock() {
-                match index.try_into() {
-                    Ok(index) => {
-                        state.bracket.update(index, nodes);
-                        state
-                            .state
-                            .live_brackets
-                            .store(&state.bracket)
-                            .await
-                            .unwrap();
+                state.bracket.update(index, nodes);
+                state
+                    .state
+                    .live_brackets
+                    .store(&state.bracket)
+                    .await
+                    .unwrap();
 
-                        // Broadcast the change.
-                        let _ = state.tx.send(WebSocketMessage::Message(frame)).await;
-                    }
-                    Err(err) => {
-                        log::warn!("Failed to convert {} to usize: {:?}", index, err);
-                    }
-                }
+                // Broadcast the change.
+                let _ = state.tx.send(WebSocketMessage::Message(frame)).await;
             }
         }
         Frame::ResetMatch { index } => {
             if *state.is_authenticated.lock() {
-                match index.try_into() {
-                    Ok(index) => {
-                        state.bracket.reset(index);
-                        state
-                            .state
-                            .live_brackets
-                            .store(&state.bracket)
-                            .await
-                            .unwrap();
+                state.bracket.reset(index);
+                state
+                    .state
+                    .live_brackets
+                    .store(&state.bracket)
+                    .await
+                    .unwrap();
 
-                        // Broadcast the change.
-                        let _ = state.tx.send(WebSocketMessage::Message(frame)).await;
-                    }
-                    Err(err) => {
-                        log::warn!("Failed to convert {} to usize: {:?}", index, err);
-                    }
-                }
+                // Broadcast the change.
+                let _ = state.tx.send(WebSocketMessage::Message(frame)).await;
             }
         }
         Frame::SyncMatchesRequest => {

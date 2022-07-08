@@ -127,7 +127,7 @@ impl LiveBrackets {
         );
 
         if let Some(bracket) = self.get_local(tournament_id, bracket_id) {
-            return Ok(bracket.clone());
+            return Ok(bracket);
         }
 
         log::debug!("LiveBracket not found in map, fetching from store");
