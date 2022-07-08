@@ -93,18 +93,22 @@ where
         }
 
         // Forward all placeholder matches.
-        while index < entrants.len().next_power_of_two() {
-            let new_index = initial_matches + (index - initial_matches) / 2;
-            // SAFETY: `new_index` is in bounds of `matches`, `index % 2` never exceeds 1.
-            let spot = unsafe {
-                matches
-                    .get_unchecked_mut(new_index)
-                    .get_unchecked_mut(index % 2)
-            };
+        // Note: This `if` is necessary because `0.next_power_of_two()` returns 1. This is
+        // incorrect when `matches.len() == 0`.
+        if entrants.len() > 0 {
+            while index < entrants.len().next_power_of_two() {
+                let new_index = initial_matches + (index - initial_matches) / 2;
+                // SAFETY: `new_index` is in bounds of `matches`, `index % 2` never exceeds 1.
+                let spot = unsafe {
+                    matches
+                        .get_unchecked_mut(new_index)
+                        .get_unchecked_mut(index % 2)
+                };
 
-            *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
+                *spot = EntrantSpot::Entrant(Node::new(index - initial_matches));
 
-            index += 1;
+                index += 1;
+            }
         }
 
         log::debug!(
@@ -510,6 +514,12 @@ mod tests {
 
     #[test]
     fn test_single_elimination() {
+        let entrants = entrants![];
+        let tournament = SingleElimination::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, vec![]);
+        assert_eq!(tournament.matches, vec![]);
+
         // Test with a single entrant.
         let entrants = entrants![0];
         let tournament = SingleElimination::<i32, u32>::new(entrants);
