@@ -124,7 +124,7 @@ impl Connection {
                         break;
                     }
                     _ = interval.tick() => {
-                        let _ = tx.send(WebSocketMessage::Ping(vec![0]));
+                        let _ = tx.send(WebSocketMessage::Ping(vec![0])).await;
                     }
                 }
             }
@@ -258,8 +258,7 @@ async fn drive_writer(
 
                 let msg = Message::Close(frame);
                 if let Err(err) = sink.send(msg).await {
-                    log::warn!("Failed to close frame: {:?}", err);
-                    return;
+                    log::warn!("Failed to send close frame: {:?}", err);
                 }
 
                 break;
