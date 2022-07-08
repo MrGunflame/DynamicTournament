@@ -5,6 +5,9 @@ mod signal;
 mod store;
 mod websocket;
 
+#[cfg(feature = "metrics")]
+mod metrics;
+
 use config::Config;
 
 use crate::websocket::live_bracket::LiveBrackets;
@@ -25,6 +28,9 @@ use std::io::Read;
 use std::sync::Arc;
 
 use clap::Parser;
+
+#[cfg(feature = "metrics")]
+use metrics::Metrics;
 
 #[derive(Clone, Debug, Parser)]
 #[clap(author, version, about)]
@@ -71,6 +77,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             config: Arc::new(config.clone()),
             shutdown: Shutdown,
             live_brackets,
+            #[cfg(feature = "metrics")]
+            metrics: Metrics::default(),
         };
 
         let tables = [
@@ -121,6 +129,8 @@ pub struct State {
     pub shutdown: Shutdown,
     pub config: Arc<Config>,
     pub live_brackets: LiveBrackets,
+    #[cfg(feature = "metrics")]
+    pub metrics: Metrics,
 }
 
 #[derive(Clone, Debug)]

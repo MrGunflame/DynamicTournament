@@ -2,6 +2,9 @@ mod v1;
 pub mod v2;
 mod v3;
 
+#[cfg(feature = "metrics")]
+mod metrics;
+
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
@@ -140,6 +143,9 @@ async fn service_root(
     log::trace!("Headers: {:?}", req.headers());
     log::trace!("Body: {:?}", req.body());
 
+    #[cfg(feature = "metrics")]
+    state.metrics.http_requests_total.inc();
+
     let req = Request::new(req, state);
 
     if req.method() == Method::POST {
@@ -189,6 +195,8 @@ async fn service_root(
         Some("v1") => v1::route().await,
         Some("v2") => v2::route(req, uri).await,
         Some("v3") => v3::route(req, uri).await,
+        #[cfg(feature = "metrics")]
+        Some("metrics") => metrics::route(req).await,
         _ => Err(Error::NotFound),
     };
 
