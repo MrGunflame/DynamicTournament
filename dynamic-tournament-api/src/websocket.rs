@@ -19,7 +19,7 @@ pub struct WebSocket<T>
 where
     T: Serialize + DeserializeOwned + 'static,
 {
-    tx: mpsc::Sender<Vec<u8>>,
+    tx: mpsc::Sender<WebSocketMessage>,
     _marker: PhantomData<mpsc::Sender<T>>,
 }
 
@@ -44,10 +44,15 @@ where
 
         // Writer task
         spawn_local(async move {
-            while let Some(bytes) = rx.next().await {
-                log::debug!("Writing websocket frame: {:?}", bytes);
+            while let Some(msg) = rx.next().await {
+                log::debug!("Writing websocket frame: {:?}", msg);
 
-                writer.send(Message::Bytes(bytes)).await.unwrap();
+                match msg {
+                    WebSocketMessage::Message(msg) => {
+                        writer.send(Message::Bytes(msg)).await.unwrap()
+                    }
+                    WebSocketMessage::Close => writer.close().await.unwrap(),
+                }
             }
 
             let _ = writer.close().await;
@@ -90,11 +95,13 @@ where
             .with_varint_encoding()
             .serialize(msg)?;
 
-        let _ = self.tx.send(bytes).await;
+        let _ = self.tx.send(WebSocketMessage::Message(bytes)).await;
         Ok(())
     }
 
-    pub async fn close(&mut self) {}
+    pub async fn close(&mut self) {
+        let _ = self.tx.send(WebSocketMessage::Close).await;
+    }
 }
 
 pub trait EventHandler<T>
@@ -146,4 +153,10 @@ where
     T: Serialize + DeserializeOwned + 'static,
 {
     fn dispatch(&mut self, _msg: T) {}
+}
+
+#[derive(Clone, Debug)]
+enum WebSocketMessage {
+    Message(Vec<u8>),
+    Close,
 }
