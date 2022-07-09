@@ -29,12 +29,35 @@ use std::time::Duration;
 
 use live_bracket::LiveBracket;
 
+#[cfg(feature = "metrics")]
+use crate::metrics::Metrics;
+
 pub async fn handle(
     conn: Upgraded,
     state: State,
     tournament_id: TournamentId,
     bracket_id: BracketId,
 ) {
+    #[cfg(feature = "metrics")]
+    let _metrics_guard = {
+        let metrics = state.metrics.clone();
+
+        metrics.websocket_connections_total.inc();
+        metrics.websocket_connections_current.inc();
+
+        struct MetricsGuard {
+            metrics: Metrics,
+        }
+
+        impl Drop for MetricsGuard {
+            fn drop(&mut self) {
+                self.metrics.websocket_connections_current.dec();
+            }
+        }
+
+        MetricsGuard { metrics }
+    };
+
     let shutdown = state.shutdown.listen();
 
     let stream = WebSocketStream::from_raw_socket(conn, Role::Server, None).await;
