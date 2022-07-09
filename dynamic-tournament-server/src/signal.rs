@@ -103,7 +103,9 @@ impl ShutdownSemaphore {
         self.semaphore.available_permits()
     }
 
-    pub fn empty(&self) -> Notified<'_> {
-        self.notify.notified()
+    pub async fn empty(&self) {
+        if self.permits() != 0 {
+            self.notify.notified().await
+        }
     }
 }
