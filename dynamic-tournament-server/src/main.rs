@@ -2,6 +2,7 @@ mod config;
 mod http;
 mod logger;
 mod signal;
+mod state;
 mod store;
 mod websocket;
 
@@ -10,27 +11,17 @@ mod metrics;
 
 use config::Config;
 
-use crate::websocket::live_bracket::LiveBrackets;
-use dynamic_tournament_api::auth::Claims;
+use crate::state::State;
 use hyper::StatusCode;
-use jsonwebtoken::DecodingKey;
-use jsonwebtoken::Validation;
 use log::LevelFilter;
 use serde::Deserialize;
 use serde::Serialize;
-use signal::ShutdownListener;
-use sqlx::mysql::MySqlPool;
 
-use store::Store;
 use thiserror::Error;
 
 use std::io::Read;
-use std::sync::Arc;
 
 use clap::Parser;
-
-#[cfg(feature = "metrics")]
-use metrics::Metrics;
 
 #[derive(Clone, Debug, Parser)]
 #[clap(author, version, about)]
@@ -64,22 +55,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let users = read_users("users.json");
 
-    let store = MySqlPool::connect(&config.database.connect_string()).await?;
-
     tokio::task::spawn(async move {
-        let store = Store { pool: store };
-
-        let live_brackets = LiveBrackets::new(store.clone());
-
-        let state = State {
-            store,
-            users,
-            config: Arc::new(config.clone()),
-            shutdown: Shutdown,
-            live_brackets,
-            #[cfg(feature = "metrics")]
-            metrics: Metrics::default(),
-        };
+        let state = State::new(config, users);
 
         let tables = [
             "CREATE TABLE IF NOT EXISTS tournaments (
@@ -111,7 +88,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             sqlx::query(t).execute(&state.store.pool).await.unwrap();
         }
 
-        http::bind(config.bind, state).await.unwrap();
+        http::bind(state.config.bind, state).await.unwrap();
     });
 
     tokio::signal::ctrl_c().await.unwrap();
@@ -119,27 +96,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     signal::terminate().await;
 
     Ok(())
-}
-
-#[derive(Clone, Debug)]
-pub struct State {
-    pub store: Store,
-    users: Vec<LoginData>,
-    // Note: Clone before polling.
-    pub shutdown: Shutdown,
-    pub config: Arc<Config>,
-    pub live_brackets: LiveBrackets,
-    #[cfg(feature = "metrics")]
-    pub metrics: Metrics,
-}
-
-#[derive(Clone, Debug)]
-pub struct Shutdown;
-
-impl Shutdown {
-    pub fn listen(&self) -> ShutdownListener<'static> {
-        signal::ShutdownListener::new()
-    }
 }
 
 #[derive(Debug, Error)]
@@ -243,53 +199,6 @@ impl StatusCodeError {
     {
         self.message = msg.to_string();
         self
-    }
-}
-
-impl State {
-    pub fn is_allowed(&self, data: &LoginData) -> bool {
-        log::debug!("Trying to authenticate: {:?}", data);
-
-        for user in &self.users {
-            if user.username == data.username && user.password == data.password {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn is_authenticated(&self, req: &http::Request) -> bool {
-        let header = match req.headers().get("Authorization") {
-            Some(header) => header.as_bytes(),
-            None => return false,
-        };
-
-        let header = match header.as_ref().strip_prefix(b"Bearer ") {
-            Some(header) => header,
-            None => return false,
-        };
-
-        self.is_authenticated_string(header)
-    }
-
-    pub fn is_authenticated_string(&self, header: impl AsRef<[u8]>) -> bool {
-        match String::from_utf8(header.as_ref().to_vec()) {
-            Ok(s) => self.decode_token(&s).is_ok(),
-            Err(err) => {
-                log::info!("Failed to convert header to string: {:?}", err);
-                false
-            }
-        }
-    }
-
-    pub fn decode_token(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-        let key = DecodingKey::from_secret(http::v2::auth::SECRET);
-        let validation = Validation::new(self.config.authorization.algorithm);
-
-        let data = jsonwebtoken::decode(token, &key, &validation)?;
-
-        Ok(data.claims)
     }
 }
 
