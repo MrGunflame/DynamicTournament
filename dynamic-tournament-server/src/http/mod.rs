@@ -18,7 +18,7 @@ use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
     HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    CONTENT_TYPE,
+    CONTENT_LENGTH, CONTENT_TYPE,
 };
 use hyper::http::request::Parts;
 use hyper::server::conn::Http;
@@ -148,41 +148,6 @@ async fn service_root(
 
     let req = Request::new(req, state);
 
-    if req.method() == Method::POST {
-        let mut resp = hyper::Response::new(Body::empty());
-        match req.headers().get("Content-Length") {
-            Some(value) => match value.to_str() {
-                Ok(s) => match s.parse::<u64>() {
-                    Ok(length) => {
-                        if length > 16384 {
-                            *resp.status_mut() = StatusCode::PAYLOAD_TOO_LARGE;
-                            *resp.body_mut() = Body::from("Payload Too Large");
-                            return Ok(resp);
-                        }
-                    }
-                    // Content-Length header is malformed.
-                    _ => {
-                        *resp.status_mut() = StatusCode::BAD_REQUEST;
-                        *resp.body_mut() = Body::from("Bad Request");
-                        return Ok(resp);
-                    }
-                },
-                // Content-Length header is malformed.
-                _ => {
-                    *resp.status_mut() = StatusCode::BAD_REQUEST;
-                    *resp.body_mut() = Body::from("Bad Request");
-                    return Ok(resp);
-                }
-            },
-            // Content-Length header is missing.
-            None => {
-                *resp.status_mut() = StatusCode::LENGTH_REQUIRED;
-                *resp.body_mut() = Body::from("Length Required");
-                return Ok(resp);
-            }
-        }
-    }
-
     let uri = String::from(req.uri().path());
 
     let mut uri = RequestUri::new(&uri);
@@ -259,6 +224,8 @@ pub struct Request {
 }
 
 impl Request {
+    const BODY_MAX_SIZE: usize = 16384;
+
     #[inline]
     fn new(req: hyper::Request<Body>, state: State) -> Self {
         let (parts, body) = req.into_parts();
@@ -296,6 +263,11 @@ impl Request {
     ///
     /// Returns an [`enum@Error`] when reading the request body fails or the request times out.
     pub async fn body(&mut self) -> std::result::Result<hyper::body::Bytes, Error> {
+        // Check if the "Content-Length" header is valid.
+        if self.content_length()? > Self::BODY_MAX_SIZE {
+            return Err(StatusCodeError::payload_too_large().into());
+        }
+
         const DUR: Duration = Duration::new(30, 0);
 
         let deadline = Instant::now() + DUR;
@@ -335,8 +307,8 @@ impl Request {
 
     /// Returns the value of the "Content-Length" header. If the header is not present or has an
     /// invalid value an error is returned.
-    pub fn content_length(&self) -> std::result::Result<u64, Error> {
-        match self.headers().get("Content-Length") {
+    pub fn content_length(&self) -> std::result::Result<usize, Error> {
+        match self.headers().get(CONTENT_LENGTH) {
             Some(value) => match value.to_str() {
                 Ok(value) => match value.parse() {
                     Ok(value) => Ok(value),
