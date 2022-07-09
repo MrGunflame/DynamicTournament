@@ -12,6 +12,7 @@ use futures::StreamExt;
 use hyper::upgrade::Upgraded;
 use parking_lot::Mutex;
 use tokio::select;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
@@ -246,45 +247,68 @@ async fn drive_writer(
     mut rx: mpsc::Receiver<WebSocketMessage>,
     state: Arc<ConnectionState>,
 ) {
-    while let Some(msg) = rx.recv().await {
-        log::debug!("Writing websocket frame: {:?}", msg);
+    let mut broadcast = state.bracket.receiver();
 
-        match msg {
-            WebSocketMessage::Message(msg) => {
-                let buf = msg.to_bytes().unwrap();
+    loop {
+        select! {
+            msg = rx.recv() => {
+                match msg {
+                    Some(WebSocketMessage::Message(msg)) => {
+                        let buf = msg.to_bytes().unwrap();
 
-                if let Err(err) = sink.send(Message::Binary(buf)).await {
-                    log::warn!("Failed to send frame: {:?}", err);
-                    return;
+                        if let Err(err) = sink.send(Message::Binary(buf)).await {
+                            log::warn!("Failed to send frame: {:?}", err);
+                            return;
+                        }
+                    }
+                    Some(WebSocketMessage::Ping(buf)) => {
+                        log::debug!("Sending ping with payload: {:?}", buf);
+
+                        if let Err(err) = sink.send(Message::Ping(buf)).await {
+                            log::warn!("Failed to send frame: {:?}", err);
+                            return;
+                        }
+                    }
+                    Some(WebSocketMessage::Pong(buf)) => {
+                        log::debug!("Sending pong with payload: {:?}", buf);
+
+                        if let Err(err) = sink.send(Message::Pong(buf)).await {
+                            log::warn!("Failed to send frame: {:?}", err);
+                            return;
+                        }
+                    }
+                    Some(WebSocketMessage::Close(frame)) => {
+                        log::debug!("Sending close frame: {:?}", frame);
+
+                        *state.shutdown.lock() = true;
+
+                        let msg = Message::Close(frame);
+                        if let Err(err) = sink.send(msg).await {
+                            log::warn!("Failed to send close frame: {:?}", err);
+                        }
+
+                        break;
+                    }
+                    None => break,
                 }
             }
-            WebSocketMessage::Ping(buf) => {
-                log::debug!("Sending ping with payload: {:?}", buf);
 
-                if let Err(err) = sink.send(Message::Ping(buf)).await {
-                    log::warn!("Failed to send frame: {:?}", err);
-                    return;
+            // Broadcast channel
+            msg = broadcast.recv() => {
+                match msg {
+                    Ok(msg) => {
+                        let buf = msg.to_bytes().unwrap();
+
+                        if let Err(err) = sink.send(Message::Binary(buf)).await {
+                            log::warn!("Failed to send frame: {:?}", err);
+                            break;
+                        }
+                    }
+                    Err(err) => match err {
+                        RecvError::Lagged(num) => log::debug!("broadcast::rx lagged {}, client is desynced", num),
+                        RecvError::Closed => unreachable!(),
+                    }
                 }
-            }
-            WebSocketMessage::Pong(buf) => {
-                log::debug!("Sending pong with payload: {:?}", buf);
-
-                if let Err(err) = sink.send(Message::Pong(buf)).await {
-                    log::warn!("Failed to send frame: {:?}", err);
-                    return;
-                }
-            }
-            WebSocketMessage::Close(frame) => {
-                log::debug!("Sending close frame: {:?}", frame);
-
-                *state.shutdown.lock() = true;
-
-                let msg = Message::Close(frame);
-                if let Err(err) = sink.send(msg).await {
-                    log::warn!("Failed to send close frame: {:?}", err);
-                }
-
-                break;
             }
         }
     }

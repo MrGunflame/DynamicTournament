@@ -14,13 +14,12 @@ use tokio::sync::broadcast;
 
 use crate::{store::Store, Error};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LiveBracket {
     tournament_id: TournamentId,
     bracket_id: BracketId,
     bracket: Arc<RwLock<Tournament<EntrantId, EntrantScore<u64>>>>,
     tx: broadcast::Sender<Frame>,
-    rx: broadcast::Receiver<Frame>,
 }
 
 impl LiveBracket {
@@ -67,22 +66,8 @@ impl LiveBracket {
         bracket.into_matches()
     }
 
-    pub async fn changed(&mut self) -> Frame {
-        // This can't fail since we keep a `broadcast::Sender` in self.
-        self.rx.recv().await.unwrap()
-    }
-}
-
-impl Clone for LiveBracket {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self {
-            tournament_id: self.tournament_id,
-            bracket_id: self.bracket_id,
-            bracket: self.bracket.clone(),
-            tx: self.tx.clone(),
-            rx: self.tx.subscribe(),
-        }
+    pub fn receiver(&self) -> broadcast::Receiver<Frame> {
+        self.tx.subscribe()
     }
 }
 
@@ -160,14 +145,13 @@ impl LiveBrackets {
             }
         };
 
-        let (tx, rx) = broadcast::channel(32);
+        let (tx, _) = broadcast::channel(32);
 
         let bracket = LiveBracket {
             tournament_id,
             bracket_id,
             bracket: Arc::new(RwLock::new(tournament)),
             tx,
-            rx,
         };
 
         let mut inner = self.inner.write();
