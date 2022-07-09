@@ -244,61 +244,6 @@ impl Store {
 
         Ok(())
     }
-
-    pub async fn get_role(
-        &self,
-        id: RoleId,
-        tournament_id: TournamentId,
-    ) -> Result<Option<Role>, Error> {
-        let row = match sqlx::query("SELECT name FROM roles WHERE id = ? AND tournament_id = ?")
-            .bind(id.0)
-            .bind(tournament_id.0)
-            .fetch_one(&self.pool)
-            .await
-        {
-            Ok(v) => v,
-            Err(sqlx::Error::RowNotFound) => return Ok(None),
-            Err(err) => return Err(err.into()),
-        };
-
-        let name = row.try_get("name")?;
-
-        Ok(Some(Role { id, name }))
-    }
-
-    pub async fn get_roles(&self, tournament_id: TournamentId) -> Result<Vec<Role>, Error> {
-        let mut rows = sqlx::query("SELECT id, name FROM roles WHERE tournament_id = ?")
-            .bind(tournament_id.0)
-            .fetch(&self.pool);
-
-        let mut roles = Vec::new();
-        while let Some(row) = rows.try_next().await? {
-            let id = row.try_get("id")?;
-            let name = row.try_get("name")?;
-
-            roles.push(Role {
-                id: RoleId(id),
-                name,
-            });
-        }
-
-        Ok(roles)
-    }
-
-    pub async fn insert_role(
-        &self,
-        role: Role,
-        tournament_id: TournamentId,
-    ) -> Result<RoleId, Error> {
-        let res = sqlx::query("INSERT INTO roles (tournament_id, name) VALUES (?, ?)")
-            .bind(tournament_id.0)
-            .bind(role.name)
-            .execute(&self.pool)
-            .await?;
-
-        let id = res.last_insert_id();
-        Ok(RoleId(id))
-    }
 }
 
 macro_rules! get_one {
