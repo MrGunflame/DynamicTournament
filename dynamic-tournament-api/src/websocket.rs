@@ -6,6 +6,8 @@ use futures::SinkExt;
 use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(target_family = "wasm")]
+use futures::select;
+#[cfg(target_family = "wasm")]
 use futures::StreamExt;
 #[cfg(target_family = "wasm")]
 use gloo_utils::errors::JsError;
@@ -19,7 +21,7 @@ pub struct WebSocket<T>
 where
     T: Serialize + DeserializeOwned + 'static,
 {
-    tx: mpsc::Sender<WebSocketMessage>,
+    tx: mpsc::Sender<Vec<u8>>,
     _marker: PhantomData<mpsc::Sender<T>>,
 }
 
@@ -36,51 +38,55 @@ where
             Err(err) => return Err(err),
         };
 
-        let (mut writer, mut reader) = ws.split();
-
         let (tx, mut rx) = mpsc::channel(32);
 
         log::debug!("Connected to {}", uri);
 
-        // Writer task
         spawn_local(async move {
-            while let Some(msg) = rx.next().await {
-                log::debug!("Writing websocket frame: {:?}", msg);
+            let mut ws = ws.fuse();
 
-                match msg {
-                    WebSocketMessage::Message(msg) => {
-                        writer.send(Message::Bytes(msg)).await.unwrap()
+            loop {
+                select! {
+                    // Writer
+                    msg = rx.next() => {
+                        match msg {
+                            Some(msg) => {
+                                ws.send(Message::Bytes(msg)).await.unwrap();
+                            }
+                            None => {
+                                break;
+                            }
+                        }
                     }
-                    WebSocketMessage::Close => writer.close().await.unwrap(),
+
+                    // Reader
+                    msg = ws.next() => {
+                        match msg {
+                            Some(Ok(Message::Bytes(buf))) => {
+                                log::debug!("Received message from ws peer: {:?}", buf);
+
+                                let msg = bincode::DefaultOptions::new()
+                                    .with_little_endian()
+                                    .with_varint_encoding()
+                                    .deserialize(&buf)
+                                    .unwrap();
+
+                                handler.dispatch(msg);
+                            }
+                            Some(Ok(Message::Text(_))) => {}
+                            Some(Err(err)) => {
+                                log::error!("Failed to read from ws: {:?}", err);
+                            }
+                            None => {
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
-            let _ = writer.close().await;
-            log::debug!("Dropped ws writer");
-        });
-
-        spawn_local(async move {
-            while let Some(msg) = reader.next().await {
-                match msg {
-                    Ok(Message::Bytes(bytes)) => {
-                        log::debug!("Received message from ws peer: {:?}", bytes);
-
-                        let msg = bincode::DefaultOptions::new()
-                            .with_little_endian()
-                            .with_varint_encoding()
-                            .deserialize(&bytes)
-                            .unwrap();
-
-                        handler.dispatch(msg);
-                    }
-                    Ok(Message::Text(_)) => {}
-                    Err(err) => {
-                        log::error!("{:?}", err);
-                    }
-                }
-            }
-
-            log::debug!("Dropped ws reader");
+            ws.into_inner().close(None, None).unwrap();
+            log::debug!("Dropped ws");
         });
 
         Ok(Self {
@@ -95,12 +101,8 @@ where
             .with_varint_encoding()
             .serialize(msg)?;
 
-        let _ = self.tx.send(WebSocketMessage::Message(bytes)).await;
+        let _ = self.tx.send(bytes).await;
         Ok(())
-    }
-
-    pub async fn close(&mut self) {
-        let _ = self.tx.send(WebSocketMessage::Close).await;
     }
 }
 
@@ -153,10 +155,4 @@ where
     T: Serialize + DeserializeOwned + 'static,
 {
     fn dispatch(&mut self, _msg: T) {}
-}
-
-#[derive(Clone, Debug)]
-enum WebSocketMessage {
-    Message(Vec<u8>),
-    Close,
 }
