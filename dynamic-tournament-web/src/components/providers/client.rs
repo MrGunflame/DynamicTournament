@@ -28,7 +28,7 @@ impl Component for ClientProvider {
 
         if let Some(auth) = client.authorization().auth_token() {
             let now = chrono::Utc::now().timestamp() as u64;
-            let token = Token::new(auth);
+            let token = Token::new(auth).unwrap();
             let claims = token.claims();
             // 30 secs buffer time
             let duration = claims.exp.saturating_sub(now + 30);
@@ -52,13 +52,13 @@ impl Component for ClientProvider {
         let client = self.client.clone();
         let link = ctx.link().clone();
         ctx.link().send_future_batch(async move {
-            if let Err(err) = client.auth().refresh().await {
+            if let Err(err) = client.v3().auth().refresh().await {
                 log::error!("Failed to refresh authorization tokens: {:?}", err);
             }
 
             if let Some(auth) = client.authorization().auth_token() {
                 let now = chrono::Utc::now().timestamp() as u64;
-                let token = Token::new(auth);
+                let token = Token::new(auth).unwrap();
                 let claims = token.claims();
                 // 30 secs buffer time
                 let duration = claims.exp.saturating_sub(now + 30);

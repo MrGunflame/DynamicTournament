@@ -14,7 +14,12 @@ async fn main() {
     let entrants: usize = args.next().unwrap().parse().unwrap();
 
     let client = Client::new(host);
-    client.auth().login(&username, &password).await.unwrap();
+    client
+        .v3()
+        .auth()
+        .login(&username, &password)
+        .await
+        .unwrap();
 
     let mut generator = TournamentGenerator::new();
     generator.entrants = entrants;

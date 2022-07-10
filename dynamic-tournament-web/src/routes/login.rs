@@ -56,9 +56,7 @@ impl Component for Login {
                         username: String,
                         password: String,
                     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-                        let client = client.auth();
-
-                        client.login(&username, &password).await?;
+                        client.v3().auth().login(&username, &password).await?;
 
                         Ok(())
                     }

@@ -4,7 +4,6 @@ pub mod tournament;
 pub mod v3;
 pub mod websocket;
 
-use crate::auth::AuthClient;
 use crate::http::{Request, RequestBuilder, Response};
 use crate::tournament::TournamentClient;
 
@@ -46,10 +45,6 @@ impl Client {
 
     pub fn tournaments(&self) -> TournamentClient<'_> {
         TournamentClient::new(self)
-    }
-
-    pub fn auth(&self) -> AuthClient {
-        AuthClient::new(self)
     }
 
     pub(crate) fn request(&self) -> RequestBuilder {
@@ -162,19 +157,17 @@ impl Authorization {
 
     /// Returns a reference to the auth token. This is the token to make requests. Returns [`None`]
     /// if no tokens are avaliable.
+    #[inline]
     pub fn auth_token(&self) -> Option<&str> {
-        match self.tokens {
-            Some(ref tokens) => Some(&tokens.auth_token),
-            None => None,
-        }
+        self.tokens.as_ref().map(|tokens| tokens.auth_token.token())
     }
 
     /// Returns a reference to the refresh token. Returns [`None`] if no tokens are avaliable.
+    #[inline]
     pub fn refresh_token(&self) -> Option<&str> {
-        match self.tokens {
-            Some(ref tokens) => Some(&tokens.refresh_token),
-            None => None,
-        }
+        self.tokens
+            .as_ref()
+            .map(|tokens| tokens.refresh_token.token())
     }
 }
 

@@ -1,202 +1,197 @@
-use http::StatusCode;
+use serde::de::{self, Deserializer, Visitor};
+use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::fmt::{self, Display, Formatter};
 
-use crate::{Client, Error, Result};
+use crate::Error;
 
-pub struct AuthClient<'a> {
-    client: &'a Client,
-}
-
-impl<'a> AuthClient<'a> {
-    pub(crate) fn new(client: &'a Client) -> Self {
-        Self { client }
-    }
-
-    /// Login in using the given credentials.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`enum@Error`] when the request fails. Returns [`Error::Unauthorized`] when the
-    /// the given credentials are incorrect.
-    pub async fn login(&self, username: &str, password: &str) -> Result<()> {
-        let body = &LoginData {
-            username: username.to_owned(),
-            password: password.to_owned(),
-        };
-
-        let req = self
-            .client
-            .request()
-            .post()
-            .uri("/v2/auth/login")
-            .body(body)
-            .build();
-
-        let resp = self.client.send(req).await?;
-
-        if resp.is_success() {
-            let body = resp.json().await?;
-
-            let mut inner = self.client.inner.write().unwrap();
-
-            inner.authorization.update(body);
-
-            Ok(())
-        } else {
-            match resp.status() {
-                StatusCode::UNAUTHORIZED => Err(Error::Unauthorized),
-                status => Err(Error::BadStatusCode(status)),
-            }
-        }
-    }
-
-    /// Refresh the authorization token pair.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`enum@Error`] when the request fails. Returns [`Error::Unauthorized`] if no
-    /// refresh token is avaliable.
-    pub async fn refresh(&self) -> Result<()> {
-        let refresh_token = {
-            let inner = self.client.inner.read().unwrap();
-
-            match inner.authorization.refresh_token() {
-                Some(token) => token.to_owned(),
-                None => return Err(Error::Unauthorized),
-            }
-        };
-
-        let body = RefreshToken { refresh_token };
-
-        let req = self
-            .client
-            .request()
-            .post()
-            .uri("/v2/auth/refresh")
-            .body(&body)
-            .build();
-
-        let resp = self.client.send(req).await?;
-
-        if resp.is_success() {
-            let body = resp.json().await?;
-
-            let mut inner = self.client.inner.write().unwrap();
-
-            inner.authorization.update(body);
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct LoginData {
-    username: String,
-    password: String,
-}
-
-/// A pair of two tokens. The `auth_token` is used to make requests.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TokenPair {
-    pub auth_token: String,
-    pub refresh_token: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RefreshToken {
-    pub refresh_token: String,
-}
-
+/// A single JWT token.
 #[derive(Clone, Debug)]
-pub struct AuthToken {
+pub struct Token {
     token: String,
     claims: Claims,
 }
 
-impl AuthToken {
-    pub fn new(token: String) -> std::result::Result<Self, JwtError> {
-        let claims = token.split_once('.').ok_or(JwtError::InvalidToken)?.1;
-        let claims = base64::decode(claims)?;
-        let claims = serde_json::from_slice(&claims)?;
+impl Token {
+    /// Creates a new `Token` from an JWT string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] if the JWT token is invalid.
+    pub fn new<'a, T>(token: T) -> Result<Self, Error>
+    where
+        T: Into<Cow<'a, str>>,
+    {
+        let token = token.into();
 
-        Ok(Self { token, claims })
+        let claims = token.split('.').nth(1).ok_or(Error::InvalidToken)?;
+
+        let claims = serde_json::from_slice(&base64::decode(claims)?)?;
+
+        Ok(Self {
+            token: token.into_owned(),
+            claims,
+        })
     }
 
-    /// Returns the token of the `AuthToken`.
+    /// Creates a new `Token` using the raw parts. Note that `from_parts` does not check if the
+    /// token is valid.
+    pub fn from_parts(token: String, claims: Claims) -> Self {
+        Self { token, claims }
+    }
+
+    /// Returns an reference to the JWT token.
     pub fn token(&self) -> &str {
         &self.token
     }
 
+    /// Returns a reference to the claims of the JWT token.
     pub fn claims(&self) -> &Claims {
         &self.claims
     }
 }
 
-impl PartialEq for AuthToken {
+impl Display for Token {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.token.fmt(f)
+    }
+}
+
+impl PartialEq for Token {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.token == other.token
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+impl Eq for Token {}
+
+impl Serialize for Token {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.token.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Token {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TokenVisitor;
+
+        impl<'de> Visitor<'de> for TokenVisitor {
+            type Value = Token;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                formatter.write_str("token")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match Token::new(v) {
+                    Ok(token) => Ok(token),
+                    Err(err) => Err(E::custom(err)),
+                }
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                match Token::new(v) {
+                    Ok(token) => Ok(token),
+                    Err(err) => Err(E::custom(err)),
+                }
+            }
+        }
+
+        deserializer.deserialize_string(TokenVisitor)
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Claims {
-    /// Subject
     pub sub: u64,
-    /// Issued at
     pub iat: u64,
-    /// Expiration time
     pub exp: u64,
-    /// Not before time
     pub nbf: u64,
 }
 
-impl Claims {
-    pub fn new(sub: u64) -> Self {
-        Self {
-            sub,
-            iat: 0,
-            exp: 0,
-            nbf: 0,
-        }
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::{Claims, Token};
+    use crate::Error;
 
-#[derive(Debug, thiserror::Error)]
-pub enum JwtError {
-    #[error("invalid token")]
-    InvalidToken,
-    #[error("base64 decode error: {0}")]
-    Base64(#[from] base64::DecodeError),
-    #[error("json decode error: {0}")]
-    Json(#[from] serde_json::Error),
+    use serde_test::{assert_tokens, Token as SerToken};
+
+    #[test]
+    fn test_token() {
+        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEyLCJpYXQiOjF9.2rAMFy3jpmaOhQ5jVygzSs4hS4hCIwuVDOk1hRmGgyI";
+
+        let token = Token::new(token).unwrap();
+
+        assert_eq!(
+            token.claims,
+            Claims {
+                sub: 12,
+                iat: 1,
+                exp: 0,
+                nbf: 0,
+            }
+        );
+
+        let token = "invalid token";
+        assert!(matches!(
+            Token::new(token).unwrap_err(),
+            Error::InvalidToken
+        ));
+
+        let token = "invalid.#.base64";
+        assert!(matches!(Token::new(token).unwrap_err(), Error::Base64(_)));
+
+        let token = "invalid.json.payload";
+        assert!(matches!(
+            Token::new(token).unwrap_err(),
+            Error::SerdeJson(_)
+        ));
+    }
+
+    #[test]
+    fn test_token_serialize() {
+        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEyLCJpYXQiOjF9.2rAMFy3jpmaOhQ5jVygzSs4hS4hCIwuVDOk1hRmGgyI";
+
+        assert_tokens(&Token::new(token).unwrap(), &[SerToken::Str(token)]);
+    }
+
+    #[test]
+    fn test_token_deserialize() {
+        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEyLCJpYXQiOjF9.2rAMFy3jpmaOhQ5jVygzSs4hS4hCIwuVDOk1hRmGgyI";
+
+        assert_tokens(
+            &Token {
+                token: token.to_string(),
+                claims: Claims {
+                    sub: 12,
+                    iat: 1,
+                    exp: 0,
+                    nbf: 0,
+                },
+            },
+            &[SerToken::Str(token)],
+        );
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-
-pub struct Token {
-    token: String,
-}
-
-impl Token {
-    pub fn new<T>(token: T) -> Self
-    where
-        T: ToString,
-    {
-        Self {
-            token: token.to_string(),
-        }
-    }
-
-    pub fn claims(&self) -> Claims {
-        let mut parts = self.token.split('.');
-
-        let claims = parts.nth(1).unwrap();
-
-        let claims = base64::decode(claims).unwrap();
-
-        serde_json::from_slice(&claims).unwrap()
-    }
+pub struct TokenPair {
+    pub auth_token: Token,
+    pub refresh_token: Token,
 }
