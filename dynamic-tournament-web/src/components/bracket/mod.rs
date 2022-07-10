@@ -35,7 +35,7 @@ use crate::services::errorlog::ErrorLog;
 use crate::services::{EventBus, MessageLog, WebSocketService};
 
 pub struct Bracket {
-    websocket: WebSocketService,
+    websocket: Option<WebSocketService>,
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
     state: Option<Tournament<String, EntrantScore<u64>>>,
@@ -51,19 +51,21 @@ impl Component for Bracket {
         let websocket =
             match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
             {
-                Ok(ws) => ws,
+                Ok(websocket) => {
+                    let mut ws = websocket.clone();
+                    ctx.link().send_future_batch(async move {
+                        ws.send(Frame::SyncMatchesRequest).await;
+
+                        vec![]
+                    });
+
+                    Some(websocket)
+                }
                 Err(err) => {
-                    ErrorLog::error(err.to_string());
-                    panic!("{}", err);
+                    MessageLog::error(err.to_string());
+                    None
                 }
             };
-
-        let mut ws = websocket.clone();
-        ctx.link().send_future_batch(async move {
-            ws.send(Frame::SyncMatchesRequest).await;
-
-            vec![]
-        });
 
         Self {
             state: None,
@@ -83,18 +85,21 @@ impl Component for Bracket {
         let websocket =
             match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
             {
-                Ok(ws) => ws,
+                Ok(websocket) => {
+                    let mut ws = websocket.clone();
+                    ctx.link().send_future_batch(async move {
+                        ws.send(Frame::SyncMatchesRequest).await;
+
+                        vec![]
+                    });
+
+                    Some(websocket)
+                }
                 Err(err) => {
                     MessageLog::error(err.to_string());
-                    panic!("{}", err)
+                    None
                 }
             };
-
-        let mut ws = websocket.clone();
-        ctx.link().send_future_batch(async move {
-            ws.send(Frame::SyncMatchesRequest).await;
-            vec![]
-        });
 
         self.websocket = websocket;
         self._producer = EventBus::bridge(ctx.link().callback(Message::HandleFrame));
@@ -227,27 +232,32 @@ impl Component for Bracket {
                 true
             }
             Message::UpdateMatch { index, nodes } => {
-                let mut websocket = self.websocket.clone();
-                ctx.link().send_future_batch(async move {
-                    websocket
-                        .send(Frame::UpdateMatch {
-                            index: index.try_into().unwrap(),
-                            nodes,
-                        })
-                        .await;
+                if let Some(websocket) = &self.websocket {
+                    let mut websocket = websocket.clone();
 
-                    vec![Message::ClosePopup]
-                });
+                    ctx.link().send_future_batch(async move {
+                        websocket
+                            .send(Frame::UpdateMatch {
+                                index: index.try_into().unwrap(),
+                                nodes,
+                            })
+                            .await;
+
+                        vec![Message::ClosePopup]
+                    });
+                }
 
                 false
             }
             Message::ResetMatch(index) => {
-                let mut websocket = self.websocket.clone();
-                ctx.link().send_future_batch(async move {
-                    websocket.send(Frame::ResetMatch { index }).await;
+                if let Some(websocket) = &self.websocket {
+                    let mut websocket = websocket.clone();
+                    ctx.link().send_future_batch(async move {
+                        websocket.send(Frame::ResetMatch { index }).await;
 
-                    vec![Message::ClosePopup]
-                });
+                        vec![Message::ClosePopup]
+                    });
+                }
 
                 false
             }
