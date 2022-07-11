@@ -1,12 +1,10 @@
 use std::rc::Rc;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
-use dynamic_tournament_api::{
-    v3::tournaments::{PartialTournament, Tournament},
-    Client,
-};
-use yew::{html, Callback, Component, Context, Html, Properties};
+use dynamic_tournament_api::v3::tournaments::{PartialTournament, Tournament};
+use yew::{html, Component, Context, Html, Properties};
 
+use crate::components::providers::{ClientProvider, Provider};
 use crate::components::Input;
 use crate::services::errorlog::ErrorLog;
 
@@ -49,7 +47,7 @@ impl Component for Settings {
                 let tournament = self.tournament.clone();
                 let id = ctx.props().tournament.id;
 
-                let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
+                let client = ClientProvider::get(ctx);
                 ctx.link().send_future_batch(async move {
                     match client.v3().tournaments().patch(id, &tournament).await {
                         Ok(_) => ErrorLog::info("Updated tournament"),

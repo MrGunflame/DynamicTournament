@@ -9,9 +9,11 @@ use dynamic_tournament_api::v3::{
         roles::Role,
     },
 };
-use dynamic_tournament_api::Client;
 
-use crate::utils::FetchData;
+use crate::{
+    components::providers::{ClientProvider, Provider},
+    utils::FetchData,
+};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
@@ -30,10 +32,7 @@ impl Component for TeamDetails {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("no client in context");
+        let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament_id;
         let id = ctx.props().id;

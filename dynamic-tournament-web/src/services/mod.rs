@@ -1,4 +1,3 @@
-pub mod client;
 pub mod errorlog;
 
 use std::collections::HashSet;
@@ -40,7 +39,7 @@ impl WebSocketService {
         if let Some(auth) = auth {
             let mut ws = ws.clone();
             spawn_local(async move {
-                let msg = Frame::Authorize(auth).to_bytes().unwrap();
+                let msg = Frame::Authorize(auth.into_token()).to_bytes().unwrap();
 
                 ws.send(msg).await;
             });

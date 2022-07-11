@@ -44,7 +44,7 @@ impl Component for Bracket {
     type Properties = Properties;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let client = ClientProvider::take(ctx);
+        let client = ClientProvider::get(ctx);
 
         let websocket =
             match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
@@ -78,7 +78,7 @@ impl Component for Bracket {
     fn changed(&mut self, ctx: &Context<Self>) -> bool {
         self.state = None;
 
-        let client = ClientProvider::take(ctx);
+        let client = ClientProvider::get(ctx);
 
         let websocket =
             match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)

@@ -1,9 +1,9 @@
 use yew::prelude::*;
 use yew_router::components::Redirect;
 
-use super::Route;
+use crate::components::providers::{ClientProvider, Provider};
 
-use dynamic_tournament_api::Client;
+use super::Route;
 
 pub struct Logout;
 
@@ -16,12 +16,7 @@ impl Component for Logout {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("No ClientProvider given");
-
-        client.logout();
+        ClientProvider::get(ctx).logout();
 
         html! {
             <Redirect<Route> to={Route::Index} />

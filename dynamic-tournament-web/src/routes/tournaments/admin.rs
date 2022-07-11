@@ -3,10 +3,13 @@ mod settings;
 
 use std::rc::Rc;
 
-use dynamic_tournament_api::{v3::tournaments::Tournament, Client, Error};
-use yew::{html, Callback, Component, Context, Html, Properties};
+use dynamic_tournament_api::{v3::tournaments::Tournament, Error};
+use yew::{html, Component, Context, Html, Properties};
 
-use crate::services::errorlog::ErrorLog;
+use crate::{
+    components::providers::{ClientProvider, Provider},
+    services::errorlog::ErrorLog,
+};
 
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
@@ -34,10 +37,7 @@ impl Component for Admin {
 
         match msg {
             Message::DeleteTournament => {
-                let (client, _) = ctx
-                    .link()
-                    .context::<Client>(Callback::noop())
-                    .expect("no client in context");
+                let client = ClientProvider::get(ctx);
 
                 ctx.link().send_future(async move {
                     Message::DeleteTournamentResult(

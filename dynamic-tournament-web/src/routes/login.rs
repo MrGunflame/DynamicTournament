@@ -1,15 +1,10 @@
-use crate::components::providers::ClientProvider;
-use crate::components::providers::Provider;
+use crate::components::providers::{ClientProvider, Provider};
 use crate::routes::Route;
-use crate::services::client::ClientEventBus;
 
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew::Callback;
-use yew_agent::Dispatched;
 use yew_router::components::Redirect;
-
-use dynamic_tournament_api::Client;
 
 pub struct Login {
     username: String,
@@ -42,27 +37,14 @@ impl Component for Login {
                 true
             }
             Message::Submit => {
-                let (client, _) = ctx
-                    .link()
-                    .context::<Client>(Callback::noop())
-                    .expect("No ClientProvider given");
+                let client = ClientProvider::get(ctx);
 
                 let username = self.username.clone();
                 let password = self.password.clone();
 
                 ctx.link().send_future(async move {
-                    async fn fetch_data(
-                        client: Client,
-                        username: String,
-                        password: String,
-                    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-                        client.v3().auth().login(&username, &password).await?;
-
-                        Ok(())
-                    }
-
-                    match fetch_data(client, username.clone(), password.clone()).await {
-                        Ok(_) => Message::ReqeustResolve,
+                    match client.login(&username, &password).await {
+                        Ok(()) => Message::ReqeustResolve,
                         Err(err) => Message::RequestReject(err.to_string()),
                     }
                 });
@@ -70,8 +52,6 @@ impl Component for Login {
                 false
             }
             Message::ReqeustResolve => {
-                ClientEventBus::dispatcher().send(());
-
                 // Redirect to / now.
                 true
             }
@@ -84,7 +64,7 @@ impl Component for Login {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let client = ClientProvider::take(ctx);
+        let client = ClientProvider::get(ctx);
 
         // Redirect to /.
         if client.is_authenticated() {

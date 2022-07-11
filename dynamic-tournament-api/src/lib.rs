@@ -8,7 +8,7 @@ use crate::http::{Request, RequestBuilder, Response};
 use crate::tournament::TournamentClient;
 
 use ::http::StatusCode;
-use auth::TokenPair;
+use auth::{Token, TokenPair};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -166,16 +166,14 @@ impl Authorization {
     /// Returns a reference to the auth token. This is the token to make requests. Returns [`None`]
     /// if no tokens are avaliable.
     #[inline]
-    pub fn auth_token(&self) -> Option<&str> {
-        self.tokens.as_ref().map(|tokens| tokens.auth_token.token())
+    pub fn auth_token(&self) -> Option<&Token> {
+        self.tokens.as_ref().map(|tokens| &tokens.auth_token)
     }
 
     /// Returns a reference to the refresh token. Returns [`None`] if no tokens are avaliable.
     #[inline]
-    pub fn refresh_token(&self) -> Option<&str> {
-        self.tokens
-            .as_ref()
-            .map(|tokens| tokens.refresh_token.token())
+    pub fn refresh_token(&self) -> Option<&Token> {
+        self.tokens.as_ref().map(|tokens| &tokens.refresh_token)
     }
 }
 

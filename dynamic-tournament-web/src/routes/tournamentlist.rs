@@ -1,10 +1,10 @@
+use crate::components::providers::{ClientProvider, Provider};
 use crate::routes::tournaments::Route;
 use crate::utils::FetchData;
 use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
-use dynamic_tournament_api::Client;
 use yew_router::history::History;
 use yew_router::prelude::RouterScopeExt;
 
@@ -24,10 +24,7 @@ impl Component for TournamentList {
         Title::set("Tournaments");
 
         let link = ctx.link();
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("No ClientProvider given");
+        let client = ClientProvider::get(ctx);
 
         link.send_future(async move {
             let msg = match client.v3().tournaments().list().await {

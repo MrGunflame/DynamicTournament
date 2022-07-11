@@ -63,8 +63,6 @@ impl<'a> AuthClient<'a> {
             }
         };
 
-        let refresh_token = Token::new(refresh_token).unwrap();
-
         let body = RefreshToken { refresh_token };
 
         let req = self

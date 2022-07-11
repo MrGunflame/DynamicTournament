@@ -63,7 +63,7 @@ where
             })
             .collect();
 
-        let client = ClientProvider::take(ctx);
+        let client = ClientProvider::get(ctx);
 
         let action_button = match client.is_authenticated() {
             true => {

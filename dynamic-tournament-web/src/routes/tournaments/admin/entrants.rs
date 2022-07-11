@@ -8,11 +8,14 @@ use dynamic_tournament_api::{
             EntrantKind, Tournament,
         },
     },
-    Client, Error,
+    Error,
 };
-use yew::{html, Callback, Component, Context, Html, Properties};
+use yew::{html, Component, Context, Html, Properties};
 
-use crate::components::Button;
+use crate::components::{
+    providers::{ClientProvider, Provider},
+    Button,
+};
 use crate::services::MessageLog;
 use crate::utils::FetchData;
 
@@ -41,7 +44,7 @@ impl Component for Entrants {
     fn create(ctx: &Context<Self>) -> Self {
         let id = ctx.props().tournament.id;
 
-        let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
+        let client = ClientProvider::get(ctx);
         ctx.link().send_future(async move {
             match client.v3().tournaments().entrants(id).list().await {
                 Ok(entrants) => Message::UpdateEntrants(FetchData::from(entrants)),
@@ -66,7 +69,7 @@ impl Component for Entrants {
                 true
             }
             Message::DeleteEntrant(id) => {
-                let (client, _) = ctx.link().context::<Client>(Callback::noop()).unwrap();
+                let client = ClientProvider::get(ctx);
 
                 let tournament_id = ctx.props().tournament.id;
                 ctx.link().send_future(async move {

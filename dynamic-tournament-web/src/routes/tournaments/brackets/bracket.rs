@@ -4,13 +4,13 @@ use dynamic_tournament_api::v3::tournaments::brackets::BracketOverview;
 use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
-use dynamic_tournament_api::Client;
-use yew::{html, Callback, Component, Context, Html, Properties};
+use yew::{html, Component, Context, Html, Properties};
 use yew_router::history::History;
 use yew_router::prelude::RouterScopeExt;
 
 use crate::components::bracket::Bracket as BracketComponent;
 use crate::components::movable_boxed::MovableBoxed;
+use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
 use crate::routes::tournaments::Route;
 use crate::utils::FetchData;
@@ -38,10 +38,7 @@ impl Component for Bracket {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("no client in context");
+        let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament.id;
         let id = ctx.props().id;
@@ -118,10 +115,7 @@ impl Component for Bracket {
                     return false;
                 }
 
-                let (client, _) = ctx
-                    .link()
-                    .context::<Client>(Callback::noop())
-                    .expect("no client in context");
+                let client = ClientProvider::get(ctx);
 
                 ctx.link().send_future(async move {
                     let msg = match client

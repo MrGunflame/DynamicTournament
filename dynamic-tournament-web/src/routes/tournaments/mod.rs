@@ -14,10 +14,9 @@ use self::admin::Admin;
 use self::brackets::bracket::Bracket;
 use self::brackets::Brackets;
 
+use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::FetchData;
 use crate::Title;
-
-use dynamic_tournament_api::Client;
 
 use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
@@ -36,10 +35,7 @@ impl Component for Tournament {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("no client in context");
+        let client = ClientProvider::get(ctx);
 
         let id = ctx.props().id;
         link.send_future(async move {

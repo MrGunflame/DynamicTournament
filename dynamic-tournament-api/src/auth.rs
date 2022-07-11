@@ -41,6 +41,13 @@ impl Token {
         Self { token, claims }
     }
 
+    /// Consumes this `Token`, returning the raw parts.
+    ///
+    /// The parts can be used to reconstruct the `Token` using [`Token::from_parts`].
+    pub fn into_parts(self) -> (String, Claims) {
+        (self.token, self.claims)
+    }
+
     /// Returns an reference to the JWT token.
     pub fn token(&self) -> &str {
         &self.token
@@ -49,6 +56,16 @@ impl Token {
     /// Returns a reference to the claims of the JWT token.
     pub fn claims(&self) -> &Claims {
         &self.claims
+    }
+
+    /// Consumes this `Token`, returning only the token.
+    pub fn into_token(self) -> String {
+        self.token
+    }
+
+    /// Consumes this `Token`, returning only the [`Claims`].
+    pub fn into_claims(self) -> Claims {
+        self.claims
     }
 }
 

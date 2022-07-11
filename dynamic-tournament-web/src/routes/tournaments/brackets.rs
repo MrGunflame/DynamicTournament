@@ -1,16 +1,16 @@
 use std::rc::Rc;
 
-use dynamic_tournament_api::{
-    v3::{
-        id::BracketId,
-        tournaments::{brackets::BracketOverview, Tournament},
-    },
-    Client,
+use dynamic_tournament_api::v3::{
+    id::BracketId,
+    tournaments::{brackets::BracketOverview, Tournament},
 };
-use yew::{html, Callback, Component, Context, Html, Properties};
+use yew::{html, Component, Context, Html, Properties};
 use yew_router::{history::History, prelude::RouterScopeExt};
 
-use crate::components::BracketList;
+use crate::components::{
+    providers::{ClientProvider, Provider},
+    BracketList,
+};
 use crate::utils::FetchData;
 
 use super::Route;
@@ -38,10 +38,7 @@ impl Component for Brackets {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let (client, _) = ctx
-            .link()
-            .context::<Client>(Callback::noop())
-            .expect("no client in context");
+        let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament.id;
         ctx.link().send_future(async move {
