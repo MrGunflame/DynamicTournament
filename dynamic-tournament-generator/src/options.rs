@@ -12,6 +12,7 @@ use std::collections::{
     hash_map::{Iter, Keys},
     HashMap,
 };
+use std::hint;
 
 use thiserror::Error;
 
@@ -100,6 +101,8 @@ impl From<TournamentOptions> for TournamentOptionValues {
 pub struct TournamentOptionValues(HashMap<String, OptionValue>);
 
 impl TournamentOptionValues {
+    /// Returns the [`OptionValue`] with the given `key`. Returns `None` if no value exist for the
+    /// given `key`.
     pub fn get(&self, key: &str) -> Option<&OptionValue> {
         self.0.get(key)
     }
@@ -151,7 +154,7 @@ pub struct TournamentOption {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[serde(untagged)]
+#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum OptionValue {
     Bool(bool),
     I64(i64),
@@ -170,57 +173,101 @@ impl OptionValue {
         }
     }
 
+    /// Returns the contained `Bool` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `self` value is not [`Bool`].
+    ///
+    /// [`Bool`]: Self::Bool
+    #[inline]
     pub fn unwrap_bool(&self) -> bool {
         match self {
-            Self::Bool(value) => *value,
-            _ => panic!("err"),
+            Self::Bool(val) => *val,
+            _ => panic!(
+                "called `OptionValue::unwrap_bool()` on a `{}` value",
+                self.panic_string()
+            ),
         }
     }
 
-    pub fn unwrap_bool_or(&self, val: bool) -> bool {
+    /// Returns the contained `Bool` value without checking whether `self` is `Bool`.
+    ///
+    /// # Safety
+    ///
+    /// Calling this method on a value other than `Bool` is undefined behavoir.
+    #[inline]
+    pub const unsafe fn unwrap_bool_unchecked(&self) -> bool {
         match self {
             Self::Bool(val) => *val,
-            _ => val,
+            _ => hint::unreachable_unchecked(),
+        }
+    }
+
+    /// Returns the contained `Bool` value or a provided default.
+    #[inline]
+    pub fn unwrap_bool_or(&self, default: bool) -> bool {
+        match self {
+            Self::Bool(val) => *val,
+            _ => default,
+        }
+    }
+
+    /// Returns the `&str` that should be used for `self` in a panic string.
+    #[inline]
+    fn panic_string(&self) -> &'static str {
+        match self {
+            Self::Bool(_) => "Bool",
+            Self::I64(_) => "I64",
+            Self::U64(_) => "U64",
+            Self::String(_) => "String",
         }
     }
 }
 
 impl From<bool> for OptionValue {
+    #[inline]
     fn from(value: bool) -> Self {
         Self::Bool(value)
     }
 }
 
 impl From<i64> for OptionValue {
+    #[inline]
     fn from(value: i64) -> Self {
         Self::I64(value)
     }
 }
 
 impl From<u64> for OptionValue {
+    #[inline]
     fn from(value: u64) -> Self {
         Self::U64(value)
     }
 }
 
 impl<'a> From<&'a str> for OptionValue {
+    #[inline]
     fn from(value: &'a str) -> Self {
         Self::String(value.to_owned())
     }
 }
 
 impl From<String> for OptionValue {
+    #[inline]
     fn from(value: String) -> Self {
         Self::String(value)
     }
 }
 
+/// A builder for [`TournamentOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct Builder {
     options: TournamentOptions,
 }
 
 impl Builder {
+    /// Adds a
     pub fn option<T, V>(mut self, key: &'static str, name: T, value: V) -> Self
     where
         T: ToString,
@@ -236,6 +283,8 @@ impl Builder {
         self
     }
 
+    /// Consumes the `Builder`, returning the collected [`TournamentOptions`].
+    #[inline]
     pub fn build(self) -> TournamentOptions {
         self.options
     }
