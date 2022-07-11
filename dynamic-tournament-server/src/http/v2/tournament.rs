@@ -9,8 +9,8 @@ use dynamic_tournament_api::v3::tournaments::brackets::Bracket as Bracket2;
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_api::v3::tournaments::entrants::{Player as Player2, Team as Team2};
 use dynamic_tournament_api::v3::tournaments::{EntrantKind, Tournament as Tournament2};
-use dynamic_tournament_generator::options::TournamentOptionValues;
-use dynamic_tournament_generator::{EntrantScore, SingleElimination};
+use dynamic_tournament_core::options::TournamentOptionValues;
+use dynamic_tournament_core::{EntrantScore, SingleElimination};
 use hyper::Method;
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {

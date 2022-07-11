@@ -3,18 +3,16 @@ mod r#match;
 
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
-use dynamic_tournament_generator::options::TournamentOptionValues;
-use dynamic_tournament_generator::tournament::TournamentKind;
-use dynamic_tournament_generator::{
-    EntrantScore, EntrantSpot, Match, Node, SingleElimination, System,
-};
+use dynamic_tournament_core::options::TournamentOptionValues;
+use dynamic_tournament_core::tournament::TournamentKind;
+use dynamic_tournament_core::{EntrantScore, EntrantSpot, Match, Node, SingleElimination, System};
 use entrant::BracketEntrant;
 use r#match::{Action, BracketMatch};
 
-use dynamic_tournament_generator::render::{
+use dynamic_tournament_core::render::{
     self, BracketRound, BracketRounds, Position, Renderer, Round,
 };
-use dynamic_tournament_generator::tournament::Tournament;
+use dynamic_tournament_core::tournament::Tournament;
 
 use yew_agent::{Bridge, Bridged};
 

@@ -1,4 +1,4 @@
-use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
+use dynamic_tournament_core::{EntrantScore, EntrantSpot};
 use yew::html::{Component, Context, Html};
 use yew::{html, Properties};
 

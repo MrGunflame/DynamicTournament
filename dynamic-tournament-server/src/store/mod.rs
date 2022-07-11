@@ -7,7 +7,7 @@ use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, TournamentId},
     tournaments::{entrants::Entrant, EntrantKind, Tournament, TournamentOverview},
 };
-use dynamic_tournament_generator::{EntrantScore, Matches};
+use dynamic_tournament_core::{EntrantScore, Matches};
 use sqlx::mysql::MySqlPool;
 use sqlx::Row;
 

@@ -1,5 +1,5 @@
 use bincode::{DefaultOptions, Options};
-use dynamic_tournament_generator::{EntrantScore, Matches};
+use dynamic_tournament_core::{EntrantScore, Matches};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

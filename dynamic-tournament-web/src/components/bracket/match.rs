@@ -1,7 +1,7 @@
-use dynamic_tournament_generator::render::Position;
+use dynamic_tournament_core::render::Position;
 use yew::prelude::*;
 
-use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
+use dynamic_tournament_core::{EntrantScore, EntrantSpot};
 
 use super::BracketEntrant;
 use crate::components::button::Button;

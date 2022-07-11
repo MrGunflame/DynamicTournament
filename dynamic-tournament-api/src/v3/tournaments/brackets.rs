@@ -1,6 +1,6 @@
 pub mod matches;
 
-use dynamic_tournament_generator::options::TournamentOptionValues;
+use dynamic_tournament_core::options::TournamentOptionValues;
 use serde::{Deserialize, Serialize};
 
 use crate::v3::id::{BracketId, EntrantId, SystemId, TournamentId};

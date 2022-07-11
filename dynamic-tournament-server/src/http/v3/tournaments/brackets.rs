@@ -4,7 +4,7 @@ use dynamic_tournament_api::v3::{
     id::{BracketId, SystemId, TournamentId},
     tournaments::brackets::Bracket,
 };
-use dynamic_tournament_generator::{options::TournamentOptions, EntrantScore, SingleElimination};
+use dynamic_tournament_core::{options::TournamentOptions, EntrantScore, SingleElimination};
 use hyper::Method;
 
 use crate::method;

@@ -1,6 +1,6 @@
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::{EntrantScore, Matches};
+use dynamic_tournament_core::{EntrantScore, Matches};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

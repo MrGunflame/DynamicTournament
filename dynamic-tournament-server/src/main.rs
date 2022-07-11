@@ -117,7 +117,7 @@ pub enum Error {
     #[error("{0}")]
     JsonWebToken(#[from] jsonwebtoken::errors::Error),
     #[error("{0}")]
-    Bracket(#[from] dynamic_tournament_generator::Error),
+    Bracket(#[from] dynamic_tournament_core::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("body already consumed")]

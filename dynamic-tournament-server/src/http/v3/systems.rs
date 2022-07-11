@@ -1,4 +1,4 @@
-use dynamic_tournament_generator::options::TournamentOptions;
+use dynamic_tournament_core::options::TournamentOptions;
 use hyper::Method;
 
 use crate::http::{Request, RequestUri, Response, Result};
@@ -6,7 +6,7 @@ use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
-use dynamic_tournament_generator::{EntrantScore, SingleElimination};
+use dynamic_tournament_core::{EntrantScore, SingleElimination};
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take() {

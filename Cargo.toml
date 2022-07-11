@@ -2,7 +2,7 @@
 members = [
     "dynamic-tournament-api",
     "dynamic-tournament-cli",
-    "dynamic-tournament-generator",
+    "dynamic-tournament-core",
     "dynamic-tournament-server",
     "dynamic-tournament-test",
     "dynamic-tournament-web",

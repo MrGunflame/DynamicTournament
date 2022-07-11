@@ -3,7 +3,7 @@ use yew::prelude::*;
 
 use std::mem::{self, MaybeUninit};
 
-use dynamic_tournament_generator::{EntrantScore, EntrantSpot};
+use dynamic_tournament_core::{EntrantScore, EntrantSpot};
 
 pub struct BracketUpdate {
     // Score: [left, right]

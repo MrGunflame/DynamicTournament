@@ -1,7 +1,7 @@
 use super::id::SystemId;
 use crate::{Client, Result};
 
-use dynamic_tournament_generator::options::TournamentOptions;
+use dynamic_tournament_core::options::TournamentOptions;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

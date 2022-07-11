@@ -5,7 +5,7 @@ use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, SystemId, TournamentId},
     tournaments::brackets::matches::Frame,
 };
-use dynamic_tournament_generator::{
+use dynamic_tournament_core::{
     tournament::{Tournament, TournamentKind},
     EntrantScore, EntrantSpot, Matches, System,
 };

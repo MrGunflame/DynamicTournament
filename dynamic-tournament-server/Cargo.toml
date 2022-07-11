@@ -13,7 +13,7 @@ metrics = []
 
 [dependencies]
 dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api", features = ["server"] }
-dynamic-tournament-generator = { version = "0.4.0", path = "../dynamic-tournament-generator", features = ["serde"] }
+dynamic-tournament-core = { version = "0.4.0", path = "../dynamic-tournament-core", features = ["serde"] }
 tokio = { version = "1.17.0", features = ["full"] }
 sqlx = { version = "0.5.11", features = ["runtime-tokio-rustls", "mysql", "json", "chrono"] }
 serde = "1.0.136"
