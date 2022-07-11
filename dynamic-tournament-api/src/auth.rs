@@ -69,6 +69,7 @@ impl PartialEq for Token {
 impl Eq for Token {}
 
 impl Serialize for Token {
+    #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -78,6 +79,7 @@ impl Serialize for Token {
 }
 
 impl<'de> Deserialize<'de> for Token {
+    #[inline]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -87,10 +89,12 @@ impl<'de> Deserialize<'de> for Token {
         impl<'de> Visitor<'de> for TokenVisitor {
             type Value = Token;
 
+            #[inline]
             fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
                 formatter.write_str("token")
             }
 
+            #[inline]
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
@@ -101,6 +105,7 @@ impl<'de> Deserialize<'de> for Token {
                 }
             }
 
+            #[inline]
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
