@@ -1,8 +1,13 @@
 use crate::Error;
 
+use std::borrow::Cow;
+
 #[cfg(target_family = "wasm")]
 use futures::SinkExt;
 
+/// A WebSocket connection.
+///
+/// The connection is automatically closed when all `WebSocket` instances are dropped.
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct WebSocket {
@@ -14,6 +19,11 @@ pub struct WebSocket {
 }
 
 impl WebSocket {
+    /// Opens a new `WebSocket` connection using the given `uri`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] if creating the connection fails.
     #[allow(unused)]
     #[inline]
     pub fn new(uri: &str, handler: Box<dyn EventHandler>) -> Result<Self, Error> {
@@ -28,6 +38,8 @@ impl WebSocket {
         Ok(Self { inner })
     }
 
+    /// Writes a [`WebSocketMessage`] into the connection. Note that `send` flushes its content
+    /// immediately.
     #[allow(unused)]
     #[inline]
     pub async fn send<T>(&mut self, msg: T)
@@ -42,26 +54,43 @@ impl WebSocket {
     }
 }
 
+/// Receiver for messages from a [`WebSocket`].
 pub trait EventHandler {
     fn dispatch(&mut self, msg: WebSocketMessage);
 }
 
+/// Builder for a [`WebSocket`].
 pub struct WebSocketBuilder {
-    uri: String,
+    uri: Cow<'static, str>,
     handler: Option<Box<dyn EventHandler>>,
 }
 
 impl WebSocketBuilder {
-    pub fn new(uri: String) -> Self {
-        Self { uri, handler: None }
+    /// Creates a new `WebSocketBuilder` using the given `uri` for the connection.
+    pub fn new<T>(uri: T) -> Self
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        Self {
+            uri: uri.into(),
+            handler: None,
+        }
     }
 
+    /// Sets the [`EventHandler`] for the `WebSocket`.
     pub fn handler(mut self, handler: Box<dyn EventHandler>) -> Self {
         self.handler = Some(handler);
         self
     }
 
-    pub fn build(self) -> Result<WebSocket, crate::Error> {
+    /// Consumes the `WebSocketBuilder` and opens a new [`WebSocket`] using the parameters
+    /// provided by the builder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] when creating a new [`WebSocket `] fails. For more details see
+    /// [`WebSocket::new`].
+    pub fn build(self) -> Result<WebSocket, Error> {
         let handler = match self.handler {
             Some(handler) => handler,
             None => Box::new(DefaultHandler),
@@ -77,6 +106,7 @@ impl EventHandler for DefaultHandler {
     fn dispatch(&mut self, _msg: WebSocketMessage) {}
 }
 
+/// A message that can be sent or received from a [`WebSocket`].
 #[derive(Clone, Debug)]
 pub enum WebSocketMessage {
     Bytes(Vec<u8>),

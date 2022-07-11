@@ -12,6 +12,7 @@ use auth::TokenPair;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "local-storage")]
@@ -20,6 +21,7 @@ use gloo_storage::{LocalStorage, Storage};
 #[cfg(target_family = "wasm")]
 use gloo_utils::errors::JsError;
 
+/// The primary client for the API.
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: Arc<RwLock<ClientInner>>,
@@ -27,9 +29,13 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(base_url: String) -> Self {
+    /// Creates a new `Client` with the given `base_url`.
+    pub fn new<T>(base_url: T) -> Self
+    where
+        T: Into<Cow<'static, str>>,
+    {
         let inner = ClientInner {
-            base_url,
+            base_url: base_url.into(),
             authorization: Authorization::new(),
         };
 
@@ -50,9 +56,10 @@ impl Client {
     pub(crate) fn request(&self) -> RequestBuilder {
         let inner = self.inner.read().unwrap();
 
-        RequestBuilder::new(inner.base_url.clone(), &inner.authorization)
+        RequestBuilder::new(inner.base_url.to_string(), &inner.authorization)
     }
 
+    /// Returns `true` if the `Client` has authentication credentials set.
     pub fn is_authenticated(&self) -> bool {
         let inner = self.inner.read().unwrap();
         inner.authorization.tokens.is_some()
@@ -64,10 +71,11 @@ impl Client {
         inner.authorization.clone()
     }
 
+    /// Returns the `base_url` used by the `Client`.
     pub fn base_url(&self) -> String {
         let inner = self.inner.read().unwrap();
 
-        inner.base_url.clone()
+        inner.base_url.to_string()
     }
 
     pub fn logout(&self) {
@@ -90,7 +98,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) struct ClientInner {
-    base_url: String,
+    base_url: Cow<'static, str>,
     authorization: Authorization,
 }
 
