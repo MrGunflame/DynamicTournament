@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use yew_agent::{Agent, AgentLink, Context, Dispatched, Dispatcher, HandlerId};
 
-use dynamic_tournament_api::websocket::{EventHandler, WebSocket};
+use dynamic_tournament_api::websocket::{EventHandler, WebSocket, WebSocketMessage};
 use dynamic_tournament_api::Client;
 
 pub use errorlog::MessageLog;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketService {
-    ws: WebSocket<Frame>,
+    ws: WebSocket,
 }
 
 impl WebSocketService {
@@ -40,7 +40,9 @@ impl WebSocketService {
         if let Some(auth) = auth {
             let mut ws = ws.clone();
             spawn_local(async move {
-                ws.send(&Frame::Authorize(auth)).await.unwrap();
+                let msg = Frame::Authorize(auth).to_bytes().unwrap();
+
+                ws.send(msg).await;
             });
         }
 
@@ -50,13 +52,15 @@ impl WebSocketService {
     pub async fn send(&mut self, msg: Frame) {
         log::debug!("Sending frame: {:?}", msg);
 
-        let _ = self.ws.send(&msg).await;
+        let msg = msg.to_bytes().unwrap();
+        let _ = self.ws.send(msg).await;
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
-    EventBusMsg(Frame),
+    Message(Frame),
+    Close,
 }
 
 pub struct EventBus {
@@ -81,11 +85,12 @@ impl Agent for EventBus {
 
     fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
         match msg {
-            Request::EventBusMsg(msg) => {
+            Request::Message(msg) => {
                 for sub in self.subscribers.iter() {
                     self.link.respond(*sub, msg.clone());
                 }
             }
+            Request::Close => {}
         }
     }
 
@@ -100,10 +105,16 @@ impl Agent for EventBus {
 
 struct Handler(Dispatcher<EventBus>);
 
-impl EventHandler<Frame> for Handler {
-    fn dispatch(&mut self, msg: Frame) {
+impl EventHandler for Handler {
+    fn dispatch(&mut self, msg: WebSocketMessage) {
         log::debug!("Received frame: {:?}", msg);
 
-        self.0.send(Request::EventBusMsg(msg));
+        match msg {
+            WebSocketMessage::Bytes(buf) => self
+                .0
+                .send(Request::Message(Frame::from_bytes(&buf).unwrap())),
+            WebSocketMessage::Text(_) => (),
+            WebSocketMessage::Close => self.0.send(Request::Close),
+        }
     }
 }
