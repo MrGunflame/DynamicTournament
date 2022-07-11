@@ -25,6 +25,7 @@ impl WebSocket {
     ///
     /// Returns an [`enum@Error`] if creating the connection fails.
     #[allow(unused)]
+    #[allow(clippy::let_unit_value)]
     #[inline]
     pub fn new(uri: &str, handler: Box<dyn EventHandler>) -> Result<Self, Error> {
         log::debug!("Connecting to {}", uri);
@@ -96,7 +97,7 @@ impl WebSocketBuilder {
             None => Box::new(DefaultHandler),
         };
 
-        Ok(WebSocket::new(&self.uri, handler)?)
+        WebSocket::new(&self.uri, handler)
     }
 }
 

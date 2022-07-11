@@ -53,7 +53,7 @@ impl WebSocketService {
         log::debug!("Sending frame: {:?}", msg);
 
         let msg = msg.to_bytes().unwrap();
-        let _ = self.ws.send(msg).await;
+        self.ws.send(msg).await;
     }
 }
 
