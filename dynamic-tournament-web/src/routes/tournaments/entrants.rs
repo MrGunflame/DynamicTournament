@@ -5,12 +5,14 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
-use crate::utils::FetchData;
+use crate::{
+    components::providers::{ClientProvider, Provider},
+    utils::FetchData,
+};
 
 use super::Route;
 
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
-use dynamic_tournament_api::Client;
 
 pub struct Entrants {
     entrants: FetchData<Vec<Entrant>>,
@@ -22,9 +24,7 @@ impl Component for Entrants {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link();
-        let (client, _) = link
-            .context::<Client>(Callback::noop())
-            .expect("no client in context");
+        let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament.id;
         link.send_future(async move {

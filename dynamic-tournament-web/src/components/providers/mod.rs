@@ -8,5 +8,5 @@ where
     C: Component,
 {
     /// Takes a new context `T` from the provider.
-    fn take(ctx: &Context<C>) -> T;
+    fn get(ctx: &Context<C>) -> T;
 }
