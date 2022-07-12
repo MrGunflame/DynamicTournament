@@ -138,6 +138,12 @@ impl<'de> Deserialize<'de> for Token {
     }
 }
 
+impl AsRef<str> for Token {
+    fn as_ref(&self) -> &str {
+        self.token()
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Claims {
