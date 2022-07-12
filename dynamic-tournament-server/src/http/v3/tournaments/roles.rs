@@ -41,9 +41,7 @@ async fn get(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {
 }
 
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     let mut role: Role = req.json().await?;
 
@@ -53,9 +51,7 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
 }
 
 async fn delete(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     req.state().store.roles(tournament_id).delete(id).await?;
 

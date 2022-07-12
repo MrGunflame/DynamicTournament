@@ -58,9 +58,7 @@ async fn get(req: Request, id: TournamentId) -> Result {
 }
 
 async fn create(mut req: Request) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     let mut tournament: Tournament = req.json().await?;
 
@@ -70,9 +68,7 @@ async fn create(mut req: Request) -> Result {
 }
 
 async fn patch(mut req: Request, id: TournamentId) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     // Check if the tournament exists.
     let mut tournament = match req.state().store.tournaments().get(id).await? {
@@ -90,9 +86,7 @@ async fn patch(mut req: Request, id: TournamentId) -> Result {
 }
 
 async fn delete(req: Request, id: TournamentId) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     req.state().store.tournaments().delete(id).await?;
 

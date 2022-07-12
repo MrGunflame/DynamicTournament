@@ -18,7 +18,7 @@ use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
     HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    CONTENT_LENGTH, CONTENT_TYPE,
+    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE,
 };
 use hyper::http::request::Parts;
 use hyper::server::conn::Http;
@@ -325,6 +325,45 @@ impl Request {
                 }
             },
             None => Err(StatusCodeError::length_required().into()),
+        }
+    }
+
+    /// Returns the value of the `Authorization` header. Returns an [`enum@Error`] if the header is
+    /// missing or contains a non-string value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StatusCodeError::unauthorized`] if the header is missing. Returns
+    /// [`StatusCodeError::bad_request`] if the header contains a non-string value.
+    pub fn authorization(&self) -> std::result::Result<&str, Error> {
+        match self.headers().get(AUTHORIZATION) {
+            Some(val) => match val.to_str() {
+                Ok(val) => Ok(val),
+                Err(_) => Err(StatusCodeError::bad_request().into()),
+            },
+            None => Err(StatusCodeError::unauthorized().into()),
+        }
+    }
+
+    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
+    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
+        let header = self.authorization()?;
+
+        let mut parts = header.split(' ');
+
+        match parts.next() {
+            Some("Bearer") => (),
+            _ => return Err(StatusCodeError::bad_request().into()),
+        }
+
+        let token = match parts.next() {
+            Some(token) => token,
+            None => return Err(StatusCodeError::bad_request().into()),
+        };
+
+        match self.state().auth.validate_auth_token(token) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(StatusCodeError::unauthorized().into()),
         }
     }
 }

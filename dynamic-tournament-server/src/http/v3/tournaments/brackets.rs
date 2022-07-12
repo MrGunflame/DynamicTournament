@@ -49,9 +49,7 @@ async fn get(req: Request, tournament_id: TournamentId, id: BracketId) -> Result
 }
 
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     let mut bracket: Bracket = req.json().await?;
 

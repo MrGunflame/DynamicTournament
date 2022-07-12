@@ -68,9 +68,7 @@ async fn list(req: Request) -> Result {
 }
 
 async fn create(mut req: Request) -> Result {
-    if !req.state().is_authenticated(&req) {
-        return Err(StatusCodeError::unauthorized().into());
-    }
+    req.require_authentication()?;
 
     let body: Tournament = req.json().await?;
 

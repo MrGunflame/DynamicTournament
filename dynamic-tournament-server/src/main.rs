@@ -1,3 +1,4 @@
+mod auth;
 mod config;
 mod http;
 mod logger;
@@ -122,6 +123,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("body already consumed")]
     BodyConsumed,
+    #[error("invalid token")]
+    InvalidToken,
 }
 
 #[derive(Debug, Error)]

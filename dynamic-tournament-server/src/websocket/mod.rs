@@ -324,7 +324,7 @@ async fn handle_frame(frame: Frame, state: Arc<ConnectionState>) {
     match frame {
         Frame::Reserved => (),
         Frame::Authorize(string) => {
-            if state.state.is_authenticated_string(&string) {
+            if state.state.auth.validate_auth_token(&string).is_ok() {
                 *state.is_authenticated.lock() = true;
             }
         }
