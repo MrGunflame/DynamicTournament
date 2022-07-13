@@ -33,12 +33,15 @@ pub enum Error {
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A list of optional values for a tournament.
+/// A list of optional values for a tournament. `TournamentOptions` includes the names and should
+/// be used to describe a list of options. [`TournamentOptionValues`] should be used when just
+/// expecting a list of key-value pairs.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TournamentOptions(HashMap<String, TournamentOption>);
 
 impl TournamentOptions {
+    /// Creates a new [`Builder`].
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -69,6 +72,8 @@ impl TournamentOptions {
         }
     }
 
+    /// Inserts a new [`TournamentOption`] with the provided `key`, overwriting the previous value
+    /// if it exists.
     pub fn insert<K>(&mut self, key: K, option: TournamentOption)
     where
         K: ToString,
@@ -76,14 +81,18 @@ impl TournamentOptions {
         self.0.insert(key.to_string(), option);
     }
 
+    /// Returns an iterator over all keys.
     pub fn keys(&self) -> Keys<'_, String, TournamentOption> {
         self.0.keys()
     }
 
+    /// Returns an iterator over all [`TournamentOption`]s.
     pub fn iter(&self) -> Iter<'_, String, TournamentOption> {
         self.0.iter()
     }
 
+    /// Consumes the `TournamentOptions`, returing an owned iterator over all
+    /// [`TournamentOption`]s.
     pub fn into_values(self) -> impl Iterator<Item = TournamentOption> {
         self.0.into_values()
     }
@@ -105,6 +114,10 @@ impl TournamentOptionValues {
     /// given `key`.
     pub fn get(&self, key: &str) -> Option<&OptionValue> {
         self.0.get(key)
+    }
+
+    pub fn take(&mut self, key: &str) -> Option<OptionValue> {
+        self.0.remove(key)
     }
 
     pub fn set<K, V>(&mut self, key: K, value: V)
@@ -152,6 +165,7 @@ pub struct TournamentOption {
     pub value: OptionValue,
 }
 
+/// The value of a [`TournamentOption`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
@@ -173,17 +187,31 @@ impl OptionValue {
         }
     }
 
-    /// Returns the contained `Bool` value.
+    /// Returns the contained [`Bool`] value.
     ///
     /// # Panics
     ///
     /// Panics if the `self` value is not [`Bool`].
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(true);
+    /// assert!(val.unwrap_bool());
+    /// ```
+    ///
+    /// ```should_panic
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(0);
+    /// assert!(val.unwrap_bool()); // Panics
+    /// ```
+    ///
     /// [`Bool`]: Self::Bool
     #[inline]
-    pub fn unwrap_bool(&self) -> bool {
+    pub fn unwrap_bool(self) -> bool {
         match self {
-            Self::Bool(val) => *val,
+            Self::Bool(val) => val,
             _ => panic!(
                 "called `OptionValue::unwrap_bool()` on a `{}` value",
                 self.panic_string()
@@ -191,25 +219,425 @@ impl OptionValue {
         }
     }
 
-    /// Returns the contained `Bool` value without checking whether `self` is `Bool`.
+    /// Returns the contained [`Bool`] value without checking whether `self` is [`Bool`].
     ///
     /// # Safety
     ///
-    /// Calling this method on a value other than `Bool` is undefined behavoir.
+    /// Calling this method on a value other than [`Bool`] is undefined behavoir.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(true);
+    /// assert!(unsafe { val.unwrap_bool_unchecked() });
+    /// ```
+    ///
+    /// ```no_run
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(0);
+    /// assert!(unsafe { val.unwrap_bool_unchecked() }); // Undefined behavoir
+    /// ```
+    ///
+    /// [`Bool`]: Self::Bool
     #[inline]
-    pub const unsafe fn unwrap_bool_unchecked(&self) -> bool {
+    pub unsafe fn unwrap_bool_unchecked(self) -> bool {
         match self {
-            Self::Bool(val) => *val,
+            Self::Bool(val) => val,
             _ => hint::unreachable_unchecked(),
         }
     }
 
-    /// Returns the contained `Bool` value or a provided default.
+    /// Returns the contained [`Bool`] value or the provided default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(true);
+    /// assert!(val.unwrap_bool_or(false));
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(0);
+    /// assert!(val.unwrap_bool_or(true));
+    /// ```
+    ///
+    /// [`Bool`]: Self::Bool
     #[inline]
-    pub fn unwrap_bool_or(&self, default: bool) -> bool {
+    pub fn unwrap_bool_or(self, default: bool) -> bool {
         match self {
-            Self::Bool(val) => *val,
+            Self::Bool(val) => val,
             _ => default,
+        }
+    }
+
+    /// Returns the contained [`Bool`] value or computes it from the provided closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(true);
+    /// assert!(val.unwrap_bool_or_else(|| false));
+    /// ```
+    ///
+    /// [`Bool`]: Self::Bool
+    #[inline]
+    pub fn unwrap_bool_or_else<F>(self, f: F) -> bool
+    where
+        F: FnOnce() -> bool,
+    {
+        match self {
+            Self::Bool(val) => val,
+            _ => f(),
+        }
+    }
+
+    /// Returns the contained [`I64`] value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `self` value is not [`I64`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::I64(-10);
+    /// assert_eq!(val.unwrap_i64(), -10);
+    /// ```
+    ///
+    /// ```should_panic
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_i64(), -10); // Panics
+    /// ```
+    ///
+    /// [`I64`]: Self::I64
+    #[inline]
+    pub fn unwrap_i64(self) -> i64 {
+        match self {
+            Self::I64(val) => val,
+            _ => panic!(
+                "called `OptionValue::unwrap_i64` on a `{}` value",
+                self.panic_string()
+            ),
+        }
+    }
+
+    /// Returns the contained [`I64`] value without checking whether `self` is [`I64`].
+    ///
+    /// # Safety
+    ///
+    /// Calling this method on a value other than [`I64`] is undefined behavoir.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::I64(-10);
+    /// assert_eq!(unsafe { val.unwrap_i64_unchecked() }, -10);
+    /// ```
+    ///
+    /// ```no_run
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(unsafe { val.unwrap_i64_unchecked() }, -10); // Undefined behavoir
+    /// ```
+    ///
+    /// [`I64`]: Self::I64
+    #[inline]
+    pub unsafe fn unwrap_i64_unchecked(self) -> i64 {
+        match self {
+            Self::I64(val) => val,
+            _ => hint::unreachable_unchecked(),
+        }
+    }
+
+    /// Returns the contained [`I64`] value or the provided default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::I64(-10);
+    /// assert_eq!(val.unwrap_i64_or(0), -10);
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_i64_or(0), 0);
+    /// ```
+    ///
+    /// [`I64`]: Self::I64
+    #[inline]
+    pub fn unwrap_i64_or(self, default: i64) -> i64 {
+        match self {
+            Self::I64(val) => val,
+            _ => default,
+        }
+    }
+
+    /// Returns the contained [`I64`] value or computes it from the provided closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::I64(-10);
+    /// assert_eq!(val.unwrap_i64_or_else(|| 0), -10);
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_i64_or_else(|| 0), 0);
+    /// ```
+    ///
+    /// [`I64`]: Self::I64
+    #[inline]
+    pub fn unwrap_i64_or_else<F>(self, f: F) -> i64
+    where
+        F: FnOnce() -> i64,
+    {
+        match self {
+            Self::I64(val) => val,
+            _ => f(),
+        }
+    }
+
+    /// Returns the contained [`U64`] value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `self` value is not [`U64`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(5);
+    /// assert_eq!(val.unwrap_u64(), 5);
+    /// ```
+    ///
+    /// ```should_panic
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_u64(), 5); // Panics
+    /// ```
+    ///
+    /// [`U64`]: Self::U64
+    #[inline]
+    pub fn unwrap_u64(self) -> u64 {
+        match self {
+            Self::U64(val) => val,
+            _ => panic!(
+                "called `OptionValue::unwrap_u64` on a `{}` value",
+                self.panic_string()
+            ),
+        }
+    }
+
+    /// Returns the contained [`U64`] value without checking whether `self` is [`U64`].
+    ///
+    /// # Safety
+    ///
+    /// Calling this method on a value other than [`U64`] is undefined behavoir.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(5);
+    /// assert_eq!(unsafe { val.unwrap_u64_unchecked() }, 5);
+    /// ```
+    ///
+    /// ```no_run
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(unsafe { val.unwrap_u64_unchecked() }, 5); // Undefined behavoir
+    /// ```
+    ///
+    /// [`U64`]: Self::U64
+    #[inline]
+    pub unsafe fn unwrap_u64_unchecked(self) -> u64 {
+        match self {
+            Self::U64(val) => val,
+            _ => hint::unreachable_unchecked(),
+        }
+    }
+
+    /// Returns the contained [`U64`] value or the provided default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(5);
+    /// assert_eq!(val.unwrap_u64_or(0), 5);
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_u64_or(0), 0);
+    /// ```
+    ///
+    /// [`U64`]: Self::U64
+    #[inline]
+    pub fn unwrap_u64_or(self, default: u64) -> u64 {
+        match self {
+            Self::U64(val) => val,
+            _ => default,
+        }
+    }
+
+    /// Returns the contained [`U64`] value or computes it from the provided closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::U64(5);
+    /// assert_eq!(val.unwrap_u64_or_else(|| 0), 5);
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_u64_or_else(|| 0), 0);
+    /// ```
+    ///
+    /// [`U64`]: Self::U64
+    #[inline]
+    pub fn unwrap_u64_or_else<F>(self, f: F) -> u64
+    where
+        F: FnOnce() -> u64,
+    {
+        match self {
+            Self::U64(val) => val,
+            _ => f(),
+        }
+    }
+
+    /// Returns the contained [`String`] value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `self` value is not [`String`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::String(String::from("Hello"));
+    /// assert_eq!(val.unwrap_string(), "Hello");
+    /// ```
+    ///
+    /// ```should_panic
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_string(), "Hello"); // Panics
+    /// ```
+    ///
+    /// [`String`]: Self::String
+    #[inline]
+    pub fn unwrap_string(self) -> String {
+        match self {
+            Self::String(val) => val,
+            _ => panic!(
+                "called `OptionValue::unwrap_string` on a `{}` value",
+                self.panic_string()
+            ),
+        }
+    }
+
+    /// Returns the contained [`String`] value without checking whether `self` is [`String`].
+    ///
+    /// # Safety
+    ///
+    /// Calling this method on a value other than [`String`] is undefined behavoir.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::String(String::from("Hello"));
+    /// assert_eq!(unsafe { val.unwrap_string_unchecked() }, "Hello");
+    /// ```
+    ///
+    /// ```no_run
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(unsafe { val.unwrap_string_unchecked() }, "Hello"); // Undefined behavoir
+    /// ```
+    ///
+    /// [`String`]: Self::String
+    #[inline]
+    pub unsafe fn unwrap_string_unchecked(self) -> String {
+        match self {
+            Self::String(val) => val,
+            _ => hint::unreachable_unchecked(),
+        }
+    }
+
+    /// Returns the contained [`String`] value or the provided default.
+    ///
+    /// Note that `default` is eagerly evaluated. You should use [`unwrap_string_or_else`] unless
+    /// you already have a [`String`](String) to pass into `unwrap_string_or`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::String(String::from("Hello"));
+    /// assert_eq!(val.unwrap_string_or(String::from("Hi")), "Hello");
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_string_or(String::from("Hi")), "Hi");
+    /// ```
+    ///
+    /// [`String`]: Self::String
+    /// [`unwrap_string_or_else`]: Self::unwrap_string_or_else
+    #[inline]
+    pub fn unwrap_string_or(self, default: String) -> String {
+        match self {
+            Self::String(val) => val,
+            _ => default,
+        }
+    }
+
+    /// Returns the contained [`String`] or computes it from the provided closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::String(String::from("Hello"));
+    /// assert_eq!(val.unwrap_string_or_else(|| String::from("Hi")), "Hello");
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::options::OptionValue;
+    /// let val = OptionValue::Bool(false);
+    /// assert_eq!(val.unwrap_string_or_else(|| String::from("Hi")), "Hi");
+    /// ```
+    ///
+    /// [`String`]: Self::String
+    #[inline]
+    pub fn unwrap_string_or_else<F>(self, f: F) -> String
+    where
+        F: FnOnce() -> String,
+    {
+        match self {
+            Self::String(val) => val,
+            _ => f(),
         }
     }
 
@@ -267,7 +695,7 @@ pub struct Builder {
 }
 
 impl Builder {
-    /// Adds a
+    /// Inserts a new [`TournamentOption`]. If the `key` already exists, it is overwritten.
     pub fn option<T, V>(mut self, key: &'static str, name: T, value: V) -> Self
     where
         T: ToString,

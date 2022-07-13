@@ -1,4 +1,4 @@
-use crate::options::{TournamentOptionValues, TournamentOptions};
+use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
 use crate::render::Position;
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
@@ -153,8 +153,8 @@ where
         let mut expected = Self::calculate_matches(entrants.len());
 
         // Add third_place_match is set in options.
-        if let Some(opt) = options.get("third_place_match") {
-            if opt.unwrap_bool() {
+        if let Some(OptionValue::Bool(v)) = options.get("third_place_match") {
+            if *v {
                 expected += 1;
             }
         }
@@ -494,10 +494,10 @@ struct SingleEliminationOptions {
 }
 
 impl SingleEliminationOptions {
-    fn new(options: TournamentOptionValues) -> Self {
+    fn new(mut options: TournamentOptionValues) -> Self {
         let mut this = Self::default();
 
-        if let Some(val) = options.get("third_place_match") {
+        if let Some(val) = options.take("third_place_match") {
             this.third_place_match = val.unwrap_bool_or(false);
         }
 
