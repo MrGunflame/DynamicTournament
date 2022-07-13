@@ -6,7 +6,6 @@ mod routes;
 mod services;
 mod utils;
 
-use yew::prelude::*;
 use yew::start_app_in_element;
 
 use routes::App;
