@@ -1,13 +1,16 @@
+use std::collections::HashMap;
+
 use crate::http::{Request, RequestUri, Response, Result};
 use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
 };
-use dynamic_tournament_api::v3::id::{RoleId, SystemId};
+use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket as Bracket2;
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_api::v3::tournaments::entrants::{Player as Player2, Team as Team2};
+use dynamic_tournament_api::v3::tournaments::roles::Role as Role2;
 use dynamic_tournament_api::v3::tournaments::{EntrantKind, Tournament as Tournament2};
 use dynamic_tournament_core::options::TournamentOptionValues;
 use dynamic_tournament_core::{EntrantScore, SingleElimination};
@@ -85,6 +88,27 @@ async fn create(mut req: Request) -> Result {
         kind,
     };
 
+    let id = req.state().store.insert_tournament(&tournament).await?;
+
+    let mut roles = HashMap::new();
+    for role in [
+        Role::Roamer,
+        Role::Teamfighter,
+        Role::Duelist,
+        Role::Support,
+    ] {
+        let id = req
+            .state()
+            .store
+            .roles(id)
+            .insert(&Role2 {
+                id: 0.into(),
+                name: role.to_string(),
+            })
+            .await?;
+        roles.insert(role, id);
+    }
+
     let entrants: Vec<Entrant> = match body.entrants {
         Entrants::Players(players) => players
             .into_iter()
@@ -93,7 +117,7 @@ async fn create(mut req: Request) -> Result {
                 inner: EntrantVariant::Player(Player2 {
                     rating: p.rating,
                     name: p.name,
-                    role: RoleId(0),
+                    role: *roles.get(&p.role).unwrap(),
                 }),
             })
             .collect(),
@@ -109,15 +133,13 @@ async fn create(mut req: Request) -> Result {
                         .map(|p| Player2 {
                             rating: p.rating,
                             name: p.name,
-                            role: RoleId(0),
+                            role: *roles.get(&p.role).unwrap(),
                         })
                         .collect(),
                 }),
             })
             .collect(),
     };
-
-    let id = req.state().store.insert_tournament(&tournament).await?;
 
     let mut entrant_ids = Vec::new();
     for entrant in entrants {

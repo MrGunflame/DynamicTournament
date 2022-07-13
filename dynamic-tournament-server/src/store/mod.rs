@@ -504,8 +504,9 @@ impl<'a> RolesClient<'a> {
     }
 
     pub async fn insert(&self, role: &Role) -> Result<RoleId, Error> {
-        let res = sqlx::query("INSERT INTO roles (name) VALUES (?)")
+        let res = sqlx::query("INSERT INTO roles (name, tournament_id) VALUES (?, ?)")
             .bind(&role.name)
+            .bind(&self.id.0)
             .execute(&self.store.pool)
             .await?;
 
