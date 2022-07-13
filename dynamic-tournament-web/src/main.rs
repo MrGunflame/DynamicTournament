@@ -39,35 +39,6 @@ fn main() {
     start_app_in_element::<App>(element);
 }
 
-pub fn render_data<T, F>(
-    data: &Option<Result<T, Box<dyn std::error::Error + Send + Sync>>>,
-    f: F,
-) -> Html
-where
-    F: FnOnce(&T) -> Html,
-{
-    log::debug!("Fetchdata is {}", data.is_some());
-
-    match data {
-        Some(data) => match data {
-            Ok(data) => f(data),
-            Err(err) => html! {
-                <crate::components::error::Error error={err.to_string()} />
-            },
-        },
-        None => {
-            log::debug!("FetchData is None");
-
-            html! {
-                <crate::components::loader::Loader />
-            }
-        }
-    }
-}
-
-pub type Data<T> = Option<Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>>;
-pub type DataResult<T> = Result<T, Box<dyn std::error::Error + 'static + Send + Sync>>;
-
 #[derive(Copy, Clone, Debug)]
 pub enum Mountpoint {
     Body,

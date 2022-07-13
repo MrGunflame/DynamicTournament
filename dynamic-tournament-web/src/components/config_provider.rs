@@ -1,12 +1,13 @@
 use yew::prelude::*;
 
-use crate::{render_data, Data, DataResult};
+use crate::utils::FetchData;
 
 use reqwasm::http::Request;
 use serde::Deserialize;
 
+#[derive(Debug)]
 pub struct ConfigProvider {
-    config: Data<Config>,
+    config: FetchData<Config>,
 }
 
 impl Component for ConfigProvider {
@@ -17,18 +18,20 @@ impl Component for ConfigProvider {
         let link = ctx.link();
 
         link.send_future(async move {
-            async fn fetch_data() -> DataResult<Config> {
-                let data = Request::get("/config.json").send().await?.json().await?;
-
-                Ok(data)
-            }
-
-            let data = Some(fetch_data().await);
+            let data = match Request::get("/config.json").send().await {
+                Ok(resp) => match resp.json::<Config>().await {
+                    Ok(body) => FetchData::from(body),
+                    Err(err) => FetchData::from_err(err),
+                },
+                Err(err) => FetchData::from_err(err),
+            };
 
             Msg::UpdateConfig(data)
         });
 
-        Self { config: None }
+        Self {
+            config: FetchData::new(),
+        }
     }
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -41,7 +44,7 @@ impl Component for ConfigProvider {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        render_data(&self.config, |config| {
+        self.config.render(|config| {
             html! {
                 <ContextProvider<Config> context={config.clone()}>
                     { for ctx.props().children.iter() }
@@ -62,5 +65,5 @@ pub struct Config {
 }
 
 pub enum Msg {
-    UpdateConfig(Data<Config>),
+    UpdateConfig(FetchData<Config>),
 }
