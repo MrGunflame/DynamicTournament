@@ -91,14 +91,17 @@ impl Component for TournamentList {
                 .collect();
 
             html! {
-                <table class="tr-link-table table-center">
-                    <tr>
-                        <th>{ "Name" }</th>
-                        <th>{ "Type" }</th>
-                        <th>{ "Date" }</th>
-                    </tr>
-                    {tournaments}
-                </table>
+                <div>
+                    <h1>{ "Tournaments" }</h1>
+                    <table class="tr-link-table tr-table">
+                        <tr class="table-head">
+                            <th>{ "Name" }</th>
+                            <th>{ "Type" }</th>
+                            <th>{ "Date" }</th>
+                        </tr>
+                        {tournaments}
+                    </table>
+                </div>
             }
         })
     }

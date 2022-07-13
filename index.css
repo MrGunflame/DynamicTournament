@@ -228,12 +228,20 @@ table {
   padding: 5px;
   border-top: 1px solid gray;
   height: 48px;
-  text-align: center;
+  /* text-align: center; */
+}
+
+.tr-table {
+  width: 100%;
+}
+
+.table-head>th {
+  text-align: start;
 }
 
 th,
 td {
-  padding: 5px;
+  padding: 10px;
 }
 
 .tr-link:hover {
