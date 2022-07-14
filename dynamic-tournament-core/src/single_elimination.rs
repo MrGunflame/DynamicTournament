@@ -739,6 +739,232 @@ mod tests {
     }
 
     #[test]
+    fn test_single_elimination_reset_match() {
+        let entrants = entrants![0, 1, 2, 3].collect();
+        let matches = vec![
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+        ]
+        .into();
+        let mut tournament = SingleElimination::<i32, u32>::resume(
+            entrants,
+            matches,
+            SingleElimination::<i32, u32>::options(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3))
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3))
+                ]),
+            ]
+        );
+
+        tournament.update_match(2, |_, result| {
+            result.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+            ]
+        );
+
+        tournament.update_match(1, |_, result| {
+            result.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(0, |_, result| {
+            result.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7].collect();
+        let matches = vec![
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(4)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(5)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(2)),
+                EntrantSpot::Entrant(Node::new(6)),
+            ]),
+            Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(5)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(2)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+        ]
+        .into();
+        let mut tournament =
+            SingleElimination::<i32, u32>::resume(entrants, matches, TournamentOptions::default())
+                .unwrap();
+
+        assert_eq!(tournament.entrants, vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+            ]
+        );
+
+        // Reset all matches following index 0.
+        tournament.update_match(0, |_, result| {
+            result.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(5))]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(2))]),
+            ]
+        );
+
+        // Reset all matches following index 2.
+        tournament.update_match(2, |_, result| {
+            result.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(5))]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(3))]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+    }
+
+    #[test]
     fn test_single_elimination_update_match_third_place_match() {
         let entrants = entrants![0, 1, 2, 3];
         let mut options = SingleElimination::<i32, u32>::options();
