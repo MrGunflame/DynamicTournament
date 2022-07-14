@@ -27,9 +27,9 @@ where
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let text = match &ctx.props().entrant {
-            EntrantSpot::Entrant(entrant) => entrant.to_string(),
-            EntrantSpot::Empty => String::from("BYE"),
-            EntrantSpot::TBD => String::from("TBD"),
+            EntrantSpot::Entrant(entrant) => html! { entrant.to_string() },
+            EntrantSpot::Empty => html! { <i>{ "BYE" }</i> },
+            EntrantSpot::TBD => html! { <i>{ "TBD" }</i> },
         };
 
         let (score, winner) = match &ctx.props().node {
