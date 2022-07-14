@@ -156,7 +156,7 @@ where
 
         // Add third_place_match is set in options.
         if let Some(OptionValue::Bool(v)) = options.get("third_place_match") {
-            if *v {
+            if *v && entrants.len() > 2 {
                 expected += 1;
             }
         }
@@ -717,6 +717,79 @@ mod tests {
             Error::InvalidEntrant {
                 index: 4,
                 length: 4
+            }
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_resume_third_place_match() {
+        let options = option_values!("third_place_match" => true);
+
+        let entrants = Entrants::from(vec![]);
+        let matches = Matches::from(vec![]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches, options.clone()).unwrap();
+
+        let entrants = Entrants::from(vec![1]);
+        let matches = Matches::from(vec![Match::new([
+            EntrantSpot::Entrant(Node::new(0)),
+            EntrantSpot::Empty,
+        ])]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches, options.clone()).unwrap();
+
+        let entrants = Entrants::from(vec![1, 2]);
+        let matches = Matches::from(vec![Match::new([
+            EntrantSpot::Entrant(Node::new(0)),
+            EntrantSpot::Entrant(Node::new(1)),
+        ])]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches, options.clone()).unwrap();
+
+        let entrants = Entrants::from(vec![1, 2, 3]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+            Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches, options.clone()).unwrap();
+
+        let entrants = Entrants::from(vec![1, 2, 3, 4]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+        ]);
+
+        SingleElimination::<i32, u32>::resume(entrants, matches, options.clone()).unwrap();
+
+        let entrants = Entrants::from(vec![1, 2, 3]);
+        let matches = Matches::from(vec![
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+            Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+            Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
+        ]);
+
+        assert_eq!(
+            SingleElimination::<i32, u32>::resume(entrants, matches, options).unwrap_err(),
+            Error::InvalidNumberOfMatches {
+                expected: 4,
+                found: 3,
             }
         );
     }
