@@ -110,6 +110,10 @@ impl From<TournamentOptions> for TournamentOptionValues {
 pub struct TournamentOptionValues(HashMap<String, OptionValue>);
 
 impl TournamentOptionValues {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
     /// Returns the [`OptionValue`] with the given `key`. Returns `None` if no value exist for the
     /// given `key`.
     pub fn get(&self, key: &str) -> Option<&OptionValue> {

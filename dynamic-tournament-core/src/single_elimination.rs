@@ -48,7 +48,9 @@ where
         };
 
         let mut num_matches = (initial_matches * 2).saturating_sub(1);
-        if options.third_place_match {
+
+        // At least 3 entrants are required for a third place match.
+        if entrants.len() > 2 && options.third_place_match {
             num_matches += 1;
         }
 
@@ -507,8 +509,8 @@ impl SingleEliminationOptions {
 
 #[cfg(test)]
 mod tests {
-    use crate::entrants;
     use crate::tests::TestRenderer;
+    use crate::{entrants, option_values};
 
     use super::*;
 
@@ -579,6 +581,78 @@ mod tests {
                     EntrantSpot::Entrant(Node::new(1)),
                     EntrantSpot::Entrant(Node::new(3))
                 ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_single_elimination_third_place_match() {
+        let options = option_values!("third_place_match" => true);
+
+        let entrants = entrants![];
+        let tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options.clone());
+
+        assert_eq!(tournament.entrants, vec![]);
+        assert_eq!(tournament.matches, vec![]);
+
+        let entrants = entrants![1];
+        let tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options.clone());
+
+        assert_eq!(tournament.entrants, vec![1]);
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Empty,
+            ])]
+        );
+
+        let entrants = entrants![1, 2];
+        let tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options.clone());
+
+        assert_eq!(tournament.entrants, vec![1, 2]);
+        assert_eq!(
+            tournament.matches,
+            vec![Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(1)),
+            ])]
+        );
+
+        let entrants = entrants![1, 2, 3];
+        let tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options.clone());
+
+        assert_eq!(tournament.entrants, vec![1, 2, 3]);
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
+            ]
+        );
+
+        let entrants = entrants![1, 2, 3, 4];
+        let tournament = SingleElimination::<i32, u32>::new_with_options(entrants, options);
+
+        assert_eq!(tournament.entrants, vec![1, 2, 3, 4]);
+        assert_eq!(
+            tournament.matches,
+            vec![
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
                 Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),
             ]
         );

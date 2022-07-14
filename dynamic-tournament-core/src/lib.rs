@@ -711,6 +711,18 @@ mod tests {
         };
     }
 
+    #[macro_export]
+    macro_rules! option_values {
+        ($($key:expr => $val:expr),*$(,)?) => {{
+            let mut options = $crate::options::TournamentOptionValues::new();
+            $(
+                options.set($key, $val);
+            )*
+
+            options
+        }};
+    }
+
     impl EntrantData for u32 {
         fn set_winner(&mut self, _winner: bool) {}
         fn reset(&mut self) {}
