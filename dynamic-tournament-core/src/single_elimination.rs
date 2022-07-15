@@ -470,7 +470,10 @@ where
 
     #[inline]
     fn render_match_position(&self, index: usize) -> Position {
-        if self.options.third_place_match && index == self.matches().len() - 1 {
+        if self.options.third_place_match
+            && self.matches.len() > 2
+            && index == self.matches().len() - 1
+        {
             Position::bottom(0)
         } else {
             Position::default()
