@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use dynamic_tournament_api::v3::{
     id::{BracketId, EntrantId, SystemId, TournamentId},
@@ -16,15 +16,12 @@ use crate::{store::Store, Error};
 
 #[derive(Clone, Debug)]
 pub struct LiveBracket {
-    tournament_id: TournamentId,
-    bracket_id: BracketId,
-    bracket: Arc<RwLock<Tournament<EntrantId, EntrantScore<u64>>>>,
-    tx: broadcast::Sender<Frame>,
+    inner: Arc<LiveBracketInner>,
 }
 
 impl LiveBracket {
     pub fn update(&self, index: u64, nodes: [EntrantScore<u64>; 2]) {
-        let mut bracket = self.bracket.write();
+        let mut bracket = self.inner.bracket.write();
 
         bracket.update_match(index.try_into().unwrap(), |m, res| {
             let mut loser_index = None;
@@ -48,33 +45,50 @@ impl LiveBracket {
             }
         });
 
-        let _ = self.tx.send(Frame::UpdateMatch { index, nodes });
+        let _ = self.inner.tx.send(Frame::UpdateMatch { index, nodes });
     }
 
     pub fn reset(&self, index: usize) {
-        let mut bracket = self.bracket.write();
+        let mut bracket = self.inner.bracket.write();
 
         bracket.update_match(index, |_, res| {
             res.reset_default();
         });
 
-        let _ = self.tx.send(Frame::ResetMatch { index });
+        let _ = self.inner.tx.send(Frame::ResetMatch { index });
     }
 
     pub fn matches(&self) -> Matches<EntrantScore<u64>> {
-        let bracket = self.bracket.read().clone();
+        let bracket = self.inner.bracket.read().clone();
         bracket.into_matches()
     }
 
     pub fn receiver(&self) -> broadcast::Receiver<Frame> {
-        self.tx.subscribe()
+        self.inner.tx.subscribe()
+    }
+}
+
+#[derive(Debug)]
+pub struct LiveBracketInner {
+    tournament_id: TournamentId,
+    bracket_id: BracketId,
+    bracket: RwLock<Tournament<EntrantId, EntrantScore<u64>>>,
+    tx: broadcast::Sender<Frame>,
+
+    live_brackets: Arc<RwLock<HashMap<(TournamentId, BracketId), Weak<LiveBracketInner>>>>,
+}
+
+impl Drop for LiveBracketInner {
+    fn drop(&mut self) {
+        let mut bracket = self.live_brackets.write();
+        bracket.remove(&(self.tournament_id, self.bracket_id));
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct LiveBrackets {
     store: Store,
-    inner: Arc<RwLock<HashMap<(TournamentId, BracketId), LiveBracket>>>,
+    inner: Arc<RwLock<HashMap<(TournamentId, BracketId), Weak<LiveBracketInner>>>>,
 }
 
 impl LiveBrackets {
@@ -96,7 +110,9 @@ impl LiveBrackets {
     ) -> Option<LiveBracket> {
         let bracket = self.inner.read();
         let bracket = bracket.get(&(tournament_id, bracket_id))?;
-        Some(bracket.clone())
+        Some(LiveBracket {
+            inner: bracket.clone().upgrade().unwrap(),
+        })
     }
 
     /// Returns a new [`LiveBracket`] for the associated tournament and bracket id.
@@ -148,14 +164,18 @@ impl LiveBrackets {
         let (tx, _) = broadcast::channel(32);
 
         let bracket = LiveBracket {
-            tournament_id,
-            bracket_id,
-            bracket: Arc::new(RwLock::new(tournament)),
-            tx,
+            inner: Arc::new(LiveBracketInner {
+                tournament_id,
+                bracket_id,
+                bracket: RwLock::new(tournament),
+                tx,
+
+                live_brackets: self.inner.clone(),
+            }),
         };
 
         let mut inner = self.inner.write();
-        inner.insert((tournament_id, bracket_id), bracket.clone());
+        inner.insert((tournament_id, bracket_id), Arc::downgrade(&bracket.inner));
 
         log::debug!("Created new LiveBracket");
 
@@ -163,10 +183,14 @@ impl LiveBrackets {
     }
 
     pub async fn store(&self, bracket: &LiveBracket) -> Result<(), Error> {
-        let matches = bracket.bracket.read().clone().into_matches();
+        let matches = bracket.inner.bracket.read().clone().into_matches();
 
         self.store
-            .update_bracket_state(bracket.tournament_id, bracket.bracket_id, &Some(matches))
+            .update_bracket_state(
+                bracket.inner.tournament_id,
+                bracket.inner.bracket_id,
+                &Some(matches),
+            )
             .await?;
         Ok(())
     }
