@@ -1,4 +1,23 @@
-//! Bracket Generator
+//! # dynamic-tournament-core
+//!
+//! This crate contains all the items required to build tournament brackets. It also currently
+//! contains two builtin tournaments: [`SingleElimination`] and [`DoubleElimination`].
+//!
+//! Important types:
+//! - [`System`]: A trait used to describe a tournament. This should be implemented on any
+//! tournament type.
+//! - [`Entrants`]: A wrapper around `Vec<T>` where `T` is an entrant in a tournament.
+//! - [`Matches`]: A `Vec` of matches contained in the tournament.
+//! - [`Match`]: A *match* or *heat* of two parties.
+//! - [`EntrantSpot`]: A *spot* within a match, which can contain an entrant, be permanently empty
+//! or contain a to-be-done spot.
+//! - [`Node`]: The data contained in every match. Includes a reference to the entrant.
+//! - [`EntrantScore`]: A score and a winner flag. Can be used together with any integer.
+//!
+//! ## Feature Flags
+//!
+//! `serde`: Adds `Serialize` and `Deserialize` impls to almost all types.
+//!
 pub mod options;
 pub mod render;
 
@@ -33,6 +52,24 @@ pub struct Entrants<T> {
     entrants: Vec<T>,
 }
 
+impl<T> Entrants<T> {
+    /// Creates a new empty `Entrants` list.
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            entrants: Vec::new(),
+        }
+    }
+
+    /// Creates a new empty `Entrants` list with the specified capacity.
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            entrants: Vec::with_capacity(capacity),
+        }
+    }
+}
+
 impl<T> FromIterator<T> for Entrants<T> {
     fn from_iter<I>(iter: I) -> Self
     where
@@ -48,6 +85,7 @@ impl<T> IntoIterator for Entrants<T> {
     type Item = T;
     type IntoIter = IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.entrants.into_iter()
     }
@@ -56,12 +94,14 @@ impl<T> IntoIterator for Entrants<T> {
 impl<T> Deref for Entrants<T> {
     type Target = Vec<T>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.entrants
     }
 }
 
 impl<T> DerefMut for Entrants<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.entrants
     }
@@ -72,6 +112,7 @@ where
     T: PartialEq,
     U: AsRef<[T]>,
 {
+    #[inline]
     fn eq(&self, other: &U) -> bool {
         self.entrants == other.as_ref()
     }
@@ -98,12 +139,14 @@ pub struct Matches<T> {
 }
 
 impl<T> Matches<T> {
+    #[inline]
     pub fn new() -> Self {
         Self {
             matches: Vec::new(),
         }
     }
 
+    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             matches: Vec::with_capacity(capacity),
@@ -115,6 +158,7 @@ impl<T> Matches<T> {
     /// # Safety
     ///
     /// See [`Vec::from_raw_parts`]
+    #[inline]
     pub unsafe fn from_raw_parts(ptr: *mut Match<Node<T>>, length: usize, capacity: usize) -> Self {
         Self {
             matches: Vec::from_raw_parts(ptr, length, capacity),
@@ -125,12 +169,14 @@ impl<T> Matches<T> {
 impl<T> Deref for Matches<T> {
     type Target = Vec<Match<Node<T>>>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.matches
     }
 }
 
 impl<T> DerefMut for Matches<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.matches
     }
@@ -141,12 +187,14 @@ where
     T: PartialEq,
     U: AsRef<[Match<Node<T>>]>,
 {
+    #[inline]
     fn eq(&self, other: &U) -> bool {
         self.matches == other.as_ref()
     }
 }
 
 impl<T> From<Vec<Match<Node<T>>>> for Matches<T> {
+    #[inline]
     fn from(matches: Vec<Match<Node<T>>>) -> Self {
         Self { matches }
     }
@@ -242,6 +290,8 @@ pub struct MatchResult<D> {
 }
 
 impl<D> MatchResult<D> {
+    /// Creates a new `MatchResult` with the default state.
+    #[inline]
     pub fn new() -> Self {
         Self {
             winner: None,
@@ -267,6 +317,8 @@ impl<D> MatchResult<D> {
         self
     }
 
+    /// Sets the winner of this [`Match`] and uses `D::default` as the value for the next [`Match`].
+    #[inline]
     pub fn winner_default(&mut self, entrant: &EntrantSpot<Node<D>>) -> &mut Self
     where
         D: Default,
@@ -279,6 +331,8 @@ impl<D> MatchResult<D> {
         self
     }
 
+    /// Sets the loser of this [`Match`] and uses `D::default` as the value for the next [`Match`].
+    #[inline]
     pub fn loser_default(&mut self, entrant: &EntrantSpot<Node<D>>) -> &mut Self
     where
         D: Default,
@@ -295,10 +349,12 @@ pub struct Match<T> {
 }
 
 impl<T> Match<T> {
+    #[inline]
     pub fn new(entrants: [EntrantSpot<T>; 2]) -> Self {
         Self { entrants }
     }
 
+    #[inline]
     pub(crate) fn is_placeholder(&self) -> bool {
         matches!(self.entrants[0], EntrantSpot::Empty)
             || matches!(self.entrants[1], EntrantSpot::Empty)
@@ -340,12 +396,14 @@ impl<T> Match<T> {
 impl<T> Index<usize> for Match<T> {
     type Output = EntrantSpot<T>;
 
+    #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         &self.entrants[index]
     }
 }
 
 impl<T> IndexMut<usize> for Match<T> {
+    #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.entrants[index]
     }
@@ -370,14 +428,46 @@ impl<T> EntrantSpot<T> {
         }
     }
 
+    /// Returns `true` if the `EntrantSpot` is [`Entrant`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::EntrantSpot;
+    /// let spot = EntrantSpot::Entrant(());
+    /// assert!(spot.is_entrant());
+    /// ```
+    /// [`Entrant`]: Self::Entrant
     pub fn is_entrant(&self) -> bool {
         matches!(self, Self::Entrant(_))
     }
 
+    /// Returns `true` if the `EntrantSpot` is [`Empty`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::EntrantSpot;
+    /// let spot: EntrantSpot<()> = EntrantSpot::Empty;
+    /// assert!(spot.is_empty());
+    /// ```
+    ///
+    /// [`Empty`]: Self::Empty
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Empty)
     }
 
+    /// Returns `true` if the `EntrantSpot` is [`TBD`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_core::EntrantSpot;
+    /// let spot: EntrantSpot<()> = EntrantSpot::TBD;
+    /// assert!(spot.is_tbd());
+    /// ```
+    ///
+    /// [`TBD`]: Self::TBD
     pub fn is_tbd(&self) -> bool {
         matches!(self, Self::TBD)
     }
@@ -444,7 +534,7 @@ impl<T> EntrantSpot<T> {
         }
     }
 
-    /// Converts from `&EntrantSpot<T>` to `EntrantSpot<&T>`.
+    /// Converts an `&EntrantSpot<T>` into an `EntrantSpot<&T>`.
     pub fn as_ref(&self) -> EntrantSpot<&T> {
         match *self {
             Self::Entrant(ref entrant) => EntrantSpot::Entrant(entrant),
@@ -453,7 +543,7 @@ impl<T> EntrantSpot<T> {
         }
     }
 
-    /// Converts from `&mut EntrantSpot<T>` to `EntrantSpot<&mut T>`.
+    /// Converts an `&mut EntrantSpot<T>` into an `EntrantSpot<&mut T>`.
     pub fn as_mut(&mut self) -> EntrantSpot<&mut T> {
         match *self {
             Self::Entrant(ref mut entrant) => EntrantSpot::Entrant(entrant),
@@ -488,6 +578,7 @@ where
     S: Default,
 {
     /// Creates a new `EntrantWithScore` with a score of 0.
+    #[inline]
     pub fn new() -> Self {
         EntrantScore {
             score: S::default(),
@@ -500,6 +591,7 @@ impl<S> Default for EntrantScore<S>
 where
     S: Default,
 {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -509,11 +601,13 @@ impl<S> EntrantData for EntrantScore<S>
 where
     S: Default,
 {
+    #[inline]
     fn reset(&mut self) {
         self.score = S::default();
         self.winner = false;
     }
 
+    #[inline]
     fn set_winner(&mut self, winner: bool) {
         self.winner = winner;
     }
@@ -523,6 +617,7 @@ impl<T> From<T> for EntrantSpot<T>
 where
     T: EntrantData,
 {
+    #[inline]
     fn from(entrant: T) -> Self {
         Self::Entrant(entrant)
     }
@@ -617,6 +712,7 @@ impl NextMatches {
 }
 
 impl Default for NextMatches {
+    #[inline]
     fn default() -> Self {
         Self {
             winner_index: SmallOption::none(),
