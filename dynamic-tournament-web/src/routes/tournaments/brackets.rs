@@ -68,12 +68,14 @@ impl Component for Brackets {
 
                 // Redirect to the bracket when there's only one avaliable.
                 self.brackets.as_ref().map(|brackets| {
-                    let bracket = &brackets[0];
+                    if !brackets.is_empty() {
+                        let bracket = &brackets[0];
 
-                    log::debug!("Redirecting to bracket {}", bracket.id);
+                        log::debug!("Redirecting to bracket {}", bracket.id);
 
-                    ctx.link()
-                        .send_message(Message::OnClick(bracket.id, bracket.name.clone()));
+                        ctx.link()
+                            .send_message(Message::OnClick(bracket.id, bracket.name.clone()));
+                    }
                 });
             }
             Message::OnClick(id, name) => {
