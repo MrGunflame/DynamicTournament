@@ -1,6 +1,7 @@
 pub mod login;
 pub mod logout;
 pub mod not_found;
+pub mod systems;
 pub mod tournamentlist;
 pub mod tournaments;
 
@@ -40,6 +41,7 @@ impl Component for App {
                                     <ul>
                                         <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
                                         <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
+                                        <li><Link<Route> to={Route::Systems}>{ "Systems" }</Link<Route>></li>
                                         <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
                                         <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
                                     </ul>
@@ -93,6 +95,8 @@ pub enum Route {
     TournamentTeam { id: u64 },
     #[at("/tournaments/:id/:name/admin")]
     Admin { id: u64 },
+    #[at("/systems")]
+    Systems,
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -124,6 +128,9 @@ pub fn switch(route: &Route) -> Html {
         },
         Route::Admin { id } => html! {
             <tournaments::Tournament id={TournamentId(*id)} />
+        },
+        Route::Systems => html! {
+            <systems::Systems />
         },
     }
 }
