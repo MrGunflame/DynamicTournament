@@ -2,15 +2,23 @@
 
 ## Building
 
-### Requirements
+You need to have a stable rust toolchain installed (cargo).
 
-- A stable rust toolchain (build only).
+1. Clone the repo: `git clone https://github.com/MrGunflame/DynamicTournament`
+2. Build using make: `cd dynamic_tournament_server && make build`
+
+The built binary is `target/release/dynamic-tournament-server`.
+
+Building the docker image.
+
+1. Clone the repo: `git clone https://github.com/MrGunflame/DynamicTournament`
+2. Build using make: `cd dynamic_tournament_server && make docker`
+
+The final docker image is tagged `dynamic-tournament-server`.
+
+## Runtime Requirements
+
 - MariaDB 12.2.7+ or MySQL 5.7.8+
-
-### Building
-
-- Clone the repo: `git clone https://github.com/MrGunflame/DynamicTournament`
-- Build the server: `cargo build --bin dynamic-tournament-server --release`
 
 ## Configuration
 
