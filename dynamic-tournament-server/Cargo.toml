@@ -2,9 +2,10 @@
 name = "dynamic-tournament-server"
 version = "0.4.0"
 edition = "2021"
-
 description = "The server for the dynamic tournament system"
-
+authors = ["MrGunflame <git@robbsrv.de>"]
+repository = "https://github.com/MrGunflame/DynamicTournament"
+license = "Apache-2.0"
 publish = false
 
 [features]

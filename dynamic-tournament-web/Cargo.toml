@@ -2,6 +2,11 @@
 name = "dynamic-tournament-web"
 version = "0.2.0"
 edition = "2021"
+description = "The Web UI part of the DynamicTournament system"
+authors = ["MrGunflame <git@robbsrv.de>"]
+repository = "https://github.com/MrGunflame/DynamicTournament"
+license = "Apache-2.0"
+publish = false
 
 [dependencies]
 dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api", features = ["local-storage"] }

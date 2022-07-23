@@ -2,6 +2,11 @@
 name = "dynamic-tournament-cli"
 version = "0.1.0"
 edition = "2021"
+description = "A CLI tools for interacting with the DynamicTournament API"
+authors = ["MrGunflame <git@robbsrv.de>"]
+repository = "https://github.com/MrGunflame/DynamicTournament"
+license = "Apache-2.0"
+publish = false
 
 [dependencies]
 dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api" }
