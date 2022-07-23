@@ -75,6 +75,7 @@ pub struct LiveBracketInner {
     bracket: RwLock<Tournament<EntrantId, EntrantScore<u64>>>,
     tx: broadcast::Sender<Frame>,
 
+    #[allow(clippy::type_complexity)]
     live_brackets: Arc<RwLock<HashMap<(TournamentId, BracketId), Weak<LiveBracketInner>>>>,
 }
 
@@ -88,6 +89,7 @@ impl Drop for LiveBracketInner {
 #[derive(Clone, Debug)]
 pub struct LiveBrackets {
     store: Store,
+    #[allow(clippy::type_complexity)]
     inner: Arc<RwLock<HashMap<(TournamentId, BracketId), Weak<LiveBracketInner>>>>,
 }
 
