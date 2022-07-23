@@ -1,18 +1,12 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::BracketOverview};
 use yew::{html, Callback, Component, Context, Html, Properties};
 
-#[derive(Clone, Debug, Properties)]
+use crate::utils::Rc;
+
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub brackets: Rc<Vec<BracketOverview>>,
     pub onclick: Callback<(usize, BracketId)>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.brackets, &other.brackets)
-    }
 }
 
 #[derive(Debug)]

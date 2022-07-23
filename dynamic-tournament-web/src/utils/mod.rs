@@ -1,6 +1,8 @@
 mod fetch_data;
+mod rc;
 
 pub use fetch_data::FetchData;
+pub use rc::Rc;
 use web_sys::Document;
 
 /// Returns the root [`Document`].

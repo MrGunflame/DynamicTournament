@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use chrono::{DateTime, NaiveDateTime, Utc};
 use dynamic_tournament_api::v3::tournaments::{PartialTournament, Tournament};
 use yew::{html, Component, Context, Html, Properties};
@@ -7,16 +5,11 @@ use yew::{html, Component, Context, Html, Properties};
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::Input;
 use crate::services::errorlog::ErrorLog;
+use crate::utils::Rc;
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub(super) struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 /// General tournament settings including the values of [`Tournament`].

@@ -1,10 +1,9 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::id::EntrantId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::prelude::*;
 use yew_router::prelude::*;
 
+use crate::utils::Rc;
 use crate::{
     components::providers::{ClientProvider, Provider},
     utils::FetchData,
@@ -111,15 +110,9 @@ impl Component for Entrants {
     }
 }
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 pub enum Message {

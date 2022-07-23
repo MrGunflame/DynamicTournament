@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::tournaments::brackets::BracketOverview;
 use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use dynamic_tournament_api::v3::tournaments::Tournament;
@@ -13,18 +11,12 @@ use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
 use crate::routes::tournaments::Route;
-use crate::utils::FetchData;
+use crate::utils::{FetchData, Rc};
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
     pub id: BracketId,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 pub struct Bracket {

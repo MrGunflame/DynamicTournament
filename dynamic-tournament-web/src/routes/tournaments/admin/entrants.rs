@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::{
     v3::{
         id::EntrantId,
@@ -12,22 +10,19 @@ use dynamic_tournament_api::{
 };
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::components::{
-    providers::{ClientProvider, Provider},
-    Button,
-};
 use crate::services::MessageLog;
 use crate::utils::FetchData;
+use crate::{
+    components::{
+        providers::{ClientProvider, Provider},
+        Button,
+    },
+    utils::Rc,
+};
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub(super) struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 #[derive(Debug)]

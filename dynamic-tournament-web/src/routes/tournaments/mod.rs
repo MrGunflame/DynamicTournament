@@ -15,13 +15,11 @@ use self::brackets::bracket::Bracket;
 use self::brackets::Brackets;
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::utils::FetchData;
+use crate::utils::{FetchData, Rc};
 use crate::Title;
 
 use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
-
-use std::rc::Rc;
 
 use overview::Overview;
 

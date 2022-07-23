@@ -14,8 +14,6 @@ use dynamic_tournament_core::tournament::Tournament;
 
 use yew_agent::{Bridge, Bridged};
 
-use std::rc::Rc;
-
 use yew::prelude::*;
 
 use dynamic_tournament_api::v3::id::SystemId;
@@ -28,6 +26,7 @@ use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
 use crate::services::errorlog::ErrorLog;
 use crate::services::{EventBus, MessageLog, WebSocketService};
+use crate::utils::Rc;
 
 use renderer::HtmlRenderer;
 

@@ -2,22 +2,16 @@ mod danger_zone;
 mod entrants;
 mod settings;
 
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
+use crate::utils::Rc;
+
 use self::danger_zone::DangerZone;
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 /// The root of the admin section of a tournament.

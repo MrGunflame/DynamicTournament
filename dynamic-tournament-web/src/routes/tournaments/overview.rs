@@ -1,8 +1,7 @@
-use std::rc::Rc;
-
-use yew::prelude::*;
-
 use dynamic_tournament_api::v3::tournaments::Tournament;
+use yew::{html, Component, Context, Html, Properties};
+
+use crate::utils::Rc;
 
 pub struct Overview;
 
@@ -23,13 +22,7 @@ impl Component for Overview {
     }
 }
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }

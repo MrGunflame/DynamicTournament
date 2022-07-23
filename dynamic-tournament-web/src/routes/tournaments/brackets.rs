@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::{
     id::BracketId,
     tournaments::{brackets::BracketOverview, Tournament},
@@ -7,25 +5,22 @@ use dynamic_tournament_api::v3::{
 use yew::{html, Component, Context, Html, Properties};
 use yew_router::{history::History, prelude::RouterScopeExt};
 
-use crate::components::{
-    providers::{ClientProvider, Provider},
-    BracketList,
-};
 use crate::utils::FetchData;
+use crate::{
+    components::{
+        providers::{ClientProvider, Provider},
+        BracketList,
+    },
+    utils::Rc,
+};
 
 use super::Route;
 
 pub mod bracket;
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 #[derive(Debug)]

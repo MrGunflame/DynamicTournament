@@ -1,9 +1,8 @@
-use std::rc::Rc;
-
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::confirmation::Confirmation;
+use crate::utils::Rc;
 use crate::{
     components::providers::{ClientProvider, Provider},
     services::MessageLog,
@@ -11,16 +10,9 @@ use crate::{
 
 const DELETE_MESSAGE: &str = "Delete this tournament? This operation cannot be undone.";
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-}
-
-impl PartialEq for Props {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-    }
 }
 
 #[derive(Debug)]
