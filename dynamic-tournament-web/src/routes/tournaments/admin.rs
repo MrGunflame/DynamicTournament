@@ -1,15 +1,13 @@
+mod danger_zone;
 mod entrants;
 mod settings;
 
 use std::rc::Rc;
 
-use dynamic_tournament_api::{v3::tournaments::Tournament, Error};
+use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::{
-    components::providers::{ClientProvider, Provider},
-    services::errorlog::ErrorLog,
-};
+use self::danger_zone::DangerZone;
 
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
@@ -22,57 +20,27 @@ impl PartialEq for Props {
     }
 }
 
-pub struct Admin {}
+/// The root of the admin section of a tournament.
+#[derive(Debug)]
+pub struct Admin;
 
 impl Component for Admin {
-    type Message = Message;
+    type Message = ();
     type Properties = Props;
 
+    #[inline]
     fn create(_ctx: &Context<Self>) -> Self {
-        Self {}
-    }
-
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        let tournament_id = ctx.props().tournament.id;
-
-        match msg {
-            Message::DeleteTournament => {
-                let client = ClientProvider::get(ctx);
-
-                ctx.link().send_future(async move {
-                    Message::DeleteTournamentResult(
-                        client.v3().tournaments().delete(tournament_id).await,
-                    )
-                });
-            }
-            Message::DeleteTournamentResult(result) => match result {
-                Ok(()) => ErrorLog::info("Tournament deleted"),
-                Err(err) => ErrorLog::error(format!("Failed to delete tournament: {}", err)),
-            },
-        }
-
-        false
+        Self
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let delete_tournament = ctx.link().callback(|_| Message::DeleteTournament);
-
         html! {
             <div>
                 <settings::Settings tournament={ctx.props().tournament.clone()} />
                 <entrants::Entrants tournament={ctx.props().tournament.clone()} />
-                <div>
-                    <h2>{ "The Danger Zone" }</h2>
 
-                    <button class="button">{ "Reset Tournament" }</button>
-                    <button class="button" onclick={delete_tournament}>{ "Delete Tournament" }</button>
-                </div>
+                <DangerZone tournament={ctx.props().tournament.clone()} />
             </div>
         }
     }
-}
-
-pub enum Message {
-    DeleteTournament,
-    DeleteTournamentResult(Result<(), Error>),
 }

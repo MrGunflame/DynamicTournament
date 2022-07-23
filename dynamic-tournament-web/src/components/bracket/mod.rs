@@ -291,7 +291,9 @@ impl Component for Bracket {
                     let on_confirm = ctx.link().callback(move |_| Message::ResetMatch(index));
 
                     html! {
-                        <Confirmation {on_close} {on_confirm} />
+                        <Confirmation {on_close} {on_confirm}>
+                            <span>{ "Are you sure to reset this match? This will also reset matches depending on the result of this match." }</span>
+                        </Confirmation>
                     }
                 }
                 None => html! {},

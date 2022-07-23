@@ -29,7 +29,7 @@ impl Component for Confirmation {
 
         html! {
             <Popup on_close={on_close}>
-                <span>{ "Are you sure to reset this match? This will also reset matches depending on the result of this match." }</span>
+                { for ctx.props().children.iter() }
                 <div>
                     <button class="button" onclick={on_confirm}>{ "Yes" }</button>
                     <button class="button" onclick={on_cancel}>{ "Cancel" }</button>
@@ -41,6 +41,7 @@ impl Component for Confirmation {
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
+    pub children: Children,
     pub on_close: Callback<()>,
     pub on_confirm: Callback<()>,
 }
