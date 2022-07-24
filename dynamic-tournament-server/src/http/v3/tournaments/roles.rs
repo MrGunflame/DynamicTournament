@@ -1,5 +1,6 @@
 use dynamic_tournament_api::v3::id::{RoleId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::roles::Role;
+use dynamic_tournament_api::Payload;
 use hyper::Method;
 
 use crate::method;
@@ -43,11 +44,13 @@ async fn get(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     req.require_authentication()?;
 
-    let mut role: Role = req.json().await?;
+    let mut roles: Payload<Role> = req.json().await?;
 
-    role.id = req.state().store.roles(tournament_id).insert(&role).await?;
+    for role in roles.iter_mut() {
+        role.id = req.state().store.roles(tournament_id).insert(&role).await?;
+    }
 
-    Ok(Response::created().json(&role))
+    Ok(Response::created().json(&roles))
 }
 
 async fn delete(req: Request, tournament_id: TournamentId, id: RoleId) -> Result {

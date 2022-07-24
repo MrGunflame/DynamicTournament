@@ -1,5 +1,6 @@
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
+use dynamic_tournament_api::Payload;
 use hyper::Method;
 
 use crate::http::{Request, RequestUri, Response, Result};
@@ -46,42 +47,47 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
         .await?
         .unwrap();
 
-    let mut body: Entrant = req.json().await?;
+    let mut entrants: Payload<Entrant> = req.json().await?;
 
-    if tournament.kind != body.kind() {
-        return Err(StatusCodeError::bad_request()
-            .message("invalid entrant kind for this tournament")
-            .into());
-    }
-
-    // Check if the roles for all players exist.
+    // Fetch roles for all entrants.
     let roles = req.state().store.roles(tournament_id).list().await?;
-    match &body.inner {
-        EntrantVariant::Player(player) => {
-            if !roles.iter().any(|role| player.role == role.id) {
-                return Err(StatusCodeError::bad_request()
-                    .message(format!("invalid role {} for player", player.role))
-                    .into());
-            }
+
+    for entrant in entrants.iter_mut() {
+        // Check that the entrant matches the tournament kind.
+        if tournament.kind != entrant.kind() {
+            return Err(StatusCodeError::bad_request()
+                .message("invalid entrant kind for this tournament")
+                .into());
         }
-        EntrantVariant::Team(team) => {
-            for player in &team.players {
+
+        // Check if the roles for all players exist.
+        match &entrant.inner {
+            EntrantVariant::Player(player) => {
                 if !roles.iter().any(|role| player.role == role.id) {
                     return Err(StatusCodeError::bad_request()
                         .message(format!("invalid role {} for player", player.role))
                         .into());
                 }
             }
+            EntrantVariant::Team(team) => {
+                for player in &team.players {
+                    if !roles.iter().any(|role| player.role == role.id) {
+                        return Err(StatusCodeError::bad_request()
+                            .message(format!("invalid role {} for player", player.role))
+                            .into());
+                    }
+                }
+            }
         }
+
+        // Insert the entrant.
+        entrant.id = req
+            .state()
+            .store
+            .entrants(tournament_id)
+            .insert(&entrant)
+            .await?;
     }
 
-    // Insert the entrant.
-    body.id = req
-        .state()
-        .store
-        .entrants(tournament_id)
-        .insert(&body)
-        .await?;
-
-    Ok(Response::created().json(&body))
+    Ok(Response::created().json(&entrants))
 }

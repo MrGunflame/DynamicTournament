@@ -1,8 +1,11 @@
 mod matches;
 
-use dynamic_tournament_api::v3::{
-    id::{BracketId, SystemId, TournamentId},
-    tournaments::brackets::Bracket,
+use dynamic_tournament_api::{
+    v3::{
+        id::{BracketId, SystemId, TournamentId},
+        tournaments::brackets::Bracket,
+    },
+    Payload,
 };
 use dynamic_tournament_core::{options::TournamentOptions, EntrantScore, SingleElimination};
 use hyper::Method;
@@ -51,52 +54,53 @@ async fn get(req: Request, tournament_id: TournamentId, id: BracketId) -> Result
 async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     req.require_authentication()?;
 
-    let mut bracket: Bracket = req.json().await?;
+    let mut brackets: Payload<Bracket> = req.json().await?;
 
-    // Make sure all entrants in the bracket actually exist.
-    let entrants = req.state().store.get_entrants(tournament_id).await?;
+    for bracket in brackets.iter_mut() {
+        // Make sure all entrants in the bracket actually exist.
+        let entrants = req.state().store.get_entrants(tournament_id).await?;
 
-    // Keep track of consumed ids to deny duplicates.
-    let mut consumed = Vec::with_capacity(bracket.entrants.len());
+        // Keep track of consumed ids to deny duplicates.
+        let mut consumed = Vec::with_capacity(bracket.entrants.len());
 
-    for id in bracket.entrants.iter() {
-        if consumed.contains(id) {
-            return Err(StatusCodeError::bad_request()
-                .message(format!("found entrant {} multiple times", id))
-                .into());
+        for id in bracket.entrants.iter() {
+            if consumed.contains(id) {
+                return Err(StatusCodeError::bad_request()
+                    .message(format!("found entrant {} multiple times", id))
+                    .into());
+            }
+
+            if !entrants.iter().any(|e| e.id == *id) {
+                return Err(StatusCodeError::bad_request()
+                    .message(format!(
+                        "invalid entrant {}, does not exist for tournament",
+                        id
+                    ))
+                    .into());
+            }
+
+            consumed.push(*id);
         }
 
-        if !entrants.iter().any(|e| e.id == *id) {
-            return Err(StatusCodeError::bad_request()
-                .message(format!(
-                    "invalid entrant {}, does not exist for tournament",
-                    id
-                ))
-                .into());
-        }
+        let options = match bracket.system {
+            SystemId(1) => SingleElimination::<u8, EntrantScore<u8>>::options(),
+            SystemId(2) => TournamentOptions::default(),
+            _ => unreachable!(),
+        };
 
-        consumed.push(*id);
+        bracket.options = match bracket.options.clone().merge(options) {
+            Ok(v) => v,
+            Err(err) => {
+                return Err(StatusCodeError::bad_request().message(err).into());
+            }
+        };
+
+        bracket.id = req
+            .state()
+            .store
+            .insert_bracket(tournament_id, &bracket)
+            .await?;
     }
 
-    let options = match bracket.system {
-        SystemId(1) => SingleElimination::<u8, EntrantScore<u8>>::options(),
-        SystemId(2) => TournamentOptions::default(),
-        _ => unreachable!(),
-    };
-
-    bracket.options = match bracket.options.merge(options) {
-        Ok(v) => v,
-        Err(err) => {
-            return Err(StatusCodeError::bad_request().message(err).into());
-        }
-    };
-
-    let id = req
-        .state()
-        .store
-        .insert_bracket(tournament_id, &bracket)
-        .await?;
-    bracket.id = id;
-
-    Ok(Response::created().json(&bracket))
+    Ok(Response::created().json(&brackets))
 }

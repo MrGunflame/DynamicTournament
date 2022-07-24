@@ -4,6 +4,7 @@ mod roles;
 
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
+use dynamic_tournament_api::Payload;
 use hyper::Method;
 
 use crate::method;
@@ -60,11 +61,13 @@ async fn get(req: Request, id: TournamentId) -> Result {
 async fn create(mut req: Request) -> Result {
     req.require_authentication()?;
 
-    let mut tournament: Tournament = req.json().await?;
+    let mut tournaments: Payload<Tournament> = req.json().await?;
 
-    tournament.id = req.state().store.tournaments().insert(&tournament).await?;
+    for tournament in tournaments.iter_mut() {
+        tournament.id = req.state().store.tournaments().insert(&tournament).await?;
+    }
 
-    Ok(Response::created().json(&tournament))
+    Ok(Response::created().json(&tournaments))
 }
 
 async fn patch(mut req: Request, id: TournamentId) -> Result {
