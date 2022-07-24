@@ -9,6 +9,55 @@ pub enum Payload<T> {
 }
 
 impl<T> Payload<T> {
+    /// Returns the number of elements in the `Payload`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_api::Payload;
+    /// let payload = Payload::Single(1);
+    ///
+    /// assert_eq!(payload.len(), 1);
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_api::Payload;
+    /// let payload = Payload::Multiple(vec![1, 2, 3]);
+    ///
+    /// assert_eq!(payload.len(), 3);
+    /// ```
+    #[inline]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Single(_) => 1,
+            Self::Multiple(v) => v.len(),
+        }
+    }
+
+    /// Returns `true` if the `Payload` contains no elements.
+    ///
+    /// `is_empty` returning `true` implies that `self` is `Payload::Multiple` with no elements.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dynamic_tournament_api::Payload;
+    /// let payload = Payload::Single(1);
+    ///
+    /// assert!(!payload.is_empty());
+    /// ```
+    ///
+    /// ```
+    /// # use dynamic_tournament_api::Payload;
+    /// let payload = Payload::Multiple(Vec::<i32>::new());
+    ///
+    /// assert!(payload.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns an iterator over the elements in the payload.
     ///
     /// # Example
@@ -144,10 +193,8 @@ impl<'a, T> Iterator for Iter<'a, T> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        match &self.payload {
-            Payload::Single(_) => (1 - self.pos, Some(1 - self.pos)),
-            Payload::Multiple(vec) => (vec.len() - self.pos, Some(vec.len() - self.pos)),
-        }
+        let n = self.payload.len() - self.pos;
+        (n, Some(n))
     }
 }
 
@@ -202,9 +249,6 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 impl<'a, T> ExactSizeIterator for IterMut<'a, T> {
     #[inline]
     fn len(&self) -> usize {
-        match &self.payload {
-            Payload::Single(_) => 1 - self.pos,
-            Payload::Multiple(vec) => vec.len() - self.pos,
-        }
+        self.payload.len() - self.pos
     }
 }
