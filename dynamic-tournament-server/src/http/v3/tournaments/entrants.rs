@@ -85,7 +85,7 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
             .state()
             .store
             .entrants(tournament_id)
-            .insert(&entrant)
+            .insert(entrant)
             .await?;
     }
 

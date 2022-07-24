@@ -47,7 +47,7 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     let mut roles: Payload<Role> = req.json().await?;
 
     for role in roles.iter_mut() {
-        role.id = req.state().store.roles(tournament_id).insert(&role).await?;
+        role.id = req.state().store.roles(tournament_id).insert(role).await?;
     }
 
     Ok(Response::created().json(&roles))

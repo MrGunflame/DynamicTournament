@@ -64,7 +64,7 @@ async fn create(mut req: Request) -> Result {
     let mut tournaments: Payload<Tournament> = req.json().await?;
 
     for tournament in tournaments.iter_mut() {
-        tournament.id = req.state().store.tournaments().insert(&tournament).await?;
+        tournament.id = req.state().store.tournaments().insert(tournament).await?;
     }
 
     Ok(Response::created().json(&tournaments))

@@ -98,7 +98,7 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
         bracket.id = req
             .state()
             .store
-            .insert_bracket(tournament_id, &bracket)
+            .insert_bracket(tournament_id, bracket)
             .await?;
     }
 
