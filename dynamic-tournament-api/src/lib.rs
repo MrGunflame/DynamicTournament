@@ -1,8 +1,12 @@
+mod payload;
+
 pub mod auth;
 pub mod http;
 pub mod tournament;
 pub mod v3;
 pub mod websocket;
+
+pub use payload::Payload;
 
 use crate::http::{Request, RequestBuilder, Response};
 use crate::tournament::TournamentClient;
