@@ -8,13 +8,17 @@
 //! [`OptionValue`] contains all types supported.
 //!
 //! [`System`]: crate::System
-use std::collections::{
-    hash_map::{Iter, Keys},
-    HashMap,
-};
+#[cfg(feature = "serde")]
+mod serde_impl;
+
+use std::collections::hash_map::{Iter, Keys};
+use std::collections::HashMap;
 use std::hint;
 
 use thiserror::Error;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum Error {
@@ -29,9 +33,6 @@ pub enum Error {
         expected: &'static str,
     },
 }
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 /// A list of optional values for a tournament. `TournamentOptions` includes the names and should
 /// be used to describe a list of options. [`TournamentOptionValues`] should be used when just
@@ -171,8 +172,6 @@ pub struct TournamentOption {
 
 /// The value of a [`TournamentOption`].
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum OptionValue {
     Bool(bool),
     I64(i64),
@@ -181,6 +180,14 @@ pub enum OptionValue {
 }
 
 impl OptionValue {
+    #[inline]
+    pub fn string<T>(value: T) -> Self
+    where
+        T: ToString,
+    {
+        Self::String(value.to_string())
+    }
+
     /// Returns the name of the type of this value.
     pub fn value_type(&self) -> &'static str {
         match self {
