@@ -17,3 +17,6 @@ serde-flatten = ["serde"]
 log = "0.4.16"
 thiserror = "1.0.30"
 serde = { version = "1.0.136", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_test = "1.0.137"
