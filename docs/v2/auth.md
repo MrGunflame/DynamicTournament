@@ -26,7 +26,7 @@ Log in using the given credentials and acquire a new auth and refresh token.
 
 - `401 Unauthorized`: Returned if the credentials in the request body were invalid.
 
-### POST `/v3/auth/refresh`
+## POST `/v3/auth/refresh`
 
 Acquire a new authentication and refresh token using an existing valid refresh token.
 
