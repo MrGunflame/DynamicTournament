@@ -89,7 +89,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             sqlx::query(t).execute(&state.store.pool).await.unwrap();
         }
 
-        http::bind(state.config.bind, state).await.unwrap();
+        http::bind(state.config.bind.clone(), state).await.unwrap();
     });
 
     tokio::signal::ctrl_c().await.unwrap();
