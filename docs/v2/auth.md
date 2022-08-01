@@ -1,6 +1,6 @@
 # /v2/auth
 
-The `/v2/auth` endpoint provides authentication endpoints. Using authentication is only required for read-endpoints.
+The `/v2/auth` endpoint provides authentication endpoints. Using authentication is only required for write-endpoints.
 
 If possible you should use `/v3/auth` instead. It provides the exact same api as `/v2/auth`, but comes from the newer version. You can use tokens from `/v3/auth` for v2 endpoints.
 
