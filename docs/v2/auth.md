@@ -20,13 +20,13 @@ Log in using the given credentials and acquire a new auth and refresh token.
 | Field         | Type   | Description                                          |
 | ------------- | ------ | ---------------------------------------------------- |
 | auth_token    | string | The authentication token (use this to make requests) |
-| refresh_token | string | The refresh token (use this for `/v3/auth/refresh`)  |
+| refresh_token | string | The refresh token (use this for `/v2/auth/refresh`)  |
 
 ### Errors
 
 - `401 Unauthorized`: Returned if the credentials in the request body were invalid.
 
-## POST `/v3/auth/refresh`
+## POST `/v2/auth/refresh`
 
 Acquire a new authentication and refresh token using an existing valid refresh token.
 
@@ -41,7 +41,7 @@ Acquire a new authentication and refresh token using an existing valid refresh t
 | Field         | Type   | Description                                          |
 | ------------- | ------ | ---------------------------------------------------- |
 | auth_token    | string | The authentication token (use this to make requests) |
-| refresh_token | string | The refresh token (use this for `/v3/auth/refresh`)  |
+| refresh_token | string | The refresh token (use this for `/v2/auth/refresh`)  |
 
 ### Errors
 
