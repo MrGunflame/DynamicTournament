@@ -8,7 +8,7 @@
 
 ## Authentication
 
-Authentication for write-endpoints is provided via a [JWT](https://jwt.io) the `Authorization` header. If the header is missing for a request a `401` error
+Authentication for write-endpoints is provided via a [JWT](https://jwt.io) in the `Authorization` header. If the header is missing for a request a `401` error
 is returned.
 
 ## Request Headers
