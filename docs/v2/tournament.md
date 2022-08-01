@@ -1,4 +1,4 @@
-# `/v2/tournament`
+# /v2/tournament
 
 The `/v2/tournament` endpoint exposes the avaliable tournaments. Note that unlike the name suggests, this endpoint returns a list of tournaments.
 
