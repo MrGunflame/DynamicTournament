@@ -1,6 +1,8 @@
 use std::env;
-use std::net::SocketAddr;
-use std::{io, path::Path};
+use std::io;
+use std::net::{AddrParseError, SocketAddr};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use jsonwebtoken::Algorithm;
 use log::LevelFilter;
@@ -36,7 +38,7 @@ macro_rules! from_environment_error {
 pub struct Config {
     pub database: Database,
     pub loglevel: LevelFilter,
-    pub bind: SocketAddr,
+    pub bind: BindAddr,
 
     pub authorization: Authorization,
 }
@@ -80,9 +82,42 @@ impl Default for Config {
         Self {
             database: Database::default(),
             loglevel: LevelFilter::Info,
-            bind: SocketAddr::new([0, 0, 0, 0].into(), 3000),
+            bind: BindAddr::Tcp(SocketAddr::new([0, 0, 0, 0].into(), 3000)),
             authorization: Authorization::default(),
         }
+    }
+}
+
+/// An address to bind the http server to.
+///
+/// This can currently be a tcp socket (net) or a unix socket (file).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum BindAddr {
+    Tcp(SocketAddr),
+    Unix(PathBuf),
+}
+
+impl BindAddr {
+    /// Parses the given string into a `Tcp` address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AddrParseError`] when parsing the input fails.
+    #[inline]
+    pub fn parse_socket(s: &str) -> Result<Self, AddrParseError> {
+        s.parse().map(Self::Tcp)
+    }
+}
+
+impl FromStr for BindAddr {
+    type Err = AddrParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(addr) = Self::parse_socket(s) {
+            return Ok(addr);
+        }
+
+        Ok(Self::Unix(s.to_owned().into()))
     }
 }
 
@@ -176,4 +211,24 @@ pub enum ConfigError {
     Toml(#[from] toml::de::Error),
     #[error("missing config field: {0}")]
     MissingField(&'static str),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BindAddr;
+
+    #[test]
+    fn test_bindaddr_parse() {
+        let input = "0.0.0.0:80";
+        assert_eq!(
+            input.parse::<BindAddr>().unwrap(),
+            BindAddr::Tcp(input.parse().unwrap())
+        );
+
+        let input = "/var/run/test";
+        assert_eq!(
+            input.parse::<BindAddr>().unwrap(),
+            BindAddr::Unix(input.to_owned().into())
+        );
+    }
 }

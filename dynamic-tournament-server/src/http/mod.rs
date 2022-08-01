@@ -5,6 +5,7 @@ mod v3;
 #[cfg(feature = "metrics")]
 mod metrics;
 
+use crate::config::BindAddr;
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
@@ -26,15 +27,24 @@ use hyper::service::Service;
 use hyper::{Body, HeaderMap, Method, StatusCode, Uri};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpSocket;
 use tokio::time::Instant;
 
 pub type Result = std::result::Result<Response, Error>;
 
-pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
-    let mut shutdown = state.shutdown.listen();
+pub async fn bind(addr: BindAddr, state: State) -> std::result::Result<(), crate::Error> {
+    match addr {
+        BindAddr::Tcp(addr) => bind_tcp(addr, state).await,
+        #[cfg(target_os = "unix")]
+        BindAddr::Unix(path) => bind_unix(path, state).await,
+        #[cfg(not(target_os = "unix"))]
+        BindAddr::Unix(_) => panic!("Cannot bind to unix socket on non-unix target"),
+    }
+}
 
-    let service = RootService { state };
+async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
+    let mut shutdown = state.shutdown.listen();
 
     let socket = TcpSocket::new_v4()?;
     if let Err(err) = socket.set_reuseaddr(true) {
@@ -61,33 +71,80 @@ pub async fn bind(addr: SocketAddr, state: State) -> std::result::Result<(), cra
                 };
                 log::info!("Accepting new connection from {:?}", addr);
 
-                let service = service.clone();
-                let shutdown = shutdown.clone();
+                let state = state.clone();
                 tokio::task::spawn(async move {
-                    let mut conn = Http::new()
-                        .http1_keep_alive(true)
-                        .serve_connection(stream, service)
-                        .with_upgrades();
-
-                    let mut conn = Pin::new(&mut conn);
-
-                    tokio::select! {
-                        res = &mut conn => {
-                            if let Err(err) = res {
-                                log::warn!("Http error: {:?}", err);
-                            }
-                        }
-                        _ = shutdown => {
-                            log::debug!("Shutting down connection");
-                            conn.graceful_shutdown();
-                        }
-                    }
+                    serve_connection(stream, state).await;
                 });
             }
             // Shut down the server.
             _ = &mut shutdown => {
                 log::debug!("Shutting down http server");
                 return Ok(());
+            }
+        }
+    }
+}
+
+/// Binds a new HTTP server to a unix socket.
+///
+/// Note that `bind_unix` is only avaliable on unix targets.
+#[cfg(target_os = "unix")]
+async fn bind_unix<P>(path: P, state: State) -> std::result::Result<(), crate::Error>
+where
+    P: AsRef<Path>,
+{
+    let mut shutdown = state.shutdown.listen();
+
+    let listener = UnixListener::bind(path)?;
+    loop {
+        tokio::select! {
+            res = listener.accept() => {
+                let (stream, addr) = match res {
+                    Ok((stream, addr)) => (stream, addr),
+                    Err(err) => {
+                        log::warn!("Failed to accept connection: {:?}", err);
+                        continue;
+                    }
+                };
+
+                log::info!("Accepting new connection from {:?}", addr);
+
+                let state = state.clone();
+                tokio::task::spawn(async move {
+                    serve_connection(stream, state).await;
+                });
+            }
+            _ = &mut shutdown => {
+                log::debug!("Shutting down http server");
+                return Ok(());
+            }
+        }
+    }
+}
+
+async fn serve_connection<S>(stream: S, state: State)
+where
+    S: AsyncRead + AsyncWrite + Unpin + 'static,
+{
+    let shutdown = state.shutdown.listen();
+    let service = RootService { state };
+
+    let mut conn = Http::new()
+        .http1_keep_alive(true)
+        .serve_connection(stream, service);
+
+    tokio::select! {
+        res = &mut conn => {
+            if let Err(err) = res {
+                log::warn!("Error serving HTTP conn: {}", err);
+            }
+        }
+        _ = shutdown => {
+            log::trace!("HTTP conn shutdown");
+            Pin::new(&mut conn).graceful_shutdown();
+
+            if let Err(err) = conn.await {
+                log::warn!("Error serving HTTP conn: {}", err);
             }
         }
     }
