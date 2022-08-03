@@ -1,5 +1,6 @@
 mod systems;
 mod tournaments;
+mod utils;
 
 use std::{
     io::{self, Write},
@@ -36,9 +37,11 @@ pub enum Command {
 
 #[tokio::main]
 async fn main() {
+    pretty_env_logger::init();
+
     let args = Args::parse();
 
-    println!("URI: {}", args.uri);
+    log::info!("Using base {}", args.uri);
 
     let client = Client::new(args.uri);
 
@@ -47,15 +50,17 @@ async fn main() {
             Ok(_) => (),
             Err(err) => {
                 match err {
-                    Error::Unauthorized => println!("Failed to authorize: Unauthorized"),
-                    err => println!("Failed to authorize: {}", err),
+                    Error::Unauthorized => log::error!("Failed to authorize: Unauthorized"),
+                    err => log::error!("Failed to authorize: {}", err),
                 }
 
                 std::process::exit(1);
             }
         }
 
-        println!("Logged in");
+        log::info!("Logged in");
+    } else {
+        log::info!("No username or password provided, some operations are unavaliable");
     }
 
     let res = match args.command {
@@ -64,19 +69,6 @@ async fn main() {
     };
 
     if let Err(err) = res {
-        println!("{}", err);
+        log::error!("{}", err);
     }
-}
-
-pub fn read_line<T>(name: &str) -> Result<T, T::Err>
-where
-    T: FromStr,
-{
-    let buf = format!("{}: ", name);
-    io::stdout().write_all(buf.as_bytes()).unwrap();
-    io::stdout().flush().unwrap();
-
-    let mut buf = String::new();
-    io::stdin().read_line(&mut buf).unwrap();
-    FromStr::from_str(&buf[..buf.len() - 1])
 }

@@ -4,6 +4,8 @@ use dynamic_tournament_api::{
     Client, Result,
 };
 
+use crate::utils::Prompt;
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
     List,
@@ -25,10 +27,10 @@ impl Command {
                 }
             }
             Self::Create => {
-                let name = crate::read_line("Name").unwrap();
-                let date = crate::read_line("Date").unwrap();
-                let description = crate::read_line("Description").unwrap();
-                let kind = crate::read_line("Kind ('team' or 'player')").unwrap();
+                let name = Prompt::new("Name").read_valid();
+                let date = Prompt::new("Date").read_valid();
+                let description = Prompt::new("Description").read_valid();
+                let kind = Prompt::new("Kind ('team' or 'player')").read_valid();
 
                 client
                     .v3()
