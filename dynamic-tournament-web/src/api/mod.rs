@@ -1,14 +1,14 @@
 use std::borrow::Cow;
 use std::ops::Deref;
-use std::time::Duration;
 use std::rc::Rc;
+use std::time::Duration;
 
+use asyncsync::local::Notify;
 use chrono::Utc;
 use dynamic_tournament_api::{Client as InnerClient, Result};
+use futures::{select, FutureExt};
 use gloo_timers::future::sleep;
 use wasm_bindgen_futures::spawn_local;
-use asyncsync::local::Notify;
-use futures::{select, FutureExt};
 
 #[derive(Clone, Debug)]
 pub struct Client {
