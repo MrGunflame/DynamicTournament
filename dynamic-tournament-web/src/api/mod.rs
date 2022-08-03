@@ -1,18 +1,24 @@
 use std::borrow::Cow;
 use std::ops::Deref;
 use std::time::Duration;
+use std::rc::Rc;
 
 use chrono::Utc;
 use dynamic_tournament_api::{Client as InnerClient, Result};
 use gloo_timers::future::sleep;
 use wasm_bindgen_futures::spawn_local;
+use asyncsync::local::Notify;
+use futures::{select, FutureExt};
 
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: InnerClient,
+    // Waker to wake the background sleep
+    waker: Rc<Notify>,
 }
 
 impl Client {
+    /// Creates a new `Client` with the given `base_url`.
     #[inline]
     pub fn new<T>(base_url: T) -> Self
     where
@@ -20,6 +26,7 @@ impl Client {
     {
         Self {
             inner: InnerClient::new(base_url),
+            waker: Rc::new(Notify::new()),
         }
     }
 
@@ -35,9 +42,16 @@ impl Client {
 
                 log::debug!("Auth token is valid for {}s", seconds);
 
-                // TODO: Abort sleeping when manually logged out.
-                sleep(Duration::new(seconds, 0)).await;
-                client.refresh().await;
+                select! {
+                    _ = sleep(Duration::new(seconds, 0)).fuse() => {
+                        log::debug!("Refreshing auth tokens");
+                        client.refresh().await;
+                    }
+                    _ = client.waker.notified() => {
+                        log::debug!("Interrupt sleep future");
+                        break;
+                    }
+                }
             }
 
             log::debug!("Refresh token expired");
@@ -49,6 +63,9 @@ impl Client {
     /// Logs the `Client` out and removes any authentication information.
     pub fn logout(&self) {
         self.inner.logout();
+
+        // Stop all sleep futures.
+        self.waker.notify_all();
     }
 
     /// Try to refresh the authentication tokens while the refresh token is still valid.
