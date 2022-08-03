@@ -1,15 +1,15 @@
 use std::env;
+use std::fmt::{self, Formatter};
 use std::io;
 use std::net::{AddrParseError, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::fmt::{self, Formatter};
 
 use jsonwebtoken::Algorithm;
 use log::LevelFilter;
-use serde::{Deserialize, Serialize, Deserializer};
-use thiserror::Error;
 use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
+use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -125,7 +125,9 @@ impl FromStr for BindAddr {
 
 impl<'de> Deserialize<'de> for BindAddr {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         struct BindAddrVisitor;
 
         impl<'de> Visitor<'de> for BindAddrVisitor {
@@ -136,7 +138,9 @@ impl<'de> Deserialize<'de> for BindAddr {
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where E: de::Error {
+            where
+                E: de::Error,
+            {
                 match v.parse() {
                     Ok(addr) => Ok(addr),
                     Err(err) => Err(E::custom(err)),
@@ -144,7 +148,9 @@ impl<'de> Deserialize<'de> for BindAddr {
             }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-            where E: de::Error {
+            where
+                E: de::Error,
+            {
                 self.visit_str(&v)
             }
         }
