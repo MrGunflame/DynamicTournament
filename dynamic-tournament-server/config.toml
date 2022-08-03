@@ -1,13 +1,49 @@
+# The maximum level of messages logged. Note that using the debug or trace levels
+# will produce high amounts of messages. Usage is not recommended for production.
+# Possible values: off, error, warn, info, debug, trace
+# Default value: warn
 loglevel = "warn"
+
+# An address:port or file path (unix-only) to bind http server to. Use 0.0.0.0 to
+# bind to all interfaces.
+# Possible values: <ADDR:PORT> | <PATH>
+# Default value: 0.0.0.0:80
 bind = "0.0.0.0:80"
 
 [database]
+# The database driver to use 
+# Possible values: mysql
+# Default value: mysql
 driver = "mysql"
+
+# The database host
+# Possible values: <ADDR>
+# Default value: 127.0.0.1
 host = "10.0.0.2"
+# The database port
+# Possible values: <PORT>
+# Default value: 3306
 port = 3306
+
+# The database user
+# Possible values: <STRING>
+# Default value: user 
 user = "user"
+
+# The password for the database user
+# Possible values: <STRING>
+# Default value: 1234
 password = "1234"
+
+# The database name
+# Possible values: <STRING>
+# Default value: dynamictournament
 database = "dynamictournament"
 
 [authorization]
-algorithm = "HS256"
+# Which JWT signing algorithm to use. Don't change this if you don't know what
+# that means.
+# Possible values: HS256, HS384, HS512
+# Default value: HS256
+alg = "HS256"
+

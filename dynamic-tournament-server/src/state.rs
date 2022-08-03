@@ -21,7 +21,7 @@ impl State {
         let pool = MySqlPool::connect_lazy(&config.database.connect_string()).unwrap();
         let store = Store { pool };
 
-        let auth = Authorization::new(config.authorization.algorithm);
+        let auth = Authorization::new(config.authorization.alg);
 
         let live_brackets = LiveBrackets::new(store.clone());
 
