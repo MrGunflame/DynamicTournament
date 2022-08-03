@@ -2,11 +2,6 @@ mod systems;
 mod tournaments;
 mod utils;
 
-use std::{
-    io::{self, Write},
-    str::FromStr,
-};
-
 use clap::{Parser, Subcommand};
 use dynamic_tournament_api::{Client, Error};
 
