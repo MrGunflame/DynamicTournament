@@ -40,6 +40,12 @@ password = "1234"
 # Default value: dynamictournament
 database = "dynamictournament"
 
+# The prefix on tables of the database. Use an empty string to disable.
+# Note that the prefix is used literally, there is no additional delimiter.
+# Possible values: <STRING>
+# Default value: ""
+prefix = ""
+
 [authorization]
 # Which JWT signing algorithm to use. Don't change this if you don't know what
 # that means.

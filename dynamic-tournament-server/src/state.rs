@@ -19,7 +19,7 @@ pub struct State(Arc<StateInner>);
 impl State {
     pub fn new(config: Config, users: Vec<LoginData>) -> Self {
         let pool = MySqlPool::connect_lazy(&config.database.connect_string()).unwrap();
-        let store = Store { pool };
+        let store = Store { pool, table_prefix: config.database.prefix.clone() };
 
         let auth = Authorization::new(config.authorization.alg);
 

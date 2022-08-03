@@ -57,36 +57,37 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let users = read_users("users.json");
 
     tokio::task::spawn(async move {
+        let prefix = config.database.prefix.clone();
         let state = State::new(config, users);
 
         let tables = [
-            "CREATE TABLE IF NOT EXISTS tournaments (
+            format!("CREATE TABLE IF NOT EXISTS {}tournaments (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT NOT NULL,
             date TIMESTAMP NOT NULL,
             kind TINYINT UNSIGNED NOT NULL
-        )",
-            "CREATE TABLE IF NOT EXISTS entrants (
+        )", prefix),
+            format!( "CREATE TABLE IF NOT EXISTS {}entrants (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL
-        )",
-            "CREATE TABLE IF NOT EXISTS brackets (
+        )", prefix),
+            format!("CREATE TABLE IF NOT EXISTS {}brackets (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL,
             state BLOB NOT NULL
-        )",
-            "CREATE TABLE IF NOT EXISTS roles (
+        )", prefix),
+            format!("CREATE TABLE IF NOT EXISTS {}roles (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             name TEXT NOT NULL
-        )",
+        )",prefix),
         ];
 
         for t in tables {
-            sqlx::query(t).execute(&state.store.pool).await.unwrap();
+            sqlx::query(&t).execute(&state.store.pool).await.unwrap();
         }
 
         http::bind(state.config.bind.clone(), state).await.unwrap();
