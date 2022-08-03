@@ -3,11 +3,13 @@ use std::io;
 use std::net::{AddrParseError, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::fmt::{self, Formatter};
 
 use jsonwebtoken::Algorithm;
 use log::LevelFilter;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer};
 use thiserror::Error;
+use serde::de::{self, Visitor};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -91,7 +93,7 @@ impl Default for Config {
 /// An address to bind the http server to.
 ///
 /// This can currently be a tcp socket (net) or a unix socket (file).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum BindAddr {
     Tcp(SocketAddr),
     Unix(PathBuf),
@@ -118,6 +120,36 @@ impl FromStr for BindAddr {
         }
 
         Ok(Self::Unix(s.to_owned().into()))
+    }
+}
+
+impl<'de> Deserialize<'de> for BindAddr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        struct BindAddrVisitor;
+
+        impl<'de> Visitor<'de> for BindAddrVisitor {
+            type Value = BindAddr;
+
+            fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+                formatter.write_str("an address with port, or file path")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where E: de::Error {
+                match v.parse() {
+                    Ok(addr) => Ok(addr),
+                    Err(err) => Err(E::custom(err)),
+                }
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where E: de::Error {
+                self.visit_str(&v)
+            }
+        }
+
+        deserializer.deserialize_str(BindAddrVisitor)
     }
 }
 
