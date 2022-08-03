@@ -1,28 +1,61 @@
-use crate::{Authorization, Result};
-
-use http::{
-    header::{AUTHORIZATION, CONTENT_TYPE},
-    Method, StatusCode,
-};
-use serde::{de::DeserializeOwned, Serialize};
-
+use http::header::{AUTHORIZATION, CONTENT_TYPE};
+use http::{Method, StatusCode};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use thiserror::Error;
 
+use crate::{Authorization, Result};
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Http(#[from] HttpError),
+    #[error(transparent)]
+    Status(#[from] StatusError),
+}
+
+/// An error from the server, rejecting the connection.
+#[derive(Clone, Debug, Error)]
+#[error("status code {status}")]
+pub struct StatusError {
+    status: StatusCode,
+}
+
+impl StatusError {
+    #[inline]
+    fn new(resp: Response) -> Self {
+        Self {
+            status: resp.status(),
+        }
+    }
+
+    pub fn status(&self) -> StatusCode {
+        self.status
+    }
+
+    pub fn status_u16(&self) -> u16 {
+        self.status.as_u16()
+    }
+}
+
+/// An error in the http protocol.
 #[derive(Debug, Error)]
 #[error(transparent)]
-pub struct Error {
-    #[cfg(any(target_family = "unix", target_family = "windows"))]
+pub struct HttpError {
+    #[cfg(not(target_family = "wasm"))]
     #[from]
-    error: hyper::Error,
+    error: sys::Error,
+
     #[cfg(target_family = "wasm")]
     #[from]
-    error: reqwasm::Error,
+    error: wasm::Error,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Client {
-    #[cfg(any(target_family = "unix", target_family = "windows"))]
-    inner: unix::InnerClient,
+    #[cfg(not(target_family = "wasm"))]
+    inner: sys::Client,
+
     #[cfg(target_family = "wasm")]
     inner: wasm::InnerClient,
 }
@@ -33,7 +66,17 @@ impl Client {
     }
 
     pub async fn send(&self, request: Request) -> Result<Response> {
-        self.inner.send(request).await
+        log::debug!("Sending {}", request.uri);
+
+        let resp = self.inner.send(request).await?;
+
+        log::debug!("Read status {}", resp.status());
+
+        if resp.is_success() {
+            Ok(resp)
+        } else {
+            Err(Error::Status(StatusError::new(resp)).into())
+        }
     }
 }
 
@@ -155,8 +198,8 @@ impl From<RequestBuilder> for Request {
 
 #[derive(Debug)]
 pub struct Response {
-    #[cfg(any(target_family = "unix", target_family = "windows"))]
-    inner: unix::InnerResponse,
+    #[cfg(not(target_family = "sys"))]
+    inner: sys::InnerResponse,
     #[cfg(target_family = "wasm")]
     inner: wasm::InnerResponse,
 }
@@ -179,9 +222,10 @@ impl Response {
     }
 }
 
-#[cfg(any(target_family = "unix", target_family = "windows"))]
-mod unix {
-    use super::{Error, Request, Response};
+// System http implementation (for non-wasm targets)
+#[cfg(not(target_family = "wasm"))]
+mod sys {
+    use super::{Request, Response};
     use crate::Result;
 
     use http::StatusCode;
@@ -189,16 +233,29 @@ mod unix {
     use hyper_tls::HttpsConnector;
     use serde::de::DeserializeOwned;
 
+    use super::HttpError;
+
+    pub use hyper::Error;
+
     #[derive(Clone, Debug)]
-    pub struct InnerClient {
+    pub struct Client {
         inner: hyper::Client<HttpsConnector<HttpConnector>>,
     }
 
-    impl InnerClient {
-        pub async fn send(&self, request: Request) -> Result<Response> {
-            let req = request.into();
+    impl Client {
+        pub fn new() -> Self {
+            Self {
+                inner: hyper::Client::builder().build(HttpsConnector::new()),
+            }
+        }
 
-            let resp = self.inner.request(req).await.map_err(Error::from)?;
+        pub async fn send(&self, req: Request) -> Result<Response> {
+            let req = convert_request(req);
+
+            let resp = match self.inner.request(req).await {
+                Ok(resp) => resp,
+                Err(err) => return Err(super::Error::Http(HttpError::from(err)).into()),
+            };
 
             Ok(Response {
                 inner: InnerResponse(resp),
@@ -206,11 +263,10 @@ mod unix {
         }
     }
 
-    impl Default for InnerClient {
+    impl Default for Client {
+        #[inline]
         fn default() -> Self {
-            Self {
-                inner: hyper::Client::builder().build(HttpsConnector::new()),
-            }
+            Self::new()
         }
     }
 
@@ -226,31 +282,28 @@ mod unix {
         where
             T: DeserializeOwned,
         {
-            let bytes = body::to_bytes(self.0.into_body())
-                .await
-                .map_err(Error::from)?;
+            let bytes = match body::to_bytes(self.0.into_body()).await {
+                Ok(bytes) => bytes,
+                Err(err) => return Err(super::Error::Http(HttpError::from(err)).into()),
+            };
 
             Ok(serde_json::from_slice(&bytes)?)
         }
     }
 
-    impl From<Request> for hyper::Request<Body> {
-        fn from(request: Request) -> Self {
-            let body = match request.body {
-                Some(body) => Body::from(body),
-                None => Body::empty(),
-            };
+    fn convert_request(req: Request) -> hyper::Request<Body> {
+        let body = match req.body {
+            Some(body) => Body::from(body),
+            None => Body::empty(),
+        };
 
-            let mut builder = hyper::Request::builder()
-                .uri(request.uri)
-                .method(request.method);
+        let mut builder = hyper::Request::builder().uri(req.uri).method(req.method);
 
-            for (key, value) in request.headers {
-                builder = builder.header(key, value);
-            }
-
-            builder.body(body).unwrap()
+        for (key, val) in req.headers {
+            builder = builder.header(key, val);
         }
+
+        builder.body(body).unwrap()
     }
 }
 
