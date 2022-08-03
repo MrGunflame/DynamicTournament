@@ -31,14 +31,20 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpSocket;
 use tokio::time::Instant;
 
+#[cfg(target_family = "unix")]
+use {
+    std::path::Path,
+    tokio::net::UnixListener,
+};
+
 pub type Result = std::result::Result<Response, Error>;
 
 pub async fn bind(addr: BindAddr, state: State) -> std::result::Result<(), crate::Error> {
     match addr {
         BindAddr::Tcp(addr) => bind_tcp(addr, state).await,
-        #[cfg(target_os = "unix")]
+        #[cfg(target_family = "unix")]
         BindAddr::Unix(path) => bind_unix(path, state).await,
-        #[cfg(not(target_os = "unix"))]
+        #[cfg(not(target_family = "unix"))]
         BindAddr::Unix(_) => panic!("Cannot bind to unix socket on non-unix target"),
     }
 }
@@ -59,6 +65,7 @@ async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), cra
 
     socket.bind(addr)?;
     let listener = socket.listen(1024)?;
+    log::info!("Server running on {}", addr);
     loop {
         tokio::select! {
             res = listener.accept() => {
@@ -88,14 +95,16 @@ async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), cra
 /// Binds a new HTTP server to a unix socket.
 ///
 /// Note that `bind_unix` is only avaliable on unix targets.
-#[cfg(target_os = "unix")]
+#[cfg(target_family = "unix")]
 async fn bind_unix<P>(path: P, state: State) -> std::result::Result<(), crate::Error>
 where
     P: AsRef<Path>,
 {
     let mut shutdown = state.shutdown.listen();
+    let path = path.as_ref();
 
     let listener = UnixListener::bind(path)?;
+    log::debug!("Server running on {}", path.display());
     loop {
         tokio::select! {
             res = listener.accept() => {
@@ -116,6 +125,10 @@ where
             }
             _ = &mut shutdown => {
                 log::debug!("Shutting down http server");
+
+                // Remove the unix socket.
+                tokio::fs::remove_file(path).await?;
+
                 return Ok(());
             }
         }
