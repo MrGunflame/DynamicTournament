@@ -167,6 +167,7 @@ pub struct Database {
     pub user: String,
     pub password: String,
     pub database: String,
+    pub prefix: String,
 }
 
 impl Database {
@@ -194,6 +195,8 @@ impl Database {
             password,
             "DT_DB_DATABASE",
             database,
+            "DT_DB_PREFIX",
+            prefix,
         );
 
         Ok(this)
@@ -214,6 +217,8 @@ impl Database {
             password,
             "DT_DB_DATABASE",
             database,
+            "DT_DB_PREFIX",
+            prefix,
         );
 
         self

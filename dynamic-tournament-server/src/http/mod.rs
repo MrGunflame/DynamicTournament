@@ -32,10 +32,7 @@ use tokio::net::TcpSocket;
 use tokio::time::Instant;
 
 #[cfg(target_family = "unix")]
-use {
-    std::path::Path,
-    tokio::net::UnixListener,
-};
+use {std::path::Path, tokio::net::UnixListener};
 
 pub type Result = std::result::Result<Response, Error>;
 

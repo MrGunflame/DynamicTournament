@@ -16,6 +16,7 @@ use futures::TryStreamExt;
 #[derive(Clone, Debug)]
 pub struct Store {
     pub pool: MySqlPool,
+    pub table_prefix: String,
 }
 
 impl Store {
@@ -35,9 +36,10 @@ impl Store {
     }
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
-        let res = sqlx::query(
-            "INSERT INTO tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
-        )
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
+            self.table_prefix
+        ))
         .bind(tournament.id.as_ref())
         .bind(&tournament.name)
         .bind(&tournament.description)
@@ -52,8 +54,12 @@ impl Store {
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows =
-            sqlx::query("SELECT id, name, date, kind FROM tournaments").fetch(&self.pool);
+        let sql = format!(
+            "SELECT id, name, date, kind FROM {}tournaments",
+            self.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.pool);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -74,16 +80,18 @@ impl Store {
     }
 
     pub async fn get_tournament(&self, id: TournamentId) -> Result<Option<Tournament>, Error> {
-        let row =
-            match sqlx::query("SELECT name, date, description, kind FROM tournaments WHERE id = ?")
-                .bind(id.as_ref())
-                .fetch_one(&self.pool)
-                .await
-            {
-                Ok(v) => v,
-                Err(sqlx::Error::RowNotFound) => return Ok(None),
-                Err(err) => return Err(err.into()),
-            };
+        let row = match sqlx::query(&format!(
+            "SELECT name, date, description, kind FROM {}tournaments WHERE id = ?",
+            self.table_prefix
+        ))
+        .bind(id.as_ref())
+        .fetch_one(&self.pool)
+        .await
+        {
+            Ok(v) => v,
+            Err(sqlx::Error::RowNotFound) => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Some(Tournament {
             id,
@@ -99,11 +107,14 @@ impl Store {
         tournament_id: TournamentId,
         entrant: Entrant,
     ) -> Result<EntrantId, Error> {
-        let res = sqlx::query("INSERT INTO entrants (tournament_id, data) VALUES (?, ?)")
-            .bind(tournament_id.0)
-            .bind(serde_json::to_vec(&entrant)?)
-            .execute(&self.pool)
-            .await?;
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}entrants (tournament_id, data) VALUES (?, ?)",
+            self.table_prefix
+        ))
+        .bind(tournament_id.0)
+        .bind(serde_json::to_vec(&entrant)?)
+        .execute(&self.pool)
+        .await?;
 
         let id = res.last_insert_id();
 
@@ -115,11 +126,14 @@ impl Store {
         tournament_id: TournamentId,
         id: EntrantId,
     ) -> Result<Option<Entrant>, Error> {
-        let row = match sqlx::query("SELECT data FROM entrants WHERE tournament_id = ? AND id = ?")
-            .bind(tournament_id.0)
-            .bind(id.0)
-            .fetch_one(&self.pool)
-            .await
+        let row = match sqlx::query(&format!(
+            "SELECT data FROM {}entrants WHERE tournament_id = ? AND id = ?",
+            self.table_prefix
+        ))
+        .bind(tournament_id.0)
+        .bind(id.0)
+        .fetch_one(&self.pool)
+        .await
         {
             Ok(v) => v,
             Err(sqlx::Error::RowNotFound) => return Ok(None),
@@ -133,9 +147,12 @@ impl Store {
     }
 
     pub async fn get_entrants(&self, tournament_id: TournamentId) -> Result<Vec<Entrant>, Error> {
-        let mut rows = sqlx::query("SELECT id, data FROM entrants WHERE tournament_id = ?")
-            .bind(tournament_id.0)
-            .fetch(&self.pool);
+        let sql = format!(
+            "SELECT id, data FROM {}entrants WHERE tournament_id = ?",
+            self.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(tournament_id.0).fetch(&self.pool);
 
         let mut entrants = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -152,9 +169,12 @@ impl Store {
     }
 
     pub async fn list_brackets(&self, tournament_id: TournamentId) -> Result<Vec<Bracket>, Error> {
-        let mut rows = sqlx::query("SELECT id, data FROM brackets WHERE tournament_id = ?")
-            .bind(tournament_id.0)
-            .fetch(&self.pool);
+        let sql = format!(
+            "SELECT id, data FROM {}brackets WHERE tournament_id = ?",
+            self.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(tournament_id.0).fetch(&self.pool);
 
         let mut brackets = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -175,12 +195,15 @@ impl Store {
         tournament_id: TournamentId,
         bracket: &Bracket,
     ) -> Result<BracketId, Error> {
-        let res = sqlx::query("INSERT INTO brackets (tournament_id, data, state) VALUES (?, ?, ?)")
-            .bind(tournament_id.0)
-            .bind(serde_json::to_vec(bracket)?)
-            .bind(serde_json::to_vec::<Option<u8>>(&None)?)
-            .execute(&self.pool)
-            .await?;
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}brackets (tournament_id, data, state) VALUES (?, ?, ?)",
+            self.table_prefix
+        ))
+        .bind(tournament_id.0)
+        .bind(serde_json::to_vec(bracket)?)
+        .bind(serde_json::to_vec::<Option<u8>>(&None)?)
+        .execute(&self.pool)
+        .await?;
 
         let id = res.last_insert_id();
 
@@ -192,11 +215,14 @@ impl Store {
         tournament_id: TournamentId,
         id: BracketId,
     ) -> Result<Option<Bracket>, Error> {
-        let row = match sqlx::query("SELECT data FROM brackets WHERE tournament_id = ? AND id = ?")
-            .bind(tournament_id.0)
-            .bind(id.0)
-            .fetch_one(&self.pool)
-            .await
+        let row = match sqlx::query(&format!(
+            "SELECT data FROM {}brackets WHERE tournament_id = ? AND id = ?",
+            self.table_prefix
+        ))
+        .bind(tournament_id.0)
+        .bind(id.0)
+        .fetch_one(&self.pool)
+        .await
         {
             Ok(v) => v,
             Err(sqlx::Error::RowNotFound) => return Ok(None),
@@ -216,11 +242,14 @@ impl Store {
         tournament_id: TournamentId,
         id: BracketId,
     ) -> Result<Option<Matches<EntrantScore<u64>>>, Error> {
-        let row = sqlx::query("SELECT state FROM brackets WHERE tournament_id = ? AND id = ?")
-            .bind(tournament_id.0)
-            .bind(id.0)
-            .fetch_one(&self.pool)
-            .await?;
+        let row = sqlx::query(&format!(
+            "SELECT state FROM {}brackets WHERE tournament_id = ? AND id = ?",
+            self.table_prefix
+        ))
+        .bind(tournament_id.0)
+        .bind(id.0)
+        .fetch_one(&self.pool)
+        .await?;
 
         let state: Vec<u8> = row.try_get("state")?;
 
@@ -235,12 +264,15 @@ impl Store {
         id: BracketId,
         state: &Option<Matches<EntrantScore<u64>>>,
     ) -> Result<(), Error> {
-        sqlx::query("UPDATE brackets SET state = ? WHERE tournament_id = ? AND id = ?")
-            .bind(serde_json::to_vec(state)?)
-            .bind(tournament_id.0)
-            .bind(id.0)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&format!(
+            "UPDATE {}brackets SET state = ? WHERE tournament_id = ? AND id = ?",
+            self.table_prefix
+        ))
+        .bind(serde_json::to_vec(state)?)
+        .bind(tournament_id.0)
+        .bind(id.0)
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
@@ -268,8 +300,12 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>, Error> {
-        let mut rows =
-            sqlx::query("SELECT id, name, date, kind FROM tournaments").fetch(&self.store.pool);
+        let sql = format!(
+            "SELECT id, name, date, kind FROM {}tournaments",
+            self.store.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).fetch(&self.store.pool);
 
         let mut tournaments = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -300,10 +336,13 @@ impl<'a> TournamentsClient<'a> {
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn get(&self, id: TournamentId) -> Result<Option<Tournament>, Error> {
         let row = get_one!(
-            sqlx::query("SELECT name, date, description, kind FROM tournaments WHERE id = ?")
-                .bind(id.0)
-                .fetch_one(&self.store.pool)
-                .await
+            sqlx::query(&format!(
+                "SELECT name, date, description, kind FROM {}tournaments WHERE id = ?",
+                self.store.table_prefix
+            ))
+            .bind(id.0)
+            .fetch_one(&self.store.pool)
+            .await
         );
 
         let name = row.try_get("name")?;
@@ -326,9 +365,10 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn insert(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
-        let res = sqlx::query(
-            "INSERT INTO tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
-        )
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
+            self.store.table_prefix
+        ))
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
@@ -346,25 +386,37 @@ impl<'a> TournamentsClient<'a> {
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn delete(&self, id: TournamentId) -> Result<(), Error> {
         // FIXME: Join all futures for better speeeed.
-        sqlx::query("DELETE FROM tournaments WHERE id = ?")
-            .bind(id.0)
-            .execute(&self.store.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {}tournaments WHERE id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
 
-        sqlx::query("DELETE FROM entrants WHERE tournament_id = ?")
-            .bind(id.0)
-            .execute(&self.store.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {}entrants WHERE tournament_id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
 
-        sqlx::query("DELETE FROM brackets WHERE tournament_id = ?")
-            .bind(id.0)
-            .execute(&self.store.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {}brackets WHERE tournament_id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
 
-        sqlx::query("DELETE FROM roles WHERE tournament_id = ?")
-            .bind(id.0)
-            .execute(&self.store.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {}roles WHERE tournament_id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
 
         Ok(())
     }
@@ -385,27 +437,36 @@ impl<'a> TournamentsClient<'a> {
         tournament: &PartialTournament,
     ) -> Result<(), Error> {
         if let Some(name) = &tournament.name {
-            sqlx::query("UPDATE tournaments SET name = ? WHERE id = ?")
-                .bind(name)
-                .bind(id.0)
-                .execute(&self.store.pool)
-                .await?;
+            sqlx::query(&format!(
+                "UPDATE {}tournaments SET name = ? WHERE id = ?",
+                self.store.table_prefix
+            ))
+            .bind(name)
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
         }
 
         if let Some(description) = &tournament.description {
-            sqlx::query("UPDATE tournaments SET description = ? WHERE id = ?")
-                .bind(description)
-                .bind(id.0)
-                .execute(&self.store.pool)
-                .await?;
+            sqlx::query(&format!(
+                "UPDATE {}tournaments SET description = ? WHERE id = ?",
+                self.store.table_prefix
+            ))
+            .bind(description)
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
         }
 
         if let Some(date) = tournament.date {
-            sqlx::query("UPDATE tournaments SET date = ? WHERE id = ?")
-                .bind(date)
-                .bind(id.0)
-                .execute(&self.store.pool)
-                .await?;
+            sqlx::query(&format!(
+                "UPDATE {}tournaments SET date = ? WHERE id = ?",
+                self.store.table_prefix
+            ))
+            .bind(date)
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
         }
 
         if let Some(kind) = tournament.kind {
@@ -415,11 +476,14 @@ impl<'a> TournamentsClient<'a> {
                 assert!(entrants.is_empty());
             }
 
-            sqlx::query("UPDATE tournaments SET kind = ? WHERE id = ?")
-                .bind(kind.to_u8())
-                .bind(id.0)
-                .execute(&self.store.pool)
-                .await?;
+            sqlx::query(&format!(
+                "UPDATE {}tournaments SET kind = ? WHERE id = ?",
+                self.store.table_prefix
+            ))
+            .bind(kind.to_u8())
+            .bind(id.0)
+            .execute(&self.store.pool)
+            .await?;
         }
 
         Ok(())
@@ -434,9 +498,12 @@ pub struct EntrantsClient<'a> {
 
 impl<'a> EntrantsClient<'a> {
     pub async fn list(&self) -> Result<Vec<Entrant>, Error> {
-        let mut rows = sqlx::query("SELECT id, data FROM entrants WHERE tournament_id = ?")
-            .bind(self.id.0)
-            .fetch(&self.store.pool);
+        let sql = format!(
+            "SELECT id, data FROM {}entrants WHERE tournament_id = ?",
+            self.store.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(self.id.0).fetch(&self.store.pool);
 
         let mut entrants = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -453,11 +520,14 @@ impl<'a> EntrantsClient<'a> {
     }
 
     pub async fn insert(&self, entrant: &Entrant) -> Result<EntrantId, Error> {
-        let res = sqlx::query("INSERT INTO entrants (tournament_id, data) VALUES (?, ?)")
-            .bind(self.id.0)
-            .bind(serde_json::to_vec(entrant)?)
-            .execute(&self.store.pool)
-            .await?;
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}entrants (tournament_id, data) VALUES (?, ?)",
+            self.store.table_prefix
+        ))
+        .bind(self.id.0)
+        .bind(serde_json::to_vec(entrant)?)
+        .execute(&self.store.pool)
+        .await?;
 
         Ok(EntrantId(res.last_insert_id()))
     }
@@ -471,9 +541,12 @@ pub struct RolesClient<'a> {
 
 impl<'a> RolesClient<'a> {
     pub async fn list(&self) -> Result<Vec<Role>, Error> {
-        let mut rows = sqlx::query("SELECT id, name FROM roles WHERE tournament_id = ?")
-            .bind(self.id.0)
-            .fetch(&self.store.pool);
+        let sql = format!(
+            "SELECT id, name FROM {}roles WHERE tournament_id = ?",
+            self.store.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(self.id.0).fetch(&self.store.pool);
 
         let mut roles = Vec::new();
         while let Some(row) = rows.try_next().await? {
@@ -491,11 +564,14 @@ impl<'a> RolesClient<'a> {
 
     pub async fn get(&self, id: RoleId) -> Result<Option<Role>, Error> {
         let row = get_one!(
-            sqlx::query("SELECT name FROM roles WHERE tournament_id = ? AND id = ?")
-                .bind(self.id.0)
-                .bind(id.0)
-                .fetch_one(&self.store.pool)
-                .await
+            sqlx::query(&format!(
+                "SELECT name FROM {}roles WHERE tournament_id = ? AND id = ?",
+                self.store.table_prefix
+            ))
+            .bind(self.id.0)
+            .bind(id.0)
+            .fetch_one(&self.store.pool)
+            .await
         );
 
         let name = row.try_get("name")?;
@@ -504,20 +580,26 @@ impl<'a> RolesClient<'a> {
     }
 
     pub async fn insert(&self, role: &Role) -> Result<RoleId, Error> {
-        let res = sqlx::query("INSERT INTO roles (name, tournament_id) VALUES (?, ?)")
-            .bind(&role.name)
-            .bind(&self.id.0)
-            .execute(&self.store.pool)
-            .await?;
+        let res = sqlx::query(&format!(
+            "INSERT INTO {}roles (name, tournament_id) VALUES (?, ?)",
+            self.store.table_prefix
+        ))
+        .bind(&role.name)
+        .bind(&self.id.0)
+        .execute(&self.store.pool)
+        .await?;
 
         Ok(RoleId(res.last_insert_id()))
     }
 
     pub async fn delete(&self, id: RoleId) -> Result<(), Error> {
-        sqlx::query("DELETE FROM roles WHERE id = ?")
-            .bind(id.0)
-            .execute(&self.store.pool)
-            .await?;
+        sqlx::query(&format!(
+            "DELETE FROM {}roles WHERE id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
 
         Ok(())
     }
