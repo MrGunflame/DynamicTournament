@@ -22,6 +22,7 @@ pub struct StatusError {
 }
 
 impl StatusError {
+    /// Creates a new `StatusError` from the response.
     #[inline]
     fn new(resp: Response) -> Self {
         Self {
@@ -29,10 +30,14 @@ impl StatusError {
         }
     }
 
+    /// Returns the [`StatusCode`] of the error.
+    #[inline]
     pub fn status(&self) -> StatusCode {
         self.status
     }
 
+    /// Returns the status code of the error as an `u16`.
+    #[inline]
     pub fn status_u16(&self) -> u16 {
         self.status.as_u16()
     }
@@ -57,14 +62,24 @@ pub struct Client {
     inner: sys::Client,
 
     #[cfg(target_family = "wasm")]
-    inner: wasm::InnerClient,
+    inner: wasm::Client,
 }
 
 impl Client {
+    /// Creates a new `Client`.
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sends a given [`Request`] using the `Client`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] when sending the request fails or the server responds with
+    /// a non-2xx status code.
+    ///
+    /// [`Error`]: crate::Error
     pub async fn send(&self, request: Request) -> Result<Response> {
         log::debug!("Sending {}", request.uri);
 
@@ -89,12 +104,15 @@ pub struct Request {
 }
 
 impl Request {
+    /// Creates a new [`RequestBuilder`].
+    #[inline]
     pub fn builder() -> RequestBuilder {
         RequestBuilder::default()
     }
 }
 
 impl Default for Request {
+    #[inline]
     fn default() -> Self {
         Self {
             uri: String::new(),
@@ -127,47 +145,55 @@ impl RequestBuilder {
     }
 
     /// Sets the request method to `OPTIONS`.
+    #[inline]
     pub fn options(mut self) -> Self {
         self.inner.method = Method::OPTIONS;
         self
     }
 
     /// Sets the request method to `GET`.
+    #[inline]
     pub fn get(mut self) -> Self {
         self.inner.method = Method::GET;
         self
     }
 
     /// Sets the request method to `POST`.
+    #[inline]
     pub fn post(mut self) -> Self {
         self.inner.method = Method::POST;
         self
     }
 
     /// Sets the request method to `PUT`.
+    #[inline]
     pub fn put(mut self) -> Self {
         self.inner.method = Method::PUT;
         self
     }
 
     /// Sets the request method to `DELETE`.
+    #[inline]
     pub fn delete(mut self) -> Self {
         self.inner.method = Method::DELETE;
         self
     }
 
     /// Sets the request method to `PATCH`.
+    #[inline]
     pub fn patch(mut self) -> Self {
         self.inner.method = Method::PATCH;
         self
     }
 
+    #[inline]
     pub fn uri(mut self, uri: &str) -> Self {
         self.inner.uri.push_str(uri);
         self
     }
 
     /// Adds an header to the request.
+    #[inline]
     pub fn header<T>(mut self, key: &'static str, value: T) -> Self
     where
         T: ToString,
@@ -185,12 +211,15 @@ impl RequestBuilder {
         self.header(CONTENT_TYPE.as_str(), "application/json")
     }
 
+    /// Consumes the builder, returning the built [`Request`].
+    #[inline]
     pub fn build(self) -> Request {
         self.inner
     }
 }
 
 impl From<RequestBuilder> for Request {
+    #[inline]
     fn from(req: RequestBuilder) -> Self {
         req.inner
     }
@@ -198,13 +227,14 @@ impl From<RequestBuilder> for Request {
 
 #[derive(Debug)]
 pub struct Response {
-    #[cfg(not(target_family = "sys"))]
+    #[cfg(not(target_family = "wasm"))]
     inner: sys::InnerResponse,
     #[cfg(target_family = "wasm")]
     inner: wasm::InnerResponse,
 }
 
 impl Response {
+    /// Returns the [`StatusCode`] of the response.
     pub fn status(&self) -> StatusCode {
         self.inner.status()
     }
@@ -214,6 +244,13 @@ impl Response {
         self.status().is_success()
     }
 
+    /// Parses the body of the response as json.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if reading the body fails or the body contains invalid json.
+    ///
+    /// [`Error`]: crate::Error
     pub async fn json<T>(self) -> Result<T>
     where
         T: DeserializeOwned,
@@ -309,36 +346,27 @@ mod sys {
 
 #[cfg(target_family = "wasm")]
 mod wasm {
-    use super::{Error, Request, Response};
+    use super::{Request, Response};
     use crate::Result;
 
     use http::{Method, StatusCode};
     use serde::de::DeserializeOwned;
 
+    use super::HttpError;
+
+    pub use reqwasm::Error;
+
     #[derive(Copy, Clone, Debug, Default)]
-    pub struct InnerClient;
+    pub struct Client;
 
-    impl InnerClient {
-        pub async fn send(&self, request: Request) -> Result<Response> {
-            let mut req = reqwasm::http::Request::new(&request.uri).method(match request.method {
-                Method::OPTIONS => reqwasm::http::Method::OPTIONS,
-                Method::GET => reqwasm::http::Method::GET,
-                Method::POST => reqwasm::http::Method::POST,
-                Method::PUT => reqwasm::http::Method::PUT,
-                Method::DELETE => reqwasm::http::Method::DELETE,
-                Method::PATCH => reqwasm::http::Method::PATCH,
-                _ => unreachable!(),
-            });
+    impl Client {
+        pub async fn send(&self, req: Request) -> Result<Response> {
+            let req = convert_request(req);
 
-            for (key, value) in request.headers {
-                req = req.header(key, &value);
-            }
-
-            if let Some(body) = request.body {
-                req = req.body(body);
-            }
-
-            let resp = req.send().await.map_err(Error::from)?;
+            let resp = match req.send().await {
+                Ok(resp) => resp,
+                Err(err) => return Err(super::Error::Http(HttpError::from(err)).into()),
+            };
 
             Ok(Response {
                 inner: InnerResponse(resp),
@@ -358,7 +386,33 @@ mod wasm {
         where
             T: DeserializeOwned,
         {
-            Ok(self.0.json().await.map_err(Error::from)?)
+            match self.0.json().await {
+                Ok(val) => Ok(val),
+                Err(err) => Err(super::Error::Http(HttpError::from(err)).into()),
+            }
         }
+    }
+
+    fn convert_request(req: Request) -> reqwasm::http::Request {
+        let mut builder = reqwasm::http::Request::new(&req.uri);
+        builder = builder.method(match req.method {
+            Method::OPTIONS => reqwasm::http::Method::OPTIONS,
+            Method::GET => reqwasm::http::Method::GET,
+            Method::POST => reqwasm::http::Method::POST,
+            Method::PUT => reqwasm::http::Method::PUT,
+            Method::DELETE => reqwasm::http::Method::DELETE,
+            Method::PATCH => reqwasm::http::Method::PATCH,
+            _ => unreachable!(),
+        });
+
+        for (key, val) in req.headers {
+            builder = builder.header(key, &val);
+        }
+
+        if let Some(body) = req.body {
+            builder = builder.body(body);
+        }
+
+        builder
     }
 }
