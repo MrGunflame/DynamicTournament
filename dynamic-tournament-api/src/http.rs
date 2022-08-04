@@ -79,7 +79,7 @@ impl Client {
     /// Returns an [`Error`] when sending the request fails or the server responds with
     /// a non-2xx status code.
     ///
-    /// [`Error`]: crate::Error
+    /// [`Error`]: enum@crate::Error
     pub async fn send(&self, request: Request) -> Result<Response> {
         log::debug!("Sending {}", request.uri);
 
@@ -250,7 +250,7 @@ impl Response {
     ///
     /// Returns an [`Error`] if reading the body fails or the body contains invalid json.
     ///
-    /// [`Error`]: crate::Error
+    /// [`Error`]: enum@crate::Error
     pub async fn json<T>(self) -> Result<T>
     where
         T: DeserializeOwned,
