@@ -1,14 +1,20 @@
-# The maximum level of messages logged. Note that using the debug or trace levels
-# will produce high amounts of messages. Usage is not recommended for production.
-# Possible values: off, error, warn, info, debug, trace
-# Default value: warn
-loglevel = "warn"
-
 # An address:port or file path (unix-only) to bind http server to. Use 0.0.0.0 to
 # bind to all interfaces.
 # Possible values: <ADDR:PORT> | <PATH>
 # Default value: 0.0.0.0:80
 bind = "0.0.0.0:80"
+
+[log]
+# The maximum level of messages logged. Note that using the debug or trace levels
+# will produce high amounts of messages. Usage is not recommended for production.
+# Possible values: off, error, warn, info, debug, trace
+# Default value: warn
+level = "warn"
+
+# Whether to emit colorful log messages.
+# Possible values: false, true
+# Default value: false
+color = false
 
 [database]
 # The database driver to use 

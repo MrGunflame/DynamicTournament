@@ -14,7 +14,6 @@ use config::Config;
 
 use crate::state::State;
 use hyper::StatusCode;
-use log::LevelFilter;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -33,8 +32,6 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    logger::init(LevelFilter::Error);
-
     let args = Args::parse();
 
     let config = match config::Config::from_file(&args.config).await {
@@ -42,15 +39,15 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Err(file_err) => match config::Config::from_environment() {
             Ok(config) => config,
             Err(env_err) => {
-                log::error!("Failed to load configuration, exiting");
-                log::error!("Failed to load config file: {}", file_err);
-                log::error!("Failed to load config from environment: {}", env_err);
+                println!("Failed to load configuration, exiting");
+                println!("Failed to load config file: {}", file_err);
+                println!("Failed to load config from environment: {}", env_err);
                 return Ok(());
             }
         },
     };
 
-    logger::init(config.loglevel);
+    logger::init(config.log.clone());
 
     log::info!("Using config: {:?}", config);
 

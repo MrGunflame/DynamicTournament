@@ -38,8 +38,8 @@ macro_rules! from_environment_error {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
+    pub log: Log,
     pub database: Database,
-    pub loglevel: LevelFilter,
     pub bind: BindAddr,
 
     pub authorization: Authorization,
@@ -62,8 +62,9 @@ impl Config {
     pub fn from_environment() -> Result<Self, ConfigError> {
         let mut this = Self::default();
 
-        from_environment_error!(this, "DT_LOGLEVEL", loglevel, "DT_BIND", bind);
+        from_environment_error!(this, "DT_BIND", bind);
 
+        this.log = Log::from_environment()?;
         this.database = Database::from_environment()?;
         this.authorization = Authorization::from_environment()?;
 
@@ -71,7 +72,9 @@ impl Config {
     }
 
     pub fn with_environment(mut self) -> Self {
-        from_environment!(self, "DT_LOGLEVEL", loglevel, "DT_BIND", bind);
+        from_environment!(self, "DT_BIND", bind);
+
+        self.log = self.log.with_environment();
         self.database = self.database.with_environment();
         self.authorization = self.authorization.with_environment();
 
@@ -82,8 +85,8 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            log: Log::default(),
             database: Database::default(),
-            loglevel: LevelFilter::Info,
             bind: BindAddr::Tcp(SocketAddr::new([0, 0, 0, 0].into(), 3000)),
             authorization: Authorization::default(),
         }
@@ -156,6 +159,37 @@ impl<'de> Deserialize<'de> for BindAddr {
         }
 
         deserializer.deserialize_str(BindAddrVisitor)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Log {
+    pub level: LevelFilter,
+    pub color: bool,
+}
+
+impl Log {
+    pub fn from_environment() -> Result<Self, ConfigError> {
+        let mut this = Self::default();
+
+        from_environment_error!(this, "DT_LOG_LEVEL", level, "DT_LOG_COLOR", color,);
+
+        Ok(this)
+    }
+
+    pub fn with_environment(mut self) -> Self {
+        from_environment!(self, "DT_LOG_LEVEL", level, "DT_LOG_COLOR", color,);
+
+        self
+    }
+}
+
+impl Default for Log {
+    fn default() -> Self {
+        Self {
+            level: LevelFilter::Info,
+            color: false,
+        }
     }
 }
 
