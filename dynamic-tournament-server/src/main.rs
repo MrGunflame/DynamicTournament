@@ -53,10 +53,13 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let users = read_users("users.json");
 
-    tokio::task::spawn(async move {
-        let prefix = config.database.prefix.clone();
-        let state = State::new(config, users);
+    let prefix = config.database.prefix.clone();
+    let state = State::new(config, users);
 
+    {
+        let state = state.clone();
+    
+    tokio::task::spawn(async move {
         let tables = [
             format!(
                 "CREATE TABLE IF NOT EXISTS {}tournaments (
@@ -96,10 +99,22 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         ];
 
         for t in tables {
-            sqlx::query(&t).execute(&state.store.pool).await.unwrap();
+            if let Err(err) = sqlx::query(&t).execute(&state.store.pool).await {
+                log::error!("Failed to create tables: {}", err);
+                break;
+            }
         }
 
-        http::bind(state.config.bind.clone(), state).await.unwrap();
+        });
+    }
+
+    tokio::task::spawn(async move {
+        loop {
+            match http::bind(state.config.bind.clone(), state.clone()).await {
+                Ok(()) => break,
+                Err(err) => log::error!("Failed to bind server: {}", err),
+            }
+        }
     });
 
     tokio::signal::ctrl_c().await.unwrap();
