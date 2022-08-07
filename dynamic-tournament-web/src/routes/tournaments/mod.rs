@@ -68,24 +68,30 @@ impl Component for Tournament {
 
             let tournament_id = ctx.props().id;
 
+                let client = ClientProvider::get(ctx);
+
             let switch = move |route: &Route| -> Html {
                 let tournament = tournament.clone();
 
                 let tournament_name = tournament.name.clone();
 
-                let mut routes = Vec::with_capacity(4);
-                for (r, n) in &[
+                let mut links = vec![
                     (Route::Index { tournament_id, tournament_name: tournament_name.clone() }, "Overview"),
                     (Route::Brackets { tournament_id, tournament_name: tournament_name.clone() }, "Brackets"),
-                    (Route::Teams { tournament_id, tournament_name: tournament_name.clone() }, "Entrants"),
-                    (Route::Admin { tournament_id, tournament_name }, "Admin")
-                ] {
-                    let classes = if r == route { "active" } else { "" };
+                    (Route::Teams { tournament_id, tournament_name: tournament_name.clone()}, "Entrants"),
+                ];
 
-                    routes.push(html! {
-                        <li><Link<Route> classes={classes} to={r.clone()}>{ n }</Link<Route>></li>
-                    });
+                if client.is_authenticated() {
+                    links.push((Route::Admin { tournament_id, tournament_name }, "Admin"));
                 }
+
+                let routes: Html = links.into_iter().map(|(r, name)| {
+                    let classes = if r == *route { "active" } else { ""};
+
+                    html! {
+                        <li><Link<Route> classes={classes} to={r.clone()}>{ name }</Link<Route>></li>
+                    }
+                }).collect();
 
                 let content = match route {
                     Route::Index { tournament_id: _,tournament_name:_ } => html! {

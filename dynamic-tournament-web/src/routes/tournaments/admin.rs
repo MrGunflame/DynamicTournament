@@ -4,7 +4,10 @@ mod settings;
 
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
+use yew_router::components::Redirect;
 
+use crate::components::providers::{ClientProvider, Provider};
+use crate::routes::Route;
 use crate::utils::Rc;
 
 use self::danger_zone::DangerZone;
@@ -28,13 +31,21 @@ impl Component for Admin {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        html! {
-            <div>
-                <settings::Settings tournament={ctx.props().tournament.clone()} />
-                <entrants::Entrants tournament={ctx.props().tournament.clone()} />
+        let client = ClientProvider::get(ctx);
 
-                <DangerZone tournament={ctx.props().tournament.clone()} />
-            </div>
+        if client.is_authenticated() {
+            html! {
+                <div>
+                    <settings::Settings tournament={ctx.props().tournament.clone()} />
+                    <entrants::Entrants tournament={ctx.props().tournament.clone()} />
+
+                    <DangerZone tournament={ctx.props().tournament.clone()} />
+                </div>
+            }
+        } else {
+            html! {
+                <Redirect<Route> to={Route::Login} />
+            }
         }
     }
 }
