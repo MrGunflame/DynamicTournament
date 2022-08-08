@@ -2,9 +2,6 @@ use crate::Error;
 
 use std::borrow::Cow;
 
-#[cfg(target_family = "wasm")]
-use futures::SinkExt;
-
 /// A WebSocket connection.
 ///
 /// The connection is automatically closed when all `WebSocket` instances are dropped.
