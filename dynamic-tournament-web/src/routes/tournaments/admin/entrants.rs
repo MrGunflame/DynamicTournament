@@ -161,6 +161,12 @@ impl Component for Entrants {
                                 html! {}
                             };
 
+                            let players = html! {
+                                <table>
+                                    { players }
+                                </table>
+                            };
+
                             html! {
                                 <>
                                     <tr>
