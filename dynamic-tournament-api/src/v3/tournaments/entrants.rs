@@ -27,10 +27,42 @@ pub struct Entrant {
 }
 
 impl Entrant {
+    pub fn player(player: Player) -> Self {
+        Self {
+            id: EntrantId(0),
+            inner: EntrantVariant::Player(player),
+        }
+    }
+
+    pub fn team(team: Team) -> Self {
+        Self {
+            id: EntrantId(0),
+            inner: EntrantVariant::Team(team),
+        }
+    }
+
     pub fn kind(&self) -> EntrantKind {
         match self.inner {
             EntrantVariant::Player(_) => EntrantKind::Player,
             EntrantVariant::Team(_) => EntrantKind::Team,
+        }
+    }
+
+    /// Returns the rating of the `Entrant` or `None` if any player is missing rating.
+    /// If the entrant is a team, the average over all players is returned.
+    ///
+    /// Note: If the combined team rating exceeds `u64::MAX`, the value is saturated at `u64::MAX`.
+    pub fn rating(&self) -> Option<u64> {
+        match &self.inner {
+            EntrantVariant::Player(player) => player.rating,
+            EntrantVariant::Team(team) => {
+                let mut sum: u64 = 0;
+                for player in &team.players {
+                    sum = sum.saturating_add(player.rating?);
+                }
+
+                Some(sum / team.players.len() as u64)
+            }
         }
     }
 }
@@ -128,5 +160,78 @@ impl<'a> EntrantsClient<'a> {
 
         self.client.send(req).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Entrant, Player, RoleId, Team};
+
+    #[test]
+    fn test_entrant_rating() {
+        let entrant = Entrant::player(Player {
+            name: String::new(),
+            role: RoleId(0),
+            rating: None,
+        });
+        assert_eq!(entrant.rating(), None);
+
+        let entrant = Entrant::player(Player {
+            name: String::new(),
+            role: RoleId(0),
+            rating: Some(1500),
+        });
+        assert_eq!(entrant.rating(), Some(1500));
+
+        let entrant = Entrant::team(Team {
+            name: String::new(),
+            players: vec![
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: Some(1500),
+                },
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: None,
+                },
+            ],
+        });
+        assert_eq!(entrant.rating(), None);
+
+        let entrant = Entrant::team(Team {
+            name: String::new(),
+            players: vec![
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: Some(1000),
+                },
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: Some(2000),
+                },
+            ],
+        });
+        assert_eq!(entrant.rating(), Some(1500));
+
+        let entrant = Entrant::team(Team {
+            name: String::new(),
+            players: vec![
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: Some(u64::MAX),
+                },
+                Player {
+                    name: String::new(),
+                    role: RoleId(0),
+                    rating: Some(1),
+                },
+            ],
+        });
+        assert_eq!(entrant.rating(), Some(u64::MAX / 2));
     }
 }
