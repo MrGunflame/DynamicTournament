@@ -8,6 +8,7 @@ pub mod tournaments;
 use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
+use crate::components::Navbar;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -37,15 +38,7 @@ impl Component for App {
                     <BrowserRouter>
                         <div class="main-wrapper">
                             <div>
-                                <div class="navbar">
-                                    <ul>
-                                        <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                                        <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
-                                        <li><Link<Route> to={Route::Systems}>{ "Systems" }</Link<Route>></li>
-                                        <li><Link<Route> to={Route::Login}>{ "Login" }</Link<Route>></li>
-                                        <li><Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>></li>
-                                    </ul>
-                                </div>
+                                <Navbar />
                                 <div class="main">
                                     <Switch<Route> render={Switch::render(switch)} />
                                 </div>
