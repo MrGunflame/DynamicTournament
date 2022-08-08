@@ -1,9 +1,15 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use std::num::ParseIntError;
+use std::str::FromStr;
+
+use chrono::naive::{NaiveDate, NaiveTime};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone, Utc};
+use dynamic_tournament_api::v3::tournaments::EntrantKind;
 use dynamic_tournament_api::v3::tournaments::{PartialTournament, Tournament};
+use thiserror::Error;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::components::Input;
+use crate::components::{Input, ParseInput};
 use crate::services::errorlog::ErrorLog;
 use crate::utils::Rc;
 
@@ -15,6 +21,7 @@ pub(super) struct Props {
 /// General tournament settings including the values of [`Tournament`].
 #[derive(Debug)]
 pub(super) struct Settings {
+    datetime: DateTime<Local>,
     tournament: PartialTournament,
 }
 
@@ -22,8 +29,9 @@ impl Component for Settings {
     type Message = Message;
     type Properties = Props;
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
         Self {
+            datetime: ctx.props().tournament.date.with_timezone(&Local),
             tournament: PartialTournament::default(),
         }
     }
@@ -34,7 +42,22 @@ impl Component for Settings {
                 self.tournament.name = Some(name);
             }
             Message::UpdateDate(date) => {
-                self.tournament.date = Some(date);
+                let time = self.datetime.time();
+
+                let datetime = NaiveDateTime::new(date, time);
+
+                self.datetime = Local.from_local_datetime(&datetime).unwrap();
+
+                self.tournament.date = Some(self.datetime.with_timezone(&Utc));
+            }
+            Message::UpdateTime(time) => {
+                let date = self.datetime.date_naive();
+
+                let datetime = NaiveDateTime::new(date, time);
+
+                self.datetime = Local.from_local_datetime(&datetime).unwrap();
+
+                self.tournament.date = Some(self.datetime.with_timezone(&Utc));
             }
             Message::UpdateTournament => {
                 let tournament = self.tournament.clone();
@@ -59,22 +82,29 @@ impl Component for Settings {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let name = ctx.props().tournament.name.clone();
-        let date = ctx.props().tournament.date.to_rfc3339();
-        let kind = ctx.props().tournament.kind.to_string();
+        let kind = ctx.props().tournament.kind;
+
+        let date = self.datetime.format("%d.%m.%Y").to_string();
+        let time = self.datetime.format("%H:%M").to_string();
 
         let on_change_name = ctx.link().callback(Message::UpdateName);
-        let on_change_date = ctx.link().callback(|date: String| {
-            let date = match DateTime::parse_from_rfc3339(&date) {
-                Ok(date) => date.with_timezone(&Utc),
-                Err(err) => {
-                    log::debug!("Failed to parse DateTime<FixedOffset>: {:?}", err);
-                    DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc)
-                }
-            };
+        let on_change_date = ctx
+            .link()
+            .callback(|date: Date| Message::UpdateDate(date.0));
 
-            Message::UpdateDate(date)
-        });
+        let on_change_time = ctx
+            .link()
+            .callback(|time: Time| Message::UpdateTime(time.0));
+
         let on_update = ctx.link().callback(|_| Message::UpdateTournament);
+
+        let mut kind_player = false;
+        let mut kind_team = false;
+        if kind == EntrantKind::Player {
+            kind_player = true;
+        } else {
+            kind_team = true;
+        }
 
         html! {
             <div>
@@ -86,12 +116,18 @@ impl Component for Settings {
 
                 <div>
                     <span>{ "Date" }</span>
-                    <Input kind={"text"} value={date} onchange={on_change_date} />
+                    <ParseInput<Date> value={date} onchange={on_change_date} />
+
+                    <span>{ "Time" }</span>
+                    <ParseInput<Time> value={time} onchange={on_change_time} />
                 </div>
 
                 <div>
                     <span>{ "Entrant Type" }</span>
-                    <input class="dt-input" type="text" value={ kind } disabled={ true } />
+                    <select disabled={true}>
+                        <option selected={kind_player}>{ "Player" }</option>
+                        <option selected={kind_team}>{ "Team" }</option>
+                    </select>
                 </div>
 
                 <button class="button" onclick={on_update}>{ "Update" }</button>
@@ -103,6 +139,79 @@ impl Component for Settings {
 #[allow(clippy::enum_variant_names)]
 pub enum Message {
     UpdateName(String),
-    UpdateDate(DateTime<Utc>),
+    UpdateDate(NaiveDate),
+    UpdateTime(NaiveTime),
     UpdateTournament,
+}
+
+struct Date(pub NaiveDate);
+
+impl FromStr for Date {
+    type Err = ParseDateError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split('.');
+
+        let day = parts.next().ok_or(ParseDateError::InvalidParts(1))?;
+        let month = parts.next().ok_or(ParseDateError::InvalidParts(2))?;
+        let year = parts.next().ok_or(ParseDateError::InvalidParts(3))?;
+
+        let c = parts.count();
+        if c > 0 {
+            return Err(ParseDateError::InvalidParts(c + 3));
+        }
+
+        let day: u32 = day.parse()?;
+        let month: u32 = month.parse()?;
+        let year: i32 = year.parse()?;
+
+        let date = NaiveDate::from_ymd_opt(year, month, day).ok_or(ParseDateError::InvalidDate)?;
+
+        Ok(Self(date))
+    }
+}
+
+#[derive(Debug, Error)]
+enum ParseDateError {
+    #[error("invalid number of parts: expected 3, found {0}")]
+    InvalidParts(usize),
+    #[error("failed to parse value: {0}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("invalid date")]
+    InvalidDate,
+}
+
+struct Time(pub NaiveTime);
+
+impl FromStr for Time {
+    type Err = ParseTimeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(':');
+
+        let hour = parts.next().ok_or(ParseTimeError::InvalidParts(1))?;
+        let minute = parts.next().ok_or(ParseTimeError::InvalidParts(2))?;
+
+        let c = parts.count();
+        if c > 0 {
+            return Err(ParseTimeError::InvalidParts(c + 2));
+        }
+
+        let hour = hour.parse()?;
+        let minute = minute.parse()?;
+
+        let time = NaiveTime::from_hms_opt(hour, minute, 0).ok_or(ParseTimeError::InvalidTime)?;
+
+        Ok(Self(time))
+    }
+}
+
+#[derive(Debug, Error)]
+enum ParseTimeError {
+    #[error("invalid number of parts: expected 2, found {0}")]
+    InvalidParts(usize),
+    #[error("failed to parse value: {0}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("invalid time")]
+    InvalidTime,
 }
