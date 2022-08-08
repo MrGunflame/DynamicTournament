@@ -116,6 +116,7 @@ impl Component for Entrants {
                         EntrantVariant::Player(player) => html! {
                             <tr>
                                 <td>{ player.name.clone() }</td>
+                                <td>{ player.rating.unwrap_or(0) }</td>
                                 <td>
                                     <Button title="Delete" onclick={delete}>
                                         <i aria-hidden="true" class="fa-solid fa-trash"></i>
@@ -136,10 +137,11 @@ impl Component for Entrants {
                                 }
                             } else {
                                 html! {
-                                <Button title="Expand" onclick={expand}>
-                                    <i aria-hidden="true" class="fa-solid fa-caret-down" style="transform: rotate(-90deg); transition: .3s;"></i>
-                                    <span class="sr-only">{ "Expand" }</span>
-                                </Button>}
+                                    <Button title="Expand" onclick={expand}>
+                                        <i aria-hidden="true" class="fa-solid fa-caret-down" style="transform: rotate(-90deg); transition: .3s;"></i>
+                                        <span class="sr-only">{ "Expand" }</span>
+                                    </Button>
+                                }
                             };
 
                             // Show all players when the team is expanded.
@@ -166,6 +168,7 @@ impl Component for Entrants {
                                             { expand }
                                             { team.name.clone() }
                                         </td>
+                                        <td>{ e.rating().unwrap_or(0) }</td>
                                         <td>{ team.players.len() }</td>
                                         <td>
                                             <Button title="Delete" onclick={delete}>
@@ -186,12 +189,14 @@ impl Component for Entrants {
                 EntrantKind::Player => html! {
                     <tr>
                         <th>{ "Name" }</th>
+                        <th>{ "Rating" }</th>
                         <th>{ "Delete" }</th>
                     </tr>
                 },
                 EntrantKind::Team => html! {
                     <tr>
                         <th>{ "Name" }</th>
+                        <th>{ "Rating" }</th>
                         <th>{ "Players" }</th>
                         <th>{ "Delete" }</th>
                     </tr>
