@@ -89,6 +89,19 @@ impl<T> FetchData<T> {
         self.inner.unwrap().unwrap()
     }
 
+    pub fn unwrap_or_default(self) -> T
+    where
+        T: Default,
+    {
+        match self.inner {
+            Some(res) => match res {
+                Ok(val) => val,
+                Err(_) => T::default(),
+            },
+            None => T::default(),
+        }
+    }
+
     /// Unwraps the value `T` from `FetchData<T>` without checking if it contains `T`.
     ///
     /// # Safety

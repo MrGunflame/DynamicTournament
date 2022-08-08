@@ -3,15 +3,15 @@ use std::str::FromStr;
 
 use chrono::naive::{NaiveDate, NaiveTime};
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone, Utc};
-use dynamic_tournament_api::v3::tournaments::EntrantKind;
-use dynamic_tournament_api::v3::tournaments::{PartialTournament, Tournament};
+use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
+use dynamic_tournament_api::v3::tournaments::{EntrantKind, PartialTournament, Tournament};
 use thiserror::Error;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::{Input, ParseInput};
 use crate::services::errorlog::ErrorLog;
-use crate::utils::Rc;
+use crate::utils::{FetchData, Rc};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub(super) struct Props {
@@ -23,6 +23,8 @@ pub(super) struct Props {
 pub(super) struct Settings {
     datetime: DateTime<Local>,
     tournament: PartialTournament,
+
+    entrants: FetchData<Vec<Entrant>>,
 }
 
 impl Component for Settings {
@@ -30,16 +32,36 @@ impl Component for Settings {
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
+        let client = ClientProvider::get(ctx);
+
+        let id = ctx.props().tournament.id;
+        ctx.link().send_future(async move {
+            let msg = match client.v3().tournaments().entrants(id).list().await {
+                Ok(entrants) => FetchData::new_with_value(entrants),
+                Err(err) => FetchData::from_err(err),
+            };
+
+            Message::UpdateEntrants(msg)
+        });
+
         Self {
             datetime: ctx.props().tournament.date.with_timezone(&Local),
             tournament: PartialTournament::default(),
+            entrants: FetchData::new(),
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
+            Message::UpdateEntrants(entrants) => {
+                self.entrants = entrants;
+
+                true
+            }
             Message::UpdateName(name) => {
                 self.tournament.name = Some(name);
+
+                false
             }
             Message::UpdateDate(date) => {
                 let time = self.datetime.time();
@@ -49,6 +71,8 @@ impl Component for Settings {
                 self.datetime = Local.from_local_datetime(&datetime).unwrap();
 
                 self.tournament.date = Some(self.datetime.with_timezone(&Utc));
+
+                false
             }
             Message::UpdateTime(time) => {
                 let date = self.datetime.date_naive();
@@ -58,6 +82,8 @@ impl Component for Settings {
                 self.datetime = Local.from_local_datetime(&datetime).unwrap();
 
                 self.tournament.date = Some(self.datetime.with_timezone(&Utc));
+
+                false
             }
             Message::UpdateTournament => {
                 let tournament = self.tournament.clone();
@@ -74,10 +100,10 @@ impl Component for Settings {
 
                     vec![]
                 });
+
+                false
             }
         }
-
-        false
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
@@ -106,6 +132,14 @@ impl Component for Settings {
             kind_team = true;
         }
 
+        let disabled = !self
+            .entrants
+            .as_ref()
+            .map(|entrants| entrants.is_empty())
+            .unwrap_or_default();
+
+        log::debug!("{}", disabled);
+
         html! {
             <div>
                 <h2>{ "Settings" }</h2>
@@ -124,7 +158,7 @@ impl Component for Settings {
 
                 <div>
                     <span>{ "Entrant Type" }</span>
-                    <select disabled={true}>
+                    <select {disabled}>
                         <option selected={kind_player}>{ "Player" }</option>
                         <option selected={kind_team}>{ "Team" }</option>
                     </select>
@@ -138,6 +172,7 @@ impl Component for Settings {
 
 #[allow(clippy::enum_variant_names)]
 pub enum Message {
+    UpdateEntrants(FetchData<Vec<Entrant>>),
     UpdateName(String),
     UpdateDate(NaiveDate),
     UpdateTime(NaiveTime),
