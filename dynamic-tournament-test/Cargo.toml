@@ -9,7 +9,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-dynamic-tournament-api = { version = "0.4.0", path = "../dynamic-tournament-api" }
+dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api" }
 
 chrono = "0.4.19"
 rand = "0.8.5"

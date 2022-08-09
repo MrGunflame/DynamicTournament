@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-api"
-version = "0.4.0"
+version = "0.5.1"
 edition = "2021"
 description = "The API definition and implementation of the DynamicTournament system"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -14,7 +14,7 @@ server = []
 local-storage = ["dep:gloo-storage"]
 
 [dependencies]
-dynamic-tournament-core = { version = "0.4.0", path = "../dynamic-tournament-core", features = ["serde"] }
+dynamic-tournament-core = { version = "0.5.1", path = "../dynamic-tournament-core", features = ["serde"] }
 
 http = "0.2.7"
 serde = { version = "1.0.136", features = ["derive"] }
