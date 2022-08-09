@@ -134,14 +134,15 @@ where
 
 async fn serve_connection<S>(stream: S, state: State)
 where
-    S: AsyncRead + AsyncWrite + Unpin + 'static,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let shutdown = state.shutdown.listen();
     let service = RootService { state };
 
     let mut conn = Http::new()
         .http1_keep_alive(true)
-        .serve_connection(stream, service);
+        .serve_connection(stream, service)
+        .with_upgrades();
 
     tokio::select! {
         res = &mut conn => {
