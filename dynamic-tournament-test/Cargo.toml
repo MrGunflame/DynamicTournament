@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-test"
-version = "0.1.0"
+version = "0.5.1"
 edition = "2021"
 description = "A utility crate for creating testing data for the API"
 authors = ["MrGunflame <git@robbsrv.de>"]
