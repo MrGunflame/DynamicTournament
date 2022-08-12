@@ -1,5 +1,7 @@
 # /v3/tournaments
 
+The `/v3/tournaments` endpoint is used to create and manage Tournaments. Note that a tournament only provides basic fields. Entrants, brackets and roles are handled by the `/v3/tournaments/:id/entrants`, `/v3/tournaments/:id/brackets` and `/v3/tournaments/:id/roles` respectively. These sub-endpoints are avaliable under the tournament once it has been created.
+
 ## Types
 
 ### Tournament
