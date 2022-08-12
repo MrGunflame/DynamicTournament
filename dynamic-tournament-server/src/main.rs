@@ -13,9 +13,9 @@ mod metrics;
 use config::Config;
 
 use crate::state::State;
+use clap::Parser;
 use hyper::StatusCode;
 use thiserror::Error;
-use clap::Parser;
 
 #[derive(Clone, Debug, Parser)]
 #[clap(author, version, about)]
