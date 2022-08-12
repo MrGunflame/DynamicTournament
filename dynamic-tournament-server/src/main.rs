@@ -14,13 +14,7 @@ use config::Config;
 
 use crate::state::State;
 use hyper::StatusCode;
-use serde::Deserialize;
-use serde::Serialize;
-
 use thiserror::Error;
-
-use std::io::Read;
-
 use clap::Parser;
 
 #[derive(Clone, Debug, Parser)]
@@ -51,10 +45,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     log::info!("Using config: {:?}", config);
 
-    let users = read_users("users.json");
-
     let prefix = config.database.prefix.clone();
-    let state = State::new(config, users);
+    let state = State::new(config);
 
     {
         let state = state.clone();
@@ -94,6 +86,14 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             tournament_id BIGINT UNSIGNED NOT NULL,
             name TEXT NOT NULL
         )",
+                    prefix
+                ),
+                format!(
+                    "CREATE TABLE IF NOT EXISTS {}users (
+                        id BIGINT UNSIGNED PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        password TEXT NOT NULL
+                        )",
                     prefix
                 ),
             ];
@@ -227,22 +227,4 @@ impl StatusCodeError {
         self.message = msg.to_string();
         self
     }
-}
-
-pub fn read_users<P>(path: P) -> Vec<LoginData>
-where
-    P: AsRef<std::path::Path>,
-{
-    let mut file = std::fs::File::open(path).unwrap();
-
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).unwrap();
-
-    serde_json::from_slice(&buf).unwrap()
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LoginData {
-    pub username: String,
-    pub password: String,
 }

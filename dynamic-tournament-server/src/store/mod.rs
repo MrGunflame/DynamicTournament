@@ -3,8 +3,9 @@ use dynamic_tournament_api::v3::id::RoleId;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
 use dynamic_tournament_api::v3::tournaments::roles::Role;
 use dynamic_tournament_api::v3::tournaments::PartialTournament;
+use dynamic_tournament_api::v3::users::User;
 use dynamic_tournament_api::v3::{
-    id::{BracketId, EntrantId, TournamentId},
+    id::{BracketId, EntrantId, TournamentId, UserId},
     tournaments::{entrants::Entrant, EntrantKind, Tournament, TournamentOverview},
 };
 use dynamic_tournament_core::{EntrantScore, Matches};
@@ -33,6 +34,11 @@ impl Store {
     #[inline]
     pub fn roles(&self, id: TournamentId) -> RolesClient<'_> {
         RolesClient { store: self, id }
+    }
+
+    #[inline]
+    pub fn users(&self) -> UsersClient<'_> {
+        UsersClient { store: self }
     }
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
@@ -602,5 +608,33 @@ impl<'a> RolesClient<'a> {
         .await?;
 
         Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct UsersClient<'a> {
+    store: &'a Store,
+}
+
+impl<'a> UsersClient<'a> {
+    pub async fn get(&self, username: &str) -> Result<Option<User>, Error> {
+        let row = get_one!(
+            sqlx::query(&format!(
+                "SELECT id, password FROM {}users WHERE username = ?",
+                self.store.table_prefix
+            ))
+            .bind(username)
+            .fetch_one(&self.store.pool)
+            .await
+        );
+
+        let id = row.try_get("id")?;
+        let password = row.try_get("password")?;
+
+        Ok(Some(User {
+            id: UserId(id),
+            username: username.to_string(),
+            password,
+        }))
     }
 }

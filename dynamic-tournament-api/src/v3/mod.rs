@@ -4,6 +4,7 @@ pub mod auth;
 pub mod id;
 pub mod systems;
 pub mod tournaments;
+pub mod users;
 
 #[derive(Clone, Debug)]
 pub struct Client<'a> {

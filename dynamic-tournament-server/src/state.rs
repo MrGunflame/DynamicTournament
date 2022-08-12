@@ -6,7 +6,6 @@ use crate::signal::ShutdownListener;
 use crate::store::Store;
 use crate::websocket::live_bracket::LiveBrackets;
 use crate::Config;
-use crate::LoginData;
 
 use sqlx::MySqlPool;
 
@@ -17,7 +16,7 @@ use crate::metrics::Metrics;
 pub struct State(Arc<StateInner>);
 
 impl State {
-    pub fn new(config: Config, users: Vec<LoginData>) -> Self {
+    pub fn new(config: Config) -> Self {
         let pool = MySqlPool::connect_lazy(&config.database.connect_string()).unwrap();
         let store = Store {
             pool,
@@ -30,7 +29,6 @@ impl State {
 
         Self(Arc::new(StateInner {
             store,
-            users,
             config,
             live_brackets,
             shutdown: Shutdown,
@@ -54,7 +52,6 @@ impl Deref for State {
 #[derive(Clone, Debug)]
 pub struct StateInner {
     pub store: Store,
-    users: Vec<LoginData>,
     pub config: Config,
     pub live_brackets: LiveBrackets,
     pub shutdown: Shutdown,
@@ -62,20 +59,6 @@ pub struct StateInner {
 
     #[cfg(feature = "metrics")]
     pub metrics: Metrics,
-}
-
-impl State {
-    pub fn is_allowed(&self, data: &LoginData) -> bool {
-        log::debug!("Trying to authenticate: {}", data.username);
-
-        for user in &self.users {
-            if user.username == data.username && user.password == data.password {
-                return true;
-            }
-        }
-
-        false
-    }
 }
 
 #[derive(Clone, Debug)]

@@ -153,6 +153,17 @@ pub struct Claims {
     pub nbf: u64,
 }
 
+impl Claims {
+    pub fn new(sub: u64) -> Self {
+        Self {
+            sub,
+            iat: 0,
+            exp: 0,
+            nbf: 0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Claims, Token};
