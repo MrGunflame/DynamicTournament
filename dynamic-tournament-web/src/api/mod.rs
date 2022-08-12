@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::future::Future;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
@@ -68,6 +69,12 @@ impl Client {
         self.waker.notify_all();
     }
 
+    /// Returns an [`Action`] when the state of the client changes.
+    pub async fn changed(&mut self) -> Action {
+        self.waker.notified().await;
+        Action::Logout
+    }
+
     /// Try to refresh the authentication tokens while the refresh token is still valid.
     ///
     /// This method will only return once the tokens have been refreshed successfully or the
@@ -113,4 +120,10 @@ impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
+}
+
+/// An change action from a [`Client`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    Logout,
 }

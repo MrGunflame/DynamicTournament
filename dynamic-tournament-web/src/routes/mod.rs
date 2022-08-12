@@ -9,17 +9,14 @@ use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
+use crate::utils::router::{Routable, Router, Switch};
 
 use yew::prelude::*;
-use yew_router::prelude::*;
-use yew_router::Routable;
 
 use login::Login;
 use logout::Logout;
 
 use not_found::NotFound;
-
-use dynamic_tournament_api::v3::id::TournamentId;
 
 pub struct App;
 
@@ -35,7 +32,7 @@ impl Component for App {
         html! {
             <ConfigProvider>
                 <ClientProvider>
-                    <BrowserRouter>
+                    <Router>
                         <div class="main-wrapper">
                             <div>
                                 <Navbar />
@@ -54,42 +51,49 @@ impl Component for App {
                                 <a href="/privacy.html">{ "Privacy Policy" }</a>
                             </div>
                         </div>
-                    </BrowserRouter>
+                    </Router>
                 </ClientProvider>
             </ConfigProvider>
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Routable)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
-    #[at("/")]
     Index,
-    #[at("/login")]
     Login,
-    #[at("/logout")]
     Logout,
-    #[not_found]
-    #[at("/404")]
-    NotFound,
-    #[at("/tournaments")]
-    TournamentList,
-    #[at("/tournaments/:id")]
-    TournamentR { id: u64 },
-    #[at("/tournaments/:id/:s")]
-    Tournament { id: u64 },
-    #[at("/tournaments/:id/:name/brackets")]
-    TournamentBrackets { id: u64 },
-    #[at("/tournaments/:id/:name/brackets/:s/:s")]
-    TournamentBracket { id: u64 },
-    #[at("/tournaments/:id/:name/entrants")]
-    TournamentTeams { id: u64 },
-    #[at("/tournaments/:id/:name/entrants/:s")]
-    TournamentTeam { id: u64 },
-    #[at("/tournaments/:id/:name/admin")]
-    Admin { id: u64 },
-    #[at("/systems")]
+    Tournaments,
     Systems,
+    NotFound,
+}
+
+impl Routable for Route {
+    fn from_path(path: &str) -> Option<Self> {
+        match path {
+            "/" => Some(Self::Index),
+            "/login" => Some(Self::Login),
+            "/logout" => Some(Self::Logout),
+            "/tournaments" => Some(Self::Tournaments),
+            "/systems" => Some(Self::Systems),
+            _ => None,
+        }
+    }
+
+    fn to_path(&self) -> String {
+        match self {
+            Self::Index => String::from("/"),
+            Self::Login => String::from("/login"),
+            Self::Logout => String::from("/logout"),
+            Self::Tournaments => String::from("/tournaments"),
+            Self::Systems => String::from("/systems"),
+            Self::NotFound => String::from("/404"),
+        }
+    }
+
+    fn not_found() -> Option<Self> {
+        Some(Self::NotFound)
+    }
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -97,33 +101,14 @@ pub fn switch(route: &Route) -> Html {
         Route::Index => html! { "this is index" },
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
-        Route::NotFound => html! { <NotFound /> },
-        Route::TournamentList => html! {
+        Route::Tournaments => html! {
             <tournamentlist::TournamentList />
-        },
-        Route::TournamentR { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::Tournament { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentTeam { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentBracket { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentBrackets { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentTeams { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::Admin { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
         },
         Route::Systems => html! {
             <systems::Systems />
+        },
+        Route::NotFound => html! {
+            <NotFound />
         },
     }
 }
