@@ -119,7 +119,7 @@ where
 }
 
 pub trait Routable: Sized + Clone + PartialEq {
-    fn from_path(path: &str) -> Option<Self>;
+    fn from_path(path: &mut Path) -> Option<Self>;
 
     fn to_path(&self) -> String;
 
@@ -183,5 +183,32 @@ where
             Some(route) => (ctx.props().render)(&route),
             None => html! { "Oh no" },
         }
+    }
+}
+
+pub struct Path {
+    path: String,
+    pos: usize,
+}
+
+impl Path {
+    fn new(path: String) -> Self {
+        Self { path, pos:0  }
+    }
+
+    pub fn take(&mut self) -> Option<&str> {
+        let mut end = self.pos;
+        loop {
+            match self.path.chars().next() {
+                Some(c) if c == '/' => break,
+                Some(_) => end +=1,
+                None => break,
+            }
+        }
+
+        let path = &self.path[self.pos..end];
+        self.pos = end;
+
+        Some(path)
     }
 }

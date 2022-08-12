@@ -9,7 +9,7 @@ use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
-use crate::utils::router::{Routable, Router, Switch};
+use crate::utils::router::{Routable, Router, Switch, Path};
 
 use yew::prelude::*;
 
@@ -69,25 +69,25 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &str) -> Option<Self> {
-        match path {
-            "/" => Some(Self::Index),
-            "/login" => Some(Self::Login),
-            "/logout" => Some(Self::Logout),
-            "/tournaments" => Some(Self::Tournaments),
-            "/systems" => Some(Self::Systems),
+    fn from_path(path: &mut Path) -> Option<Self> {
+        match path.take() {
+            Some("") => Some(Self::Index),
+            Some("login") => Some(Self::Login),
+            Some("logout") => Some(Self::Logout),
+            Some("tournaments") => Some(Self::Tournaments),
+            Some("systems") => Some(Self::Systems),
             _ => None,
         }
     }
 
     fn to_path(&self) -> String {
         match self {
-            Self::Index => String::from("/"),
-            Self::Login => String::from("/login"),
-            Self::Logout => String::from("/logout"),
-            Self::Tournaments => String::from("/tournaments"),
-            Self::Systems => String::from("/systems"),
-            Self::NotFound => String::from("/404"),
+            Self::Index => String::from(""),
+            Self::Login => String::from("login"),
+            Self::Logout => String::from("logout"),
+            Self::Tournaments => String::from("tournaments"),
+            Self::Systems => String::from("systems"),
+            Self::NotFound => String::from("404"),
         }
     }
 

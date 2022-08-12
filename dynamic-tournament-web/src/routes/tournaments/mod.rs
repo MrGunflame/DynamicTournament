@@ -17,6 +17,7 @@ use self::brackets::Brackets;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::{FetchData, Rc};
 use crate::Title;
+use crate::utils::router::{Routable, Link, Switch, Path};
 
 use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
@@ -184,4 +185,20 @@ pub enum Route {
         tournament_id: TournamentId,
         tournament_name: String,
     },
+}
+
+impl Routable for Route {
+    fn from_path(path: &mut Path) -> Option<Self> {
+        let id = path.take()?.parse().ok()?;
+        let name = path.take()?.to_string();
+
+        Some(Self::Index { tournament_id: id, tournament_name: name})
+    }
+
+    fn to_path(&self) -> String {
+        match self {
+            Route::Index { tournament_id, tournament_name} => format!("{}/{}", tournament_id, tournament_name),
+            _ => unimplemented!(),
+        }
+    }
 }
