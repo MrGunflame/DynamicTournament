@@ -1,10 +1,10 @@
 use yew::prelude::*;
-use yew_router::components::Redirect;
-
-use crate::components::providers::{ClientProvider, Provider};
 
 use super::Route;
+use crate::components::providers::{ClientProvider, Provider};
+use crate::utils::router::Redirect;
 
+#[derive(Debug)]
 pub struct Logout;
 
 impl Component for Logout {

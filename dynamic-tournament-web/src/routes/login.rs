@@ -1,11 +1,12 @@
 use crate::components::providers::{ClientProvider, Provider};
 use crate::routes::Route;
+use crate::utils::router::Redirect;
 
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use yew::Callback;
-use yew_router::components::Redirect;
 
+#[derive(Debug)]
 pub struct Login {
     username: String,
     password: String,

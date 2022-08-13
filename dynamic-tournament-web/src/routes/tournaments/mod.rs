@@ -15,9 +15,9 @@ use self::brackets::bracket::Bracket;
 use self::brackets::Brackets;
 
 use crate::components::providers::{ClientProvider, Provider};
+use crate::utils::router::{Link, Path, Routable, Switch};
 use crate::utils::{FetchData, Rc};
 use crate::Title;
-use crate::utils::router::{Routable, Link, Switch, Path};
 
 use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
@@ -117,7 +117,7 @@ impl Component for Tournament {
 
                 html! {
                     <>
-                        <Link<crate::routes::Route> classes="link-inline link-back" to={crate::routes::Route::TournamentList}>
+                        <Link<crate::routes::Route> classes="link-inline link-back" to={crate::routes::Route::Tournaments}>
                             <i aria-hidden="true" class="fa-solid fa-angle-left"></i>
                             { "Back to Tournaments" }
                         </Link<crate::routes::Route>>
@@ -192,12 +192,18 @@ impl Routable for Route {
         let id = path.take()?.parse().ok()?;
         let name = path.take()?.to_string();
 
-        Some(Self::Index { tournament_id: id, tournament_name: name})
+        Some(Self::Index {
+            tournament_id: id,
+            tournament_name: name,
+        })
     }
 
     fn to_path(&self) -> String {
         match self {
-            Route::Index { tournament_id, tournament_name} => format!("{}/{}", tournament_id, tournament_name),
+            Route::Index {
+                tournament_id,
+                tournament_name,
+            } => format!("{}/{}", tournament_id, tournament_name),
             _ => unimplemented!(),
         }
     }

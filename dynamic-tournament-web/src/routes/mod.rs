@@ -9,7 +9,7 @@ use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
-use crate::utils::router::{Routable, Router, Switch, Path};
+use crate::utils::router::{Path, Routable, Router, Switch};
 
 use yew::prelude::*;
 
@@ -71,12 +71,12 @@ pub enum Route {
 impl Routable for Route {
     fn from_path(path: &mut Path) -> Option<Self> {
         match path.take() {
-            Some("") => Some(Self::Index),
+            None => Some(Self::Index),
             Some("login") => Some(Self::Login),
             Some("logout") => Some(Self::Logout),
             Some("tournaments") => Some(Self::Tournaments),
             Some("systems") => Some(Self::Systems),
-            _ => None,
+            Some(_) => None,
         }
     }
 
