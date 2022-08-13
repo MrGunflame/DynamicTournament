@@ -16,7 +16,6 @@ wee_alloc = "0.4.5"
 yew = "0.19.3"
 reqwasm = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
-yew-router = "0.16.0"
 gloo-console = "0.2.1"
 gloo-events = "0.1.2"
 gloo-timers = "0.2.3"
