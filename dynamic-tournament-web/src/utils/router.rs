@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
@@ -324,20 +324,20 @@ impl Path {
 
 impl Debug for Path {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.parts.join("/"))
+        write!(f, "\"{}\"", self.parts.join("/"))
     }
 }
 
 #[derive(Clone, Debug)]
 struct SwitchList {
-    list: HashMap<usize, Callback<()>>,
+    list: BTreeMap<usize, Callback<()>>,
     id: usize,
 }
 
 impl SwitchList {
     fn new() -> Self {
         Self {
-            list: HashMap::new(),
+            list: BTreeMap::new(),
             id: 0,
         }
     }
