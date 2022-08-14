@@ -3,6 +3,7 @@ mod brackets;
 mod entrants;
 mod overview;
 mod teamdetails;
+mod tournament;
 
 use entrants::Entrants;
 use teamdetails::TeamDetails;
@@ -23,6 +24,23 @@ use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
 use overview::Overview;
+
+pub struct Tournaments;
+
+impl Component for Tournaments {
+    type Message = ();
+    type Properties = ();
+
+    fn create(ctx: &Context<Self>) -> Self {
+        Self
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        html! {
+            <Switch<Route> render={Switch::render(switch)} />
+        }
+    }
+}
 
 pub struct Tournament {
     tournament: FetchData<Rc<ApiTournament>>,
@@ -150,61 +168,40 @@ pub enum Msg {
     Update(FetchData<Rc<ApiTournament>>),
 }
 
-#[derive(Clone, Routable, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Route {
-    #[at("/tournaments/:tournament_id/:tournament_name")]
-    Index {
-        tournament_id: TournamentId,
-        tournament_name: String,
-    },
-    #[at("/tournaments/:tournament_id/:tournament_name/brackets")]
-    Brackets {
-        tournament_id: TournamentId,
-        tournament_name: String,
-    },
-    #[at("/tournaments/:tournament_id/:tournament_name/brackets/:bracket_id/:bracket_name")]
-    Bracket {
-        tournament_id: TournamentId,
-        tournament_name: String,
-        bracket_id: BracketId,
-        bracket_name: String,
-    },
-    #[at("/tournaments/:tournament_id/:tournament_name/entrants")]
-    Teams {
-        tournament_id: TournamentId,
-        tournament_name: String,
-    },
-    #[at("/tournaments/:tournament_id/:tournament_name/entrants/:team_id")]
-    TeamDetails {
-        tournament_id: TournamentId,
-        tournament_name: String,
-        team_id: EntrantId,
-    },
-    #[at("/tournaments/:tournament_id/:tournament_name/admin")]
-    Admin {
-        tournament_id: TournamentId,
-        tournament_name: String,
-    },
+    Index,
+    Tournament { id: TournamentId, name: String },
 }
 
 impl Routable for Route {
     fn from_path(path: &mut Path) -> Option<Self> {
-        let id = path.take()?.parse().ok()?;
-        let name = path.take()?.to_string();
+        match path.take() {
+            None => Some(Self::Index),
+            Some(s) => {
+                let id = s.parse().ok()?;
+                let name = path.take()?.to_string();
 
-        Some(Self::Index {
-            tournament_id: id,
-            tournament_name: name,
-        })
+                Some(Self::Tournament { id, name })
+            }
+        }
     }
 
     fn to_path(&self) -> String {
         match self {
-            Route::Index {
-                tournament_id,
-                tournament_name,
-            } => format!("{}/{}", tournament_id, tournament_name),
-            _ => unimplemented!(),
+            Route::Index => String::from("/"),
+            Route::Tournament { id, name } => format!("{}/{}", id, name),
         }
+    }
+}
+
+fn switch(route: &Route) -> Html {
+    match route {
+        Route::Index => html! {
+            <super::tournamentlist::TournamentList />
+        },
+        Route::Tournament { id, name: _ } => html! {
+            <Tournament id={*id} />
+        },
     }
 }
