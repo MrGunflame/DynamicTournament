@@ -51,7 +51,9 @@ impl Entrant {
     /// Returns the rating of the `Entrant` or `None` if any player is missing rating.
     /// If the entrant is a team, the average over all players is returned.
     ///
-    /// Note: If the combined team rating exceeds `u64::MAX`, the value is saturated at `u64::MAX`.
+    /// If the `Entrant` is a team there are two edge conditions to consider:
+    /// 1. If the combined team rating exceeds [`u64::MAX`], the sum is saturated at [`u64::MAX`].
+    /// 2. If the number of players in a team is `0`, this method returns `Some(0)`.
     pub fn rating(&self) -> Option<u64> {
         match &self.inner {
             EntrantVariant::Player(player) => player.rating,
@@ -61,7 +63,7 @@ impl Entrant {
                     sum = sum.saturating_add(player.rating?);
                 }
 
-                Some(sum / team.players.len() as u64)
+                Some(sum.checked_div(team.players.len() as u64).unwrap_or(0))
             }
         }
     }
@@ -169,6 +171,13 @@ mod tests {
 
     #[test]
     fn test_entrant_rating() {
+        // Team with no player should yield 0.
+        let entrant = Entrant::team(Team {
+            name: String::new(),
+            players: vec![],
+        });
+        assert_eq!(entrant.rating(), Some(0));
+
         let entrant = Entrant::player(Player {
             name: String::new(),
             role: RoleId(0),

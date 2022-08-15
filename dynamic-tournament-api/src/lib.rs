@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "local-storage")]
-use gloo_storage::{LocalStorage, Storage};
+use gloo_storage::{LocalStorage, Storage as _};
 
 #[cfg(target_family = "wasm")]
 use gloo_utils::errors::JsError;
@@ -66,7 +66,7 @@ impl Client {
     /// Returns `true` if the `Client` has authentication credentials set.
     pub fn is_authenticated(&self) -> bool {
         let inner = self.inner.read().unwrap();
-        inner.authorization.tokens.is_some()
+        inner.authorization.auth_token().is_some()
     }
 
     pub fn authorization(&self) -> Authorization {
@@ -135,54 +135,101 @@ impl From<JsError> for Error {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authorization {
-    pub(crate) tokens: Option<TokenPair>,
+    auth_token: Option<Token>,
+    refresh_token: Option<Token>,
 }
 
 impl Authorization {
     pub fn new() -> Self {
-        #[cfg(feature = "local-storage")]
-        if let Ok(this) = LocalStorage::get("dynamic-tournament-api-client") {
-            return this;
-        }
+        let refresh_token = Storage::load()
+            .map(|storage| storage.token)
+            .and_then(|token| match Token::new(token) {
+                Ok(token) => Some(token),
+                Err(err) => {
+                    log::warn!("Loaded token is invalid: {}", err);
+                    None
+                }
+            });
 
-        Self { tokens: None }
+        Self {
+            auth_token: None,
+            refresh_token,
+        }
     }
 
     /// Update the authorization tokens to the newly provided [`TokenPair`].
     pub fn update(&mut self, tokens: TokenPair) {
-        self.tokens = Some(tokens);
+        self.auth_token = Some(tokens.auth_token);
 
-        #[cfg(feature = "local-storage")]
-        {
-            LocalStorage::set("dynamic-tournament-api-client", self)
-                .expect("Failed to update localStorage with authorization credentials");
+        let refresh_token = tokens.refresh_token.to_string();
+        self.refresh_token = Some(tokens.refresh_token);
+
+        Storage {
+            token: refresh_token,
         }
+        .update();
     }
 
     /// Delete all authorization tokens.
     pub fn delete(&mut self) {
-        #[cfg(feature = "local-storage")]
-        LocalStorage::delete("dynamic-tournament-api-client");
+        self.auth_token = None;
+        self.refresh_token = None;
 
-        self.tokens = None;
+        Storage::delete();
     }
 
     /// Returns a reference to the auth token. This is the token to make requests. Returns [`None`]
     /// if no tokens are avaliable.
     #[inline]
     pub fn auth_token(&self) -> Option<&Token> {
-        self.tokens.as_ref().map(|tokens| &tokens.auth_token)
+        self.auth_token.as_ref()
     }
 
     /// Returns a reference to the refresh token. Returns [`None`] if no tokens are avaliable.
     #[inline]
     pub fn refresh_token(&self) -> Option<&Token> {
-        self.tokens.as_ref().map(|tokens| &tokens.refresh_token)
+        self.refresh_token.as_ref()
     }
 }
 
 impl Default for Authorization {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Storage {
+    /// Refresh token
+    pub token: String,
+}
+
+impl Storage {
+    const KEY: &'static str = "dynamic-tournament-api-client";
+
+    pub fn load() -> Option<Self> {
+        #[cfg(feature = "local-storage")]
+        match LocalStorage::get(Self::KEY) {
+            Ok(val) => Some(val),
+            Err(err) => {
+                log::warn!("Failed to load from storage: {}", err);
+                None
+            }
+        }
+
+        #[cfg(not(feature = "local-storage"))]
+        None
+    }
+
+    pub fn update(&self) {
+        #[cfg(feature = "local-storage")]
+        if let Err(err) = LocalStorage::set(Self::KEY, self) {
+            log::error!("Failed to save to storage: {}", err);
+        }
+    }
+
+    pub fn delete() {
+        #[cfg(feature = "local-storage")]
+        LocalStorage::delete(Self::KEY);
     }
 }
