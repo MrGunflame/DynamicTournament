@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
@@ -102,6 +103,13 @@ impl History {
         log::debug!("History::push {:?}", url);
 
         self.callback.emit(url);
+    }
+
+    pub fn redirect<R>(&self, route: impl Borrow<R>)
+    where
+        R: Routable,
+    {
+        self.push(route.borrow().to_path());
     }
 }
 
@@ -361,6 +369,23 @@ impl SwitchList {
         for cb in self.list.values() {
             cb.emit(());
         }
+    }
+}
+
+pub trait RouterContextExt {
+    fn history(&self) -> History;
+}
+
+impl<C> RouterContextExt for yew::Context<C>
+where
+    C: yew::Component,
+{
+    fn history(&self) -> History {
+        let (h, _) = self
+            .link()
+            .context::<History>(yew::Callback::noop())
+            .expect("no router");
+        h
     }
 }
 

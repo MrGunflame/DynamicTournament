@@ -5,11 +5,10 @@ use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
-use yew_router::history::History;
-use yew_router::prelude::RouterScopeExt;
-
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::TournamentOverview;
+
+use crate::utils::router::RouterContextExt;
 
 pub struct TournamentList {
     tournaments: FetchData<Vec<TournamentOverview>>,
@@ -48,13 +47,7 @@ impl Component for TournamentList {
                 true
             }
             Message::ClickTournament { id, name } => {
-                ctx.link()
-                    .history()
-                    .expect("failed to read history")
-                    .push(Route::Index {
-                        tournament_id: id,
-                        tournament_name: name,
-                    });
+                ctx.history().redirect(Route::Index);
 
                 false
             }

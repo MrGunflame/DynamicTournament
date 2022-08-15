@@ -3,14 +3,13 @@ use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
-use yew_router::history::History;
-use yew_router::prelude::RouterScopeExt;
 
 use crate::components::bracket::Bracket as BracketComponent;
 use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
 use crate::routes::tournaments::Route;
+use crate::utils::router::RouterContextExt;
 use crate::utils::{FetchData, Rc};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
@@ -124,15 +123,7 @@ impl Component for Bracket {
                     Message::UpdateBracket(msg)
                 });
 
-                ctx.link()
-                    .history()
-                    .expect("no history in context")
-                    .push(Route::Bracket {
-                        tournament_id,
-                        tournament_name,
-                        bracket_id: id,
-                        bracket_name: name,
-                    });
+                ctx.history().redirect(Route::Bracket { id, name });
             }
         }
 

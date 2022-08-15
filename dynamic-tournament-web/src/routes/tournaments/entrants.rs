@@ -1,8 +1,8 @@
 use dynamic_tournament_api::v3::id::EntrantId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::prelude::*;
-use yew_router::prelude::*;
 
+use crate::utils::router::RouterContextExt;
 use crate::utils::Rc;
 use crate::{
     components::providers::{ClientProvider, Provider},
@@ -55,14 +55,8 @@ impl Component for Entrants {
                 let id = ctx.props().tournament.id;
                 let name = ctx.props().tournament.name.clone();
 
-                ctx.link()
-                    .history()
-                    .expect("No History given")
-                    .push(Route::TeamDetails {
-                        tournament_id: id,
-                        tournament_name: name,
-                        team_id,
-                    });
+                ctx.history()
+                    .redirect(Route::TeamDetails { id, name, team_id });
             }
         }
 

@@ -6,21 +6,18 @@ mod teamdetails;
 mod tournament;
 
 use entrants::Entrants;
-use teamdetails::TeamDetails;
 
 use yew::prelude::*;
-use yew_router::prelude::*;
 
 use self::admin::Admin;
-use self::brackets::bracket::Bracket;
 use self::brackets::Brackets;
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::utils::router::{Link, Path, Routable, Switch};
+use crate::utils::router::{Path, Routable, Switch};
 use crate::utils::{FetchData, Rc};
 use crate::Title;
 
-use dynamic_tournament_api::v3::id::{BracketId, EntrantId, TournamentId};
+use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
 use overview::Overview;
@@ -82,73 +79,6 @@ impl Component for Tournament {
     fn view(&self, ctx: &Context<Self>) -> Html {
         self.tournament.render(|tournament| {
             Title::set(&tournament.name);
-
-            let tournament = tournament.clone();
-
-            let tournament_id = ctx.props().id;
-
-                let client = ClientProvider::get(ctx);
-
-            let switch = move |route: &Route| -> Html {
-                let tournament = tournament.clone();
-
-                let tournament_name = tournament.name.clone();
-
-                let mut links = vec![
-                    (Route::Index { tournament_id, tournament_name: tournament_name.clone() }, "Overview"),
-                    (Route::Brackets { tournament_id, tournament_name: tournament_name.clone() }, "Brackets"),
-                    (Route::Teams { tournament_id, tournament_name: tournament_name.clone()}, "Entrants"),
-                ];
-
-                if client.is_authenticated() {
-                    links.push((Route::Admin { tournament_id, tournament_name }, "Admin"));
-                }
-
-                let routes: Html = links.into_iter().map(|(r, name)| {
-                    let classes = if r == *route { "active" } else { ""};
-
-                    html! {
-                        <li><Link<Route> classes={classes} to={r.clone()}>{ name }</Link<Route>></li>
-                    }
-                }).collect();
-
-                let content = match route {
-                    Route::Index { tournament_id: _,tournament_name:_ } => html! {
-                        <Overview tournament={tournament.clone()} />
-                    },
-                    Route::Brackets { tournament_id: _, tournament_name: _ } => html! {
-                        <Brackets tournament={tournament.clone()} />
-                    },
-                    Route::Bracket{ tournament_id: _, tournament_name: _, bracket_id, bracket_name: _ }=> html! {
-                        <Bracket tournament={tournament.clone()} id={*bracket_id} />
-                    },
-                    Route::Teams { tournament_id: _, tournament_name: _, } => html! {
-                        <Entrants tournament={ tournament.clone() } />
-                    },
-                    Route::TeamDetails { tournament_id: _, tournament_name: _, team_id } => html! {
-                        <TeamDetails {tournament_id} id={*team_id} />
-                    },
-                    Route::Admin { tournament_id: _, tournament_name: _ } => html! {
-                        <Admin tournament={tournament.clone()} />
-                    },
-                };
-
-                html! {
-                    <>
-                        <Link<crate::routes::Route> classes="link-inline link-back" to={crate::routes::Route::Tournaments}>
-                            <i aria-hidden="true" class="fa-solid fa-angle-left"></i>
-                            { "Back to Tournaments" }
-                        </Link<crate::routes::Route>>
-                        <h2 class="tournament-name">{ tournament.name.clone() }</h2>
-                        <div class="navbar">
-                            <ul>
-                                {routes}
-                            </ul>
-                        </div>
-                        {content}
-                    </>
-                }
-            };
 
             html! {
                 <>

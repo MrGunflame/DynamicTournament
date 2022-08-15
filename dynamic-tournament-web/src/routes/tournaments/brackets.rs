@@ -3,8 +3,8 @@ use dynamic_tournament_api::v3::{
     tournaments::{brackets::BracketOverview, Tournament},
 };
 use yew::{html, Component, Context, Html, Properties};
-use yew_router::{history::History, prelude::RouterScopeExt};
 
+use crate::utils::router::RouterContextExt;
 use crate::utils::FetchData;
 use crate::{
     components::{
@@ -77,15 +77,7 @@ impl Component for Brackets {
                 let tournament_id = ctx.props().tournament.id;
                 let tournament_name = ctx.props().tournament.name.clone();
 
-                ctx.link()
-                    .history()
-                    .expect("no history in context")
-                    .push(Route::Bracket {
-                        tournament_id,
-                        tournament_name,
-                        bracket_id: id,
-                        bracket_name: name,
-                    });
+                ctx.history().redirect(Route::Bracket { id, name });
             }
         }
 
