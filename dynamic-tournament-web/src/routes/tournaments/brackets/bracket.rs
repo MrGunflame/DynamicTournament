@@ -4,18 +4,18 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
 
+use super::Route;
 use crate::components::bracket::Bracket as BracketComponent;
 use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
-use crate::routes::tournaments::Route;
 use crate::utils::router::RouterContextExt;
 use crate::utils::{FetchData, Rc};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-    pub id: BracketId,
+    pub bracket_id: BracketId,
 }
 
 pub struct Bracket {
@@ -32,7 +32,7 @@ impl Component for Bracket {
         let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament.id;
-        let id = ctx.props().id;
+        let id = ctx.props().bracket_id;
         {
             let client = client.clone();
 
@@ -99,7 +99,6 @@ impl Component for Bracket {
             Message::UpdateBracket(bracket) => self.bracket = bracket,
             Message::OnClick(id, name) => {
                 let tournament_id = ctx.props().tournament.id;
-                let tournament_name = ctx.props().tournament.name.clone();
 
                 // Don't update when requesting the same bracket.
                 if self.bracket.has_value() && self.bracket.as_ref().unwrap().id == id {
@@ -123,7 +122,7 @@ impl Component for Bracket {
                     Message::UpdateBracket(msg)
                 });
 
-                ctx.history().redirect(Route::Bracket { id, name });
+                ctx.history().redirect(Route::Bracket { id });
             }
         }
 
