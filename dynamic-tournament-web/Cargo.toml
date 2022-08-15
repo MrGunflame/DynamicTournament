@@ -18,7 +18,7 @@ reqwasm = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 gloo-console = "0.2.1"
 gloo-events = "0.1.2"
-gloo-timers = "0.2.3"
+gloo-timers = { version = "0.2.3", features = ["futures"] }
 web-sys = { version = "0.3.56", features = ["Document", "Element", "Node", "Window", "HtmlCollection", "HtmlInputElement", "TouchEvent", "TouchList", "Touch"] }
 log = { version = "0.4.16", features = ["release_max_level_warn"]}
 futures = "0.3.21"
