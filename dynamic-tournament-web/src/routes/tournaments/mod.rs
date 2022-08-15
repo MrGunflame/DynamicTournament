@@ -28,11 +28,11 @@ impl Component for Tournaments {
     type Message = ();
     type Properties = ();
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <Switch<Route> render={Switch::render(switch)} />
         }
@@ -76,7 +76,7 @@ impl Component for Tournament {
         }
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         self.tournament.render(|tournament| {
             Title::set(&tournament.name);
 
@@ -101,7 +101,7 @@ pub enum Msg {
 #[derive(Clone, PartialEq)]
 pub enum Route {
     Index,
-    Tournament { id: TournamentId, name: String },
+    Tournament { id: TournamentId },
 }
 
 impl Routable for Route {
@@ -110,9 +110,8 @@ impl Routable for Route {
             None => Some(Self::Index),
             Some(s) => {
                 let id = s.parse().ok()?;
-                let name = path.take()?.to_string();
 
-                Some(Self::Tournament { id, name })
+                Some(Self::Tournament { id })
             }
         }
     }
@@ -120,7 +119,7 @@ impl Routable for Route {
     fn to_path(&self) -> String {
         match self {
             Route::Index => String::from("/"),
-            Route::Tournament { id, name } => format!("{}/{}", id, name),
+            Route::Tournament { id } => format!("/{}", id),
         }
     }
 }
@@ -130,7 +129,7 @@ fn switch(route: &Route) -> Html {
         Route::Index => html! {
             <super::tournamentlist::TournamentList />
         },
-        Route::Tournament { id, name: _ } => html! {
+        Route::Tournament { id } => html! {
             <Tournament id={*id} />
         },
     }

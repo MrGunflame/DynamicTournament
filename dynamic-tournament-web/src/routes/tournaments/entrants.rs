@@ -1,25 +1,25 @@
 mod entrant;
+#[allow(clippy::module_inception)]
 mod entrants;
 
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::utils::router::{Path, Routable, Switch};
-use crate::utils::FetchData;
 
 #[derive(Copy, Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub tournament_id: TournamentId,
 }
 
+#[derive(Debug)]
 pub struct Entrants;
 
 impl Component for Entrants {
-    type Message = Message;
+    type Message = ();
     type Properties = Props;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self
     }
 
@@ -69,9 +69,4 @@ fn switch(tournament_id: TournamentId) -> impl Fn(&Route) -> Html {
             <Entrant {tournament_id} entrant_id={*id} />
         },
     }
-}
-
-pub enum Message {
-    Update(FetchData<Vec<Entrant>>),
-    OnClick(EntrantId),
 }

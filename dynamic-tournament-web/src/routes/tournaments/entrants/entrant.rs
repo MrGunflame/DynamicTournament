@@ -13,6 +13,7 @@ pub struct Props {
     pub entrant_id: EntrantId,
 }
 
+#[derive(Debug)]
 pub struct Entrant {
     entrant: FetchData<ApiEntrant>,
     roles: FetchData<HashMap<RoleId, String>>,
@@ -65,7 +66,16 @@ impl Component for Entrant {
         }
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Message) -> bool {
+        match msg {
+            Message::UpdateEntrant(entrant) => self.entrant = entrant,
+            Message::UpdateRoles(roles) => self.roles = roles,
+        }
+
+        true
+    }
+
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         self.entrant.zip(&self.roles).render(|(entrant, roles)| {
             let title;
 

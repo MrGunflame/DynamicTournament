@@ -1,4 +1,5 @@
 mod bracket;
+#[allow(clippy::module_inception)]
 mod brackets;
 
 use dynamic_tournament_api::v3::id::BracketId;
@@ -20,7 +21,7 @@ impl Component for Brackets {
     type Message = ();
     type Properties = Props;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self
     }
 

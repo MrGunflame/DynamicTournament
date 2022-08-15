@@ -43,12 +43,12 @@ impl Component for Brackets {
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: FetchData<Vec<BracketOverview>>) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: FetchData<Vec<BracketOverview>>) -> bool {
         self.brackets = msg;
         true
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         self.brackets.render(|brackets| match brackets.first() {
             Some(bracket) => html! {
                 <Redirect<Route> to={Route::Bracket{id:bracket.id}} />

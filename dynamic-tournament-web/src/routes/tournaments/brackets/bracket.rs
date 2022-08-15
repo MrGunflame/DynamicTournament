@@ -97,7 +97,7 @@ impl Component for Bracket {
             Message::UpdateBrackets(bracket) => self.brackets = bracket,
             Message::UpdateEntrants(entrants) => self.entrants = entrants,
             Message::UpdateBracket(bracket) => self.bracket = bracket,
-            Message::OnClick(id, name) => {
+            Message::OnClick(id) => {
                 let tournament_id = ctx.props().tournament.id;
 
                 // Don't update when requesting the same bracket.
@@ -136,9 +136,7 @@ impl Component for Bracket {
             let entrants = self.entrants.clone().unwrap();
             let bracket = self.bracket.clone().unwrap();
 
-            let onclick = ctx
-                .link()
-                .callback(move |(_, id)| Message::OnClick(id, "a".into()));
+            let onclick = ctx.link().callback(move |(_, id)| Message::OnClick(id));
 
             html! {
                 <>
@@ -160,5 +158,5 @@ pub enum Message {
     UpdateBrackets(FetchData<Rc<Vec<BracketOverview>>>),
     UpdateBracket(FetchData<Rc<ApiBracket>>),
     UpdateEntrants(FetchData<Rc<Vec<Entrant>>>),
-    OnClick(BracketId, String),
+    OnClick(BracketId),
 }

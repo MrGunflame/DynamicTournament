@@ -1,10 +1,10 @@
 use crate::components::providers::{ClientProvider, Provider};
-use crate::routes::tournaments::Route;
 use crate::utils::FetchData;
 use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
+use super::tournaments::Route;
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::TournamentOverview;
 
@@ -46,8 +46,8 @@ impl Component for TournamentList {
                 self.tournaments = tournaments;
                 true
             }
-            Message::ClickTournament { id, name } => {
-                ctx.history().redirect(Route::Index);
+            Message::ClickTournament { id } => {
+                ctx.history().redirect(Route::Tournament { id });
 
                 false
             }
@@ -67,11 +67,9 @@ impl Component for TournamentList {
                         .with_timezone(&self.timezone)
                         .format("%B %d, %Y %H:%M");
 
-                    let tournament_name = name.clone();
-                    let on_click = ctx.link().callback(move |_| Message::ClickTournament {
-                        id,
-                        name: tournament_name.clone(),
-                    });
+                    let on_click = ctx
+                        .link()
+                        .callback(move |_| Message::ClickTournament { id });
 
                     html! {
                         <tr class="tr-link" onclick={on_click}>
@@ -106,5 +104,5 @@ impl Component for TournamentList {
 
 pub enum Message {
     Update(FetchData<Vec<TournamentOverview>>),
-    ClickTournament { id: TournamentId, name: String },
+    ClickTournament { id: TournamentId },
 }

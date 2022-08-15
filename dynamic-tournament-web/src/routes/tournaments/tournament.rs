@@ -42,12 +42,12 @@ impl Component for Tournament {
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: FetchData<Rc<ApiTournament>>) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: FetchData<Rc<ApiTournament>>) -> bool {
         self.tournament = msg;
         true
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         self.tournament.render(|tournament| {
             let tournament = tournament.clone();
             let is_admin = self.is_admin;
@@ -143,6 +143,7 @@ fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> H
                         { routes }
                     </ul>
                 </div>
+                { content }
             </>
         }
     }

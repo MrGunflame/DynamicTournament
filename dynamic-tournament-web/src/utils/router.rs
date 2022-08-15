@@ -33,7 +33,7 @@ impl Component for Router {
         Self { history }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: String) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: String) -> bool {
         let mut state = self.history.state.borrow_mut();
         state.path = Path::new(msg);
 
@@ -76,8 +76,7 @@ impl History {
             .location()
             .expect("no document.location")
             .pathname()
-            .expect("failed to fetch location pathname")
-            .to_string();
+            .expect("failed to fetch location pathname");
 
         Self {
             history: Rc::new(history()),
@@ -237,7 +236,7 @@ where
         }
     }
 
-    fn update(&mut self, ctx: &Context<Self>, _msg: ()) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, _msg: ()) -> bool {
         true
     }
 
@@ -290,7 +289,7 @@ where
     type Message = ();
     type Properties = RedirectProps<R>;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {
             _marker: PhantomData,
         }

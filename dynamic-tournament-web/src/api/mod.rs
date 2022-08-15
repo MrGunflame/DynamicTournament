@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::future::Future;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;

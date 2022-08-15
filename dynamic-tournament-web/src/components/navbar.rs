@@ -26,7 +26,7 @@ impl Component for Navbar {
         Self
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Action) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, _msg: Action) -> bool {
         true
     }
 
