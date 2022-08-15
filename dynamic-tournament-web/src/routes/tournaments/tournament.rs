@@ -122,7 +122,7 @@ fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> H
                     <Brackets {tournament} />
                 },
                 Route::Entrants => html! {
-                    <Entrants {tournament} />
+                    <Entrants tournament_id={tournament.id} />
                 },
                 Route::Admin => html! {
                     <Admin {tournament} />
