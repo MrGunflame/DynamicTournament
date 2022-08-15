@@ -18,6 +18,8 @@ use logout::Logout;
 
 use not_found::NotFound;
 
+use self::tournaments::Tournaments;
+
 pub struct App;
 
 impl Component for App {
@@ -102,7 +104,7 @@ pub fn switch(route: &Route) -> Html {
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
         Route::Tournaments => html! {
-            <tournamentlist::TournamentList />
+            <Tournaments />
         },
         Route::Systems => html! {
             <systems::Systems />

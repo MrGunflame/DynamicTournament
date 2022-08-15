@@ -325,6 +325,8 @@ impl Path {
         let path = self.parts.get(self.pos)?;
         self.pos += 1;
 
+        log::debug!("Taking part {}: {:?}", self.pos - 1, path);
+
         Some(path)
     }
 }
