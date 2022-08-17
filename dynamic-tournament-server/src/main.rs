@@ -12,7 +12,7 @@ mod metrics;
 
 use config::Config;
 
-use crate::state::State;
+use crate::{signal::ShutdownListener, state::State};
 use clap::Parser;
 use hyper::StatusCode;
 use thiserror::Error;
@@ -108,17 +108,25 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
 
     tokio::task::spawn(async move {
-        loop {
-            match http::bind(state.config.bind.clone(), state.clone()).await {
-                Ok(()) => break,
-                Err(err) => log::error!("Failed to bind server: {}", err),
-            }
-        }
+        tokio::signal::ctrl_c().await.unwrap();
+        log::info!("Interrupt");
+        signal::terminate().await;
     });
 
-    tokio::signal::ctrl_c().await.unwrap();
-    log::info!("Interrupt");
-    signal::terminate().await;
+    loop {
+        let shutdown = ShutdownListener::new();
+        tokio::select! {
+            res = http::bind(state.config.bind.clone(), state.clone()) => {
+                match res {
+                    Ok(()) => break,
+                    Err(err) => log::error!("Failed to bind server: {}", err),
+                }
+            }
+            _ = shutdown => {
+                break;
+            }
+        }
+    }
 
     Ok(())
 }
