@@ -1,24 +1,45 @@
 use yew::{html, Component, Context, Html};
 use yew_router::components::Link;
 
+use crate::api::{Action, State};
 use crate::components::providers::{ClientProvider, Provider};
 use crate::routes::Route;
 
 #[derive(Debug)]
-pub struct Navbar;
+pub struct Navbar {
+    state: State,
+}
 
 impl Component for Navbar {
-    type Message = ();
+    type Message = Action;
     type Properties = ();
 
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self
+    fn create(ctx: &Context<Self>) -> Self {
+        let client = ClientProvider::get(ctx);
+        let state = client.state();
+
+        let link = ctx.link().clone();
+        ctx.link().send_future_batch(async move {
+            loop {
+                let msg = client.changed().await;
+                link.send_message(msg);
+            }
+        });
+
+        Self { state }
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
-        let client = ClientProvider::get(ctx);
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Action::Login => self.state = State::LoggedIn,
+            Action::Logout => self.state = State::LoggedOut,
+        }
 
-        let login = if client.is_authenticated() {
+        true
+    }
+
+    fn view(&self, _ctx: &Context<Self>) -> Html {
+        let login = if self.state == State::LoggedIn {
             html! {
                 <Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>>
             }

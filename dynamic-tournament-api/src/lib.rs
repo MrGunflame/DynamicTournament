@@ -205,6 +205,8 @@ struct Storage {
 }
 
 impl Storage {
+    // Used from within feature-gates.
+    #[allow(unused)]
     const KEY: &'static str = "dynamic-tournament-api-client";
 
     pub fn load() -> Option<Self> {
