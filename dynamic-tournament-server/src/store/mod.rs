@@ -620,7 +620,7 @@ impl<'a> UsersClient<'a> {
     pub async fn get(&self, username: &str) -> Result<Option<User>, Error> {
         let row = get_one!(
             sqlx::query(&format!(
-                "SELECT id, password FROM {}users WHERE username = ?",
+                "SELECT id, password FROM {}users WHERE name = ?",
                 self.store.table_prefix
             ))
             .bind(username)
@@ -636,5 +636,19 @@ impl<'a> UsersClient<'a> {
             username: username.to_string(),
             password,
         }))
+    }
+
+    pub async fn insert(&self, user: &User) -> Result<(), Error> {
+        sqlx::query(&format!(
+            "INSERT INTO {}users (id, name, password) VALUES (?, ?, ?)",
+            self.store.table_prefix
+        ))
+        .bind(user.id.0)
+        .bind(&user.username)
+        .bind(&user.password)
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(())
     }
 }

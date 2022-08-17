@@ -33,7 +33,7 @@ async fn login(mut req: Request) -> Result {
     // Get the salted password hash by first hashing the password, then the user id.
     // Note that the id is passed as bytes. The id is not converted to a string.
     let mut hasher = Sha512::new();
-    hasher.update(user.username.as_bytes());
+    hasher.update(input.password.as_bytes());
     hasher.update(user.id.0.to_le_bytes());
 
     let res = hasher.finalize();
