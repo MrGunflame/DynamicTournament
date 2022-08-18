@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 use bincode::{DefaultOptions, Options};
 use dynamic_tournament_core::{EntrantScore, Matches};
 use serde::{Deserialize, Serialize};
@@ -111,9 +113,191 @@ impl Frame {
     }
 }
 
+const CONTINUE_BIT: u8 = 1 << 7;
+
+pub trait Encode {
+    fn encode<W>(&self, writer: W) -> Result<usize, io::Error>
+    where
+        W: Write;
+}
+
+impl Encode for u8 {
+    fn encode<W>(&self, mut writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        writer.write_all(&[*self])?;
+        Ok(1)
+    }
+}
+
+impl Encode for u16 {
+    fn encode<W>(&self, mut writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let mut n = *self;
+
+        let mut bytes_written = 0;
+        loop {
+            let byte = n & (u8::MAX as u16);
+            let mut byte = byte as u8 & !CONTINUE_BIT;
+
+            n >>= 7;
+            if n != 0 {
+                byte |= CONTINUE_BIT;
+            }
+
+            writer.write_all(&[byte])?;
+            bytes_written += 1;
+
+            if n == 0 {
+                return Ok(bytes_written);
+            }
+        }
+    }
+}
+
+impl Encode for u32 {
+    fn encode<W>(&self, mut writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let mut n = *self;
+
+        let mut bytes_written = 0;
+        loop {
+            let byte = n & (u8::MAX as u32);
+            let mut byte = byte as u8 & !CONTINUE_BIT;
+
+            n >>= 7;
+            if n != 0 {
+                byte |= CONTINUE_BIT;
+            }
+
+            writer.write_all(&[byte])?;
+            bytes_written += 1;
+
+            if n == 0 {
+                return Ok(bytes_written);
+            }
+        }
+    }
+}
+
+impl Encode for i8 {
+    fn encode<W>(&self, writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let n = ((*self << 1) ^ (*self >> 7)) as u8;
+        n.encode(writer)
+    }
+}
+
+impl Encode for i16 {
+    fn encode<W>(&self, writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let n = ((*self << 1) ^ (*self >> 15)) as u16;
+        n.encode(writer)
+    }
+}
+
+impl Encode for i32 {
+    fn encode<W>(&self, writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let n = ((*self << 1) ^ (*self >> 31)) as u32;
+        n.encode(writer)
+    }
+}
+
+impl Encode for i64 {
+    fn encode<W>(&self, writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let n = ((*self << 1) ^ (*self >> 63)) as u64;
+        n.encode(writer)
+    }
+}
+
+impl Encode for u64 {
+    fn encode<W>(&self, mut writer: W) -> Result<usize, io::Error>
+    where
+        W: Write,
+    {
+        let mut n = *self;
+
+        let mut bytes_written = 0;
+        loop {
+            let byte = n & (u8::MAX as u64);
+            let mut byte = byte as u8 & !CONTINUE_BIT;
+
+            n >>= 7;
+            if n != 0 {
+                byte |= CONTINUE_BIT;
+            }
+
+            writer.write_all(&[byte])?;
+            bytes_written += 1;
+
+            if n == 0 {
+                return Ok(bytes_written);
+            }
+        }
+    }
+}
+
+mod leb128 {
+    const CONTINUE_BIT: u8 = 1 << 7;
+
+    fn encode(mut n: u64, w: &mut Vec<u8>) -> usize {
+        let mut len = 0;
+        loop {
+            let byte = n & (u8::MAX as u64);
+            let mut byte = byte as u8 & !CONTINUE_BIT;
+
+            n >>= 7;
+            if n != 0 {
+                byte |= CONTINUE_BIT;
+            }
+
+            let buf = [byte];
+            w.extend(buf);
+            len += 1;
+
+            if n == 0 {
+                return len;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Frame;
+    use super::{Encode, Frame};
+
+    #[test]
+    fn test_encode_u8() {
+        let mut buf = Vec::new();
+        0_u8.encode(&mut buf).unwrap();
+        assert_eq!(buf, [0]);
+    }
+
+    #[test]
+    fn test_encode_u16() {
+        let mut buf = Vec::new();
+        127_u16.encode(&mut buf).unwrap();
+        assert_eq!(buf, [127]);
+
+        let mut buf = Vec::new();
+        300_u16.encode(&mut buf).unwrap();
+        assert_eq!(buf, [172, 2]);
+    }
 
     #[test]
     fn test_frame_to_bytes() {
