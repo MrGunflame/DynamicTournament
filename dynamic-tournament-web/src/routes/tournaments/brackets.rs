@@ -18,7 +18,7 @@ use super::Route;
 
 pub mod bracket;
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

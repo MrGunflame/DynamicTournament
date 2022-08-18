@@ -22,7 +22,7 @@ impl Component for Overview {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

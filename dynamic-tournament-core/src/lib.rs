@@ -271,7 +271,7 @@ impl<D> Node<D> {
 /// An `Result<T>` using [`enum@Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum Error {
     #[error("invalid number of matches: expected {expected}, found {found}")]
     InvalidNumberOfMatches { expected: usize, found: usize },

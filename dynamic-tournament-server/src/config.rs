@@ -96,7 +96,7 @@ impl Default for Config {
 /// An address to bind the http server to.
 ///
 /// This can currently be a tcp socket (net) or a unix socket (file).
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum BindAddr {
     Tcp(SocketAddr),
     Unix(PathBuf),

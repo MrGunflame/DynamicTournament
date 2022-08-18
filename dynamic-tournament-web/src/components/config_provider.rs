@@ -59,7 +59,7 @@ pub struct Props {
     pub children: Children,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct Config {
     pub api_url: String,
 }

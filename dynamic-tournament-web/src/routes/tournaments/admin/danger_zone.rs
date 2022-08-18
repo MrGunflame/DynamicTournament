@@ -10,7 +10,7 @@ use crate::{
 
 const DELETE_MESSAGE: &str = "Delete this tournament? This operation cannot be undone.";
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

@@ -140,7 +140,7 @@ impl Component for Tournament {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub id: TournamentId,
 }
@@ -149,7 +149,7 @@ pub enum Msg {
     Update(FetchData<Rc<ApiTournament>>),
 }
 
-#[derive(Clone, Routable, PartialEq)]
+#[derive(Clone, Routable, PartialEq, Eq)]
 pub enum Route {
     #[at("/tournaments/:tournament_id/:tournament_name")]
     Index {
