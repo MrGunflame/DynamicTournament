@@ -18,6 +18,8 @@ pub enum Error {
     VarintOverflow,
     #[error("invalid variant")]
     InvalidVariant,
+    #[error("invalid sequence length")]
+    InvalidLength,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -549,6 +551,9 @@ where
         R: Read,
     {
         let len = usize::decode(&mut reader)?;
+        if len != N {
+            return Err(Error::InvalidLength);
+        }
 
         // SAFETY: An uninitialized `[MaybeUninit<_>; N]` is always valid.
         let mut buf: [MaybeUninit<T>; N] =
@@ -834,6 +839,10 @@ mod tests {
     fn test_decode_array() {
         let buf = Cursor::new([5, 1, 2, 3, 4, 5]);
         assert_eq!(<[u8; 5]>::decode(buf).unwrap(), [1, 2, 3, 4, 5]);
+
+        // Invalid length
+        let buf = Cursor::new([3, 1, 2, 3]);
+        matches!(<[u8; 5]>::decode(buf).unwrap_err(), Error::InvalidLength);
 
         // Test internal drop implementation.
         static ACTIVE: AtomicUsize = AtomicUsize::new(3);
