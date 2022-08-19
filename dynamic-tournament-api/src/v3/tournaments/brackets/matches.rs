@@ -17,6 +17,8 @@ pub enum Error {
     InvalidBool(u8),
     #[error("varint overflow")]
     VarintOverflow,
+    #[error("invalid variant")]
+    InvalidVariant,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +79,35 @@ impl Encode for Request {
         }
 
         Ok(bytes_written)
+    }
+}
+
+impl Decode for Request {
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        match u8::decode(&mut reader)? {
+            0 => Ok(Self::Reserved),
+            1 => {
+                let token = String::decode(reader)?;
+
+                Ok(Self::Authorize(token))
+            }
+            2 => Ok(Self::SyncState),
+            3 => {
+                let index = u64::decode(&mut reader)?;
+                let nodes = Decode::decode(reader)?;
+
+                Ok(Self::UpdateMatch { index, nodes })
+            }
+            4 => {
+                let index = u64::decode(&mut reader)?;
+
+                Ok(Self::ResetMatch { index })
+            }
+            _ => Err(Error::InvalidVariant),
+        }
     }
 }
 
@@ -615,6 +646,65 @@ where
         bytes_written += self.winner.encode(writer)?;
 
         Ok(bytes_written)
+    }
+}
+
+impl<T> Decode for Match<T>
+where
+    T: Decode,
+{
+    fn decode<R>(reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        Ok(Match::new(Decode::decode(reader)?))
+    }
+}
+
+impl<T> Decode for EntrantSpot<T>
+where
+    T: Decode,
+{
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        match u8::decode(&mut reader)? {
+            0 => Ok(Self::Empty),
+            1 => Ok(Self::TBD),
+            2 => Ok(Self::Entrant(T::decode(reader)?)),
+            _ => Err(Error::InvalidVariant),
+        }
+    }
+}
+
+impl<T> Decode for Node<T>
+where
+    T: Decode,
+{
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        let index = usize::decode(&mut reader)?;
+        let data = T::decode(reader)?;
+
+        Ok(Node::new_with_data(index, data))
+    }
+}
+
+impl<T> Decode for EntrantScore<T>
+where
+    T: Decode,
+{
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        let score = T::decode(&mut reader)?;
+        let winner = bool::decode(reader)?;
+
+        Ok(Self { score, winner })
     }
 }
 
