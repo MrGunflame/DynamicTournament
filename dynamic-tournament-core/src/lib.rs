@@ -217,7 +217,7 @@ pub trait EntrantData: Default {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Node<D> {
-    index: usize,
+    pub index: usize,
     #[cfg_attr(feature = "serde-flatten", serde(flatten))]
     pub data: D,
 }
