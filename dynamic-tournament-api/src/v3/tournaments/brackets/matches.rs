@@ -175,6 +175,35 @@ impl Encode for Response {
     }
 }
 
+impl Decode for Response {
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        match u8::decode(&mut reader)? {
+            0 => Ok(Self::Reserved),
+            1 => Ok(Self::Error),
+            2 => {
+                let matches: Vec<Match<Node<EntrantScore<u64>>>> = Decode::decode(reader)?;
+
+                Ok(Self::SyncState(Matches::from(matches)))
+            }
+            3 => {
+                let index = u64::decode(&mut reader)?;
+                let nodes = Decode::decode(reader)?;
+
+                Ok(Self::UpdateMatch { index, nodes })
+            }
+            4 => {
+                let index = u64::decode(reader)?;
+
+                Ok(Self::ResetMatch { index })
+            }
+            _ => Err(Error::InvalidVariant),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Frame {
     Reserved,
@@ -550,10 +579,10 @@ where
         // return an error. This means we need to drop all previously initialized
         // elements. The `elems` variable keeps track of how many values have been
         // initialized.
-        for _ in 0..len {
+        for index in 0..len {
             match T::decode(&mut reader) {
                 Ok(val) => {
-                    buf[0].write(val);
+                    buf[index].write(val);
                     elems += 1;
                 }
                 Err(err) => {
@@ -741,7 +770,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{Cursor, Read};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::{Decode, Encode, EntrantScore, EntrantSpot, Error, Frame, Match, Node};
 
@@ -796,6 +826,49 @@ mod tests {
 
         let mut buf = Cursor::new([172, 2]);
         assert_eq!(u64::decode(&mut buf).unwrap(), 300);
+    }
+
+    #[test]
+    fn test_decode_usize() {
+        let buf = Cursor::new([0]);
+        assert_eq!(usize::decode(buf).unwrap(), 0);
+
+        let buf = Cursor::new([127]);
+        assert_eq!(usize::decode(buf).unwrap(), 127);
+
+        let buf = Cursor::new([172, 2]);
+        assert_eq!(usize::decode(buf).unwrap(), 300);
+    }
+
+    #[test]
+    fn test_decode_array() {
+        let buf = Cursor::new([5, 1, 2, 3, 4, 5]);
+        assert_eq!(<[u8; 5]>::decode(buf).unwrap(), [1, 2, 3, 4, 5]);
+
+        // Test internal drop implementation.
+        static ACTIVE: AtomicUsize = AtomicUsize::new(3);
+
+        #[derive(Debug)]
+        struct HasDrop(u8);
+
+        impl Decode for HasDrop {
+            fn decode<R>(reader: R) -> Result<Self, Error>
+            where
+                R: Read,
+            {
+                Ok(Self(u8::decode(reader)?))
+            }
+        }
+
+        impl Drop for HasDrop {
+            fn drop(&mut self) {
+                ACTIVE.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+
+        let buf = Cursor::new([5, 1, 2, 3]);
+        matches!(<[HasDrop; 5]>::decode(buf).unwrap_err(), Error::Io(_));
+        assert_eq!(ACTIVE.load(Ordering::SeqCst), 0);
     }
 
     #[test]
