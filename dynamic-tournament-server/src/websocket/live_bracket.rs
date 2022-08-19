@@ -10,9 +10,11 @@ use dynamic_tournament_core::{
     tournament::{Tournament, TournamentKind},
     EntrantScore, EntrantSpot, Matches, System,
 };
+use futures::StreamExt;
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
-use tokio::sync::broadcast::error::RecvError;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{store::Store, Error};
 
@@ -87,11 +89,12 @@ impl LiveBracket {
     }
 
     pub fn changed(&self) -> Changed<'_> {
-        let mut rx = self.receiver();
+        let rx = self.receiver();
 
         Changed {
             _bracket: self,
-            state: Box::pin(async move { rx.recv().await }),
+            state: BroadcastStream::new(rx),
+            next: None,
         }
     }
 
@@ -232,22 +235,35 @@ impl LiveBrackets {
 pub struct Changed<'a> {
     _bracket: &'a LiveBracket,
     // TODO: Get rid the Box here once the asyncsync has a strong-typed broadcast channel.
-    state: Pin<Box<dyn Future<Output = Result<BracketChange, RecvError>> + Send + Sync + 'static>>,
+    state: BroadcastStream<BracketChange>,
+    next: Option<futures::stream::Next<'static, BroadcastStream<BracketChange>>>,
 }
 
 impl<'a> Future for Changed<'a> {
     type Output = Result<BracketChange, ChangeError>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let state = unsafe { self.map_unchecked_mut(|this| &mut this.state) };
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.next.is_none() {
+            let next = self.state.next();
+            // Extend to lifetime of Next to 'static.
+            // SAFETY: This is safe since the reference only exists for the same
+            // lifetime as the owner.
+            let next = unsafe { std::mem::transmute(next) };
 
-        match state.poll(cx) {
+            self.next = Some(next);
+        }
+
+        let next = unsafe { self.map_unchecked_mut(|this| this.next.as_mut().unwrap()) };
+
+        match next.poll(cx) {
             Poll::Ready(res) => match res {
-                Ok(c) => Poll::Ready(Ok(c)),
-                Err(RecvError::Lagged(_)) => Poll::Ready(Err(ChangeError::Lagged)),
+                Some(Ok(c)) => Poll::Ready(Ok(c)),
+                Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
+                    Poll::Ready(Err(ChangeError::Lagged))
+                }
                 // This error cannot ever occur because we keep an instance to a sender
                 // ourself.
-                Err(RecvError::Closed) => unreachable!(),
+                None => unreachable!(),
             },
             Poll::Pending => Poll::Pending,
         }
