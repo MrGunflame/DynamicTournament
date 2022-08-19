@@ -13,12 +13,10 @@ use hyper::upgrade::Upgraded;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior};
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
 
-use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -70,26 +68,10 @@ pub async fn handle(
     select! {
         _ = &mut conn => {}
         _ = shutdown => {
-            conn.shutdown().await;
             log::debug!("Server shutdown, closing websocket connection");
-            conn.await;
+            conn.close().await;
         }
     }
-}
-
-#[derive(Debug)]
-enum WebSocketMessage {
-    Response(Response),
-    Ping(Vec<u8>),
-    Pong(Vec<u8>),
-    Close(Option<CloseFrame<'static>>),
-}
-
-fn close_normal() -> WebSocketMessage {
-    WebSocketMessage::Close(Some(CloseFrame {
-        code: CloseCode::Normal,
-        reason: Cow::Borrowed("CLOSE_NORMAL"),
-    }))
 }
 
 /// A websocket connection.
@@ -145,8 +127,20 @@ where
 
     /// Initiates a graceful shutdown of the `Connection`. The connection should be continued to
     /// be polled until it completes.
-    pub async fn shutdown(&self) {
-        unimplemented!()
+    #[inline]
+    fn close(&mut self) -> Close<'_, S> {
+        Close { conn: self }
+    }
+
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        // If there is a message in the buffer, complete it.
+        match self.state {
+            ConnectionState::Write(_) => return self.poll_write(cx),
+            _ => (),
+        }
+
+        self.init_write_close(None);
+        self.poll_write_close(cx)
     }
 
     /// Poll the reading half of the stream. This method returns `Poll::Ready` once the remote
@@ -406,3 +400,24 @@ unsafe impl<S> Send for Connection<S> where S: AsyncRead + AsyncWrite + Unpin + 
 
 // Both `TcpStream` and `UnixStream` are Sync, unlike Upgraded for some reason.
 unsafe impl<S> Sync for Connection<S> where S: AsyncRead + AsyncWrite + Unpin {}
+
+#[derive(Debug)]
+pub struct Close<'a, S>
+where
+    S: AsyncRead + AsyncWrite + Unpin + 'static,
+{
+    conn: &'a mut Connection<S>,
+}
+
+impl<'a, S> Future for Close<'a, S>
+where
+    S: AsyncRead + AsyncWrite + Unpin + 'static,
+{
+    type Output = ();
+
+    #[inline]
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let conn = unsafe { self.map_unchecked_mut(|this| this.conn) };
+        conn.poll_close(cx)
+    }
+}
