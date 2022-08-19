@@ -125,6 +125,14 @@ pub enum Response {
     },
 }
 
+#[derive(Clone, Debug)]
+pub enum ErrorResp {
+    Unauthorized,
+    /// The server event queue lagged and is out sync. The client may want
+    /// to synchronize again.
+    Lagged,
+}
+
 impl Response {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::new();

@@ -27,6 +27,8 @@ use live_bracket::LiveBracket;
 #[cfg(feature = "metrics")]
 use crate::metrics::Metrics;
 
+use self::live_bracket::Changed;
+
 pub async fn handle(
     conn: Upgraded,
     state: State,
@@ -102,18 +104,23 @@ where
     is_authenticated: bool,
     global_state: State,
     bracket: LiveBracket,
+    changed: Changed<'static>,
 }
 
 impl<S> Connection<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + 'static,
 {
+    /// Creates a new `Connection` using `stream` as the underlying websocket stream. The
+    /// initial handshake should already have happened.
     pub fn new(stream: WebSocketStream<S>, state: State, bracket: LiveBracket) -> Self
     where
         S: AsyncRead + AsyncWrite + Unpin,
     {
         let mut ping_interval = tokio::time::interval(Duration::new(30, 0));
         ping_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        let changed = unsafe { mem::transmute(bracket.changed()) };
 
         Self {
             stream,
@@ -122,6 +129,7 @@ where
             is_authenticated: false,
             global_state: state,
             bracket,
+            changed,
         }
     }
 
@@ -270,6 +278,26 @@ where
         }
     }
 
+    /// Poll for changes from the live bracket.
+    fn poll_changed(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        log::trace!("Connection.poll_changed");
+
+        let changed = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.changed) };
+
+        match changed.poll(cx) {
+            Poll::Ready(res) => match res {
+                Ok(change) => {
+                    let buf = Response::from(change).to_bytes();
+                    self.init_write(Message::Binary(buf));
+                    self.poll_write(cx)
+                }
+                // TODO: Add error handling for lagging
+                Err(_) => Poll::Ready(()),
+            },
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
     fn init_read(&mut self) {
         let prev = self.state_str();
 
@@ -377,10 +405,13 @@ where
                     self.init_read();
                     continue;
                 }
-                // Try to read, then tick.
+                // Try to read, check for bracket updates and then tick.
                 ConnectionState::Read(_) => match self.as_mut().poll_read(cx) {
                     Poll::Ready(_) => {}
-                    Poll::Pending => return self.as_mut().poll_tick(cx),
+                    Poll::Pending => match self.as_mut().poll_changed(cx) {
+                        Poll::Ready(()) => {}
+                        Poll::Pending => return self.as_mut().poll_tick(cx),
+                    },
                 },
                 // Finish the write request, then call poll_read again.
                 ConnectionState::Write(_) => match self.as_mut().poll_write(cx) {
