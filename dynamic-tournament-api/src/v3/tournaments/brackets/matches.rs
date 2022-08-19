@@ -2,7 +2,6 @@ use std::io::{self, Read, Write};
 use std::mem::MaybeUninit;
 use std::string::FromUtf8Error;
 
-use bincode::{DefaultOptions, Options};
 use dynamic_tournament_core::{EntrantScore, EntrantSpot, Match, Matches, Node};
 use serde::{Deserialize, Serialize};
 
@@ -217,24 +216,6 @@ pub enum Frame {
     ResetMatch {
         index: usize,
     },
-}
-
-impl Frame {
-    pub fn to_bytes(&self) -> bincode::Result<Vec<u8>> {
-        let options = DefaultOptions::new()
-            .with_little_endian()
-            .with_varint_encoding();
-
-        options.serialize(self)
-    }
-
-    pub fn from_bytes(buf: &[u8]) -> bincode::Result<Self> {
-        let options = DefaultOptions::new()
-            .with_little_endian()
-            .with_varint_encoding();
-
-        options.deserialize(buf)
-    }
 }
 
 const CONTINUE_BIT: u8 = 1 << 7;
@@ -773,7 +754,7 @@ mod tests {
     use std::io::{Cursor, Read};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{Decode, Encode, EntrantScore, EntrantSpot, Error, Frame, Match, Node};
+    use super::{Decode, Encode, EntrantScore, EntrantSpot, Error, Match, Node};
 
     #[test]
     fn test_encode_bool() {
@@ -927,59 +908,5 @@ mod tests {
             .encode(&mut buf)
             .unwrap();
         assert_eq!(buf, [2, 0, 0]);
-    }
-
-    #[test]
-    fn test_frame_to_bytes() {
-        let frame = Frame::Reserved;
-
-        assert_eq!(frame.to_bytes().unwrap(), vec![0]);
-
-        let frame = Frame::Authorize(String::from("Hello World"));
-        assert_eq!(
-            frame.to_bytes().unwrap(),
-            vec![
-                1,
-                "Hello World".as_bytes().len().try_into().unwrap(),
-                b'H',
-                b'e',
-                b'l',
-                b'l',
-                b'o',
-                b' ',
-                b'W',
-                b'o',
-                b'r',
-                b'l',
-                b'd',
-            ]
-        );
-    }
-
-    #[test]
-    fn test_frame_from_bytes() {
-        let bytes = &[0];
-
-        let frame = Frame::from_bytes(bytes).unwrap();
-        assert_eq!(frame, Frame::Reserved);
-
-        let bytes = &[
-            1,
-            "Hello World".as_bytes().len().try_into().unwrap(),
-            b'H',
-            b'e',
-            b'l',
-            b'l',
-            b'o',
-            b' ',
-            b'W',
-            b'o',
-            b'r',
-            b'l',
-            b'd',
-        ];
-
-        let frame = Frame::from_bytes(bytes).unwrap();
-        assert_eq!(frame, Frame::Authorize(String::from("Hello World")));
     }
 }
