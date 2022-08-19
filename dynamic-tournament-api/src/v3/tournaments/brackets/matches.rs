@@ -587,10 +587,10 @@ where
                 }
                 Err(err) => {
                     // Drop all previously initialized elements.
-                    for index in 0..elems {
+                    for mut elem in buf.into_iter().take(elems) {
                         // SAFETY: All fields until `elems` are initialized.
                         unsafe {
-                            buf[index].assume_init_drop();
+                            elem.assume_init_drop();
                         }
                     }
 
@@ -817,6 +817,15 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_bool() {
+        let mut buf = Cursor::new([0, 1, 2]);
+        assert!(!bool::decode(&mut buf).unwrap());
+        assert!(bool::decode(&mut buf).unwrap());
+
+        matches!(bool::decode(&mut buf).unwrap_err(), Error::InvalidBool(_));
+    }
+
+    #[test]
     fn test_decode_u64() {
         let mut buf = Cursor::new([0]);
         assert_eq!(u64::decode(&mut buf).unwrap(), 0);
@@ -918,15 +927,6 @@ mod tests {
             .encode(&mut buf)
             .unwrap();
         assert_eq!(buf, [2, 0, 0]);
-    }
-
-    #[test]
-    fn test_decode_bool() {
-        let mut buf = Cursor::new([0, 1, 2]);
-        assert_eq!(bool::decode(&mut buf).unwrap(), false);
-        assert_eq!(bool::decode(&mut buf).unwrap(), true);
-
-        matches!(bool::decode(&mut buf).unwrap_err(), Error::InvalidBool(_));
     }
 
     #[test]

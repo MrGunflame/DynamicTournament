@@ -83,13 +83,13 @@ pub async fn handle(
 /// # Implementation notes
 ///
 /// The connection is implemented using a single future. It calls [`poll_read`], [`poll_write`]
-/// and [`poll_ping`] to advance the internal state. When a `poll_*` modifies the internal state
+/// and [`poll_tick`] to advance the internal state. When a `poll_*` modifies the internal state
 /// it must install a waker on the new state. The future implementation for `Connection` will only
 /// initialize the state and then forward any `poll` calls to the appropriate `poll_*` method.
 ///
 /// [`poll_read`]: Self::poll_read
 /// [`poll_write`]: Self::poll_write
-/// [`poll_ping`]: Self::poll_ping
+/// [`poll_tick`]: Self::poll_tick
 #[derive(Debug)]
 pub struct Connection<S>
 where
@@ -142,9 +142,8 @@ where
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         // If there is a message in the buffer, complete it.
-        match self.state {
-            ConnectionState::Write(_) => return self.poll_write(cx),
-            _ => (),
+        if let ConnectionState::Write(_) = self.state {
+            return self.poll_write(cx);
         }
 
         self.init_write_close(None);

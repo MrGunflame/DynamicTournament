@@ -117,7 +117,6 @@ impl EventHandler for Handler {
                     Ok(resp) => self.0.send(Req::Message(resp)),
                     Err(err) => {
                         log::error!("Failed to decode websocket response: {}", err);
-                        return;
                     }
                 }
             }
