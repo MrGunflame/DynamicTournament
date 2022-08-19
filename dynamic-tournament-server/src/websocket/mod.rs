@@ -31,7 +31,7 @@ use std::time::Duration;
 use live_bracket::LiveBracket;
 
 #[cfg(feature = "metrics")]
-use crate::metrics::Metrics;
+use crate::metrics::GaugeGuard;
 
 pub async fn handle(
     conn: Upgraded,
@@ -39,24 +39,11 @@ pub async fn handle(
     tournament_id: TournamentId,
     bracket_id: BracketId,
 ) {
+    // Update the active connections gauge.
     #[cfg(feature = "metrics")]
     let _metrics_guard = {
-        let metrics = state.metrics.clone();
-
-        metrics.websocket_connections_total.inc();
-        metrics.websocket_connections_current.inc();
-
-        struct MetricsGuard {
-            metrics: Metrics,
-        }
-
-        impl Drop for MetricsGuard {
-            fn drop(&mut self) {
-                self.metrics.websocket_connections_current.dec();
-            }
-        }
-
-        MetricsGuard { metrics }
+        let gauge = state.metrics.websocket_connections_current.clone();
+        GaugeGuard::new(gauge)
     };
 
     let shutdown = state.shutdown.listen();
