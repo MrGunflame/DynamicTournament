@@ -1,9 +1,10 @@
 pub mod errorlog;
 
 use std::collections::HashSet;
+use std::io::Cursor;
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
+use dynamic_tournament_api::v3::tournaments::brackets::matches::{Decode, Request, Response};
 use dynamic_tournament_api::Error;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
@@ -39,7 +40,7 @@ impl WebSocketService {
         if let Some(auth) = auth {
             let mut ws = ws.clone();
             spawn_local(async move {
-                let msg = Frame::Authorize(auth.into_token()).to_bytes().unwrap();
+                let msg = Request::Authorize(auth.into_token()).to_bytes();
 
                 ws.send(msg).await;
             });
@@ -48,17 +49,17 @@ impl WebSocketService {
         Ok(Self { ws })
     }
 
-    pub async fn send(&mut self, msg: Frame) {
-        log::debug!("Sending frame: {:?}", msg);
+    pub async fn send(&mut self, req: Request) {
+        log::debug!("Sending frame: {:?}", req);
 
-        let msg = msg.to_bytes().unwrap();
+        let msg = req.to_bytes();
         self.ws.send(msg).await;
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Request {
-    Message(Frame),
+pub enum Req {
+    Message(Response),
     Close,
 }
 
@@ -70,8 +71,8 @@ pub struct EventBus {
 impl Agent for EventBus {
     type Reach = Context<Self>;
     type Message = ();
-    type Input = Request;
-    type Output = Frame;
+    type Input = Req;
+    type Output = Response;
 
     fn create(link: AgentLink<Self>) -> Self {
         Self {
@@ -84,12 +85,12 @@ impl Agent for EventBus {
 
     fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
         match msg {
-            Request::Message(msg) => {
+            Req::Message(msg) => {
                 for sub in self.subscribers.iter() {
                     self.link.respond(*sub, msg.clone());
                 }
             }
-            Request::Close => {}
+            Req::Close => {}
         }
     }
 
@@ -109,11 +110,19 @@ impl EventHandler for Handler {
         log::debug!("Received frame: {:?}", msg);
 
         match msg {
-            WebSocketMessage::Bytes(buf) => self
-                .0
-                .send(Request::Message(Frame::from_bytes(&buf).unwrap())),
+            WebSocketMessage::Bytes(buf) => {
+                let mut buf = Cursor::new(buf);
+
+                match Response::decode(&mut buf) {
+                    Ok(resp) => self.0.send(Req::Message(resp)),
+                    Err(err) => {
+                        log::error!("Failed to decode websocket response: {}", err);
+                        return;
+                    }
+                }
+            }
             WebSocketMessage::Text(_) => (),
-            WebSocketMessage::Close => self.0.send(Request::Close),
+            WebSocketMessage::Close => self.0.send(Req::Close),
         }
     }
 }
