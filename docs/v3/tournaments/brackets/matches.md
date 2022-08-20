@@ -178,3 +178,65 @@ The body contains the id of the error that happened.
 | ProtoIntOverflow  | 131 | A specialized protocol error: A varint-encoded integer was too long. Note that this may also be returned when the varint is malformed. |
 
 #### SyncState
+
+The `SyncState` is returned in response to a `SyncState` request. It contains the complete state of
+the bracket.
+
+| Name    | Type    | Description                           |
+| ------- | ------- | ------------------------------------- |
+| matches | []Match | A list of all matches in the bracket. |
+
+A `Match` contains:
+| Name     | Type          | Description |
+| -------- | ------------- | ----------- |
+| entrants | []EntrantSpot | A list of entrants in a match. This currently always has the length 2
+(red/blue team). |
+
+An `EntrantSpot` describes a position in a match. The position be `Empty` (displayed as *BYE* on the frontend), `TBD` (displayed as *TBD* on the frontend) or it contain a reference to an entrant. An `EntrantSpot` is encoded as a single byte representing the variant of the position. If the variant contains an entrant it is encoded afterwards.
+| Name    | Byte |
+| ------- | ---- |
+| Empty   | 0    |
+| TBD     | 1    |
+| Entrant | 2    |
+
+If the `EntrantSpot` is an `Entrant` variant, it contains a `Node`. A `Node` contains a reference (index) to an entrant and the state (score/winner):
+| Name  | Type        | Description               |
+| ----- | ----------- | ------------------------- |
+| index | Type        | The index of the entrant. |
+| data  | EntrantSpot | The state of the node.    |
+
+The data field of a `Node` contains a `EntrantScore`. A `EntrantScore` contains a score and winner flag.
+| Name   | Type | Description                   |
+| ------ | ---- | ----------------------------- |
+| score  | u64  | The score of the node.        |
+| winner | bool | Whether the node is a winner. |
+
+#### UpdateMatch
+
+The `UpdateMatch` event notifies about an updated match in the bracket. The body contains the index
+of the updated match and the updated values.
+
+Note: The body has the same format as the `UpdateMatch` request.
+
+| Name  | Type           | Description |
+| ----- | -------------- | -- |
+| index | u64            | The index of the match. |
+| nodes | []EntrantScore | An array of the updated data. This currently always has the length 2
+(red/blue team). |
+
+An `EntrantScore` contains:
+| Name   | Type | Description                   |
+| ------ | ---- | ----------------------------- |
+| score  | u64  | The score of the node.        |
+| winner | bool | Whether the node is a winner. |
+
+#### ResetMatch
+
+The `ResetMatch` event notifies about a resetted match in the bracket. The body contains the index
+of the resetted match.
+
+Note: The body has the same format as the `ResetMatch` request.
+
+| Name  | Type | Description                      |
+| ----- | ---- | -------------------------------- |
+| index | u64  | The index of the match to reset. |
