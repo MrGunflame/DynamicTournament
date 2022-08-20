@@ -10,16 +10,14 @@ use serde::{Deserialize, Serialize};
 pub enum Error {
     #[error("io: {0}")]
     Io(#[from] io::Error),
-    #[error("invalid utf8: {0}")]
-    InvalidUtf8(#[from] FromUtf8Error),
-    #[error("invalid bool value: {0}")]
-    InvalidBool(u8),
-    #[error("varint overflow")]
-    VarintOverflow,
     #[error("invalid variant")]
     InvalidVariant,
     #[error("invalid sequence length")]
-    InvalidLength,
+    InvalidSequence,
+    #[error("invalid utf8 string: {0}")]
+    InvalidString(#[from] FromUtf8Error),
+    #[error("varint overflow")]
+    IntOverflow,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,11 +125,56 @@ pub enum Response {
 }
 
 #[derive(Clone, Debug)]
-pub enum ErrorResp {
+pub enum ErrorResponse {
+    Internal,
+    Proto,
     Unauthorized,
     /// The server event queue lagged and is out sync. The client may want
     /// to synchronize again.
     Lagged,
+    ProtoInvalidVariant,
+    ProtoInvalidSequence,
+    ProtoInvalidString,
+    ProtoIntOverflow,
+}
+
+impl Encode for ErrorResponse {
+    fn encode<W>(&self, writer: W) -> Result<usize, Error>
+    where
+        W: Write,
+    {
+        let b: u8 = match self {
+            Self::Internal => 0,
+            Self::Proto => 1,
+            Self::Unauthorized => 2,
+            Self::Lagged => 3,
+            Self::ProtoInvalidVariant => 128,
+            Self::ProtoInvalidSequence => 129,
+            Self::ProtoInvalidString => 130,
+            Self::ProtoIntOverflow => 131,
+        };
+
+        b.encode(writer)
+    }
+}
+
+impl Decode for ErrorResponse {
+    fn decode<R>(reader: R) -> Result<Self, Error>
+    where
+        R: Read,
+    {
+        match u8::decode(reader)? {
+            0 => Ok(Self::Internal),
+            1 => Ok(Self::Proto),
+            2 => Ok(Self::Unauthorized),
+            3 => Ok(Self::Lagged),
+            128 => Ok(Self::ProtoInvalidVariant),
+            129 => Ok(Self::ProtoInvalidSequence),
+            130 => Ok(Self::ProtoInvalidString),
+            131 => Ok(Self::ProtoIntOverflow),
+            _ => Err(Error::InvalidVariant),
+        }
+    }
 }
 
 impl Response {
@@ -236,17 +279,116 @@ pub trait Decode: Sized {
         R: Read;
 }
 
-// ========================
-// ===== Encode impls =====
-// ========================
+/// A macro to implement Encode and Decode for unsigned integer types.
+macro_rules! impl_uint_varint {
+    ($($t:ty),*$(,)?) => {
+        $(
+            impl Encode for $t {
+                fn encode<W>(&self, mut writer: W) -> Result<usize, Error>
+                where
+                    W: Write,
+                {
+                    let mut n = *self;
 
-impl Encode for bool {
-    fn encode<W>(&self, writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        (*self as u8).encode(writer)
-    }
+                    let mut bytes_written = 0;
+                    loop {
+                        let byte = n & (u8::MAX as $t);
+                        let mut byte = byte as u8 & !CONTINUE_BIT;
+
+                        n >>= 7;
+                        if n != 0 {
+                            byte |= CONTINUE_BIT;
+                        }
+
+                        writer.write_all(&[byte])?;
+                        bytes_written += 1;
+
+                        if n == 0 {
+                            return Ok(bytes_written);
+                        }
+                    }
+                }
+            }
+
+            impl Decode for $t {
+                fn decode<R>(mut reader: R) -> Result<Self, Error>
+                where
+                    R: Read,
+                {
+                    let mut n = 0;
+                    let mut shift = 0;
+
+                    loop {
+                        let mut buf = [0];
+                        reader.read_exact(&mut buf)?;
+
+                        if shift == <$t>::BITS - 1 {
+                            consume_trail(reader)?;
+                            return Err(Error::IntOverflow);
+                        }
+
+                        // remove the continue bit.
+                        n += ((buf[0] & !CONTINUE_BIT) as $t) << shift;
+
+                        if buf[0] & CONTINUE_BIT == 0 {
+                            return Ok(n);
+                        }
+
+                        shift += 7;
+                    }
+                }
+            }
+        )*
+    };
+}
+
+/// A macro to implement Encode and Decdoe for signed integer types.
+macro_rules! impl_int_varint {
+    ($($t:ty:$uint:ty),*$(,)?) => {
+        $(
+            impl Encode for $t {
+                fn encode<W>(&self, writer: W) -> Result<usize, Error>
+                where
+                    W: Write,
+                {
+                    let n = ((*self << 1) ^ (*self >> (<$t>::BITS - 1))) as $uint;
+
+                    Encode::encode(&n, writer)
+                }
+            }
+
+            impl Decode for $t {
+                fn decode<R>(reader: R) -> Result<Self, Error>
+                where
+                    R: Read,
+                {
+                    let n = <$uint>::decode(reader)?;
+
+                    match n & 1 {
+                        // Unsigned
+                        0 => Ok((n as $t >> 1)),
+                        // Signed
+                        1 => Ok((n as $t >> 1) ^ -1),
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        )*
+    };
+}
+
+impl_uint_varint! {
+    u16,
+    u32,
+    u64,
+    usize,
+}
+
+impl_int_varint! {
+    i16: u16,
+    i32: u32,
+    i64: u64,
+    isize: usize,
 }
 
 impl Encode for u8 {
@@ -259,150 +401,35 @@ impl Encode for u8 {
     }
 }
 
-impl Encode for u16 {
-    fn encode<W>(&self, mut writer: W) -> Result<usize, Error>
+impl Decode for u8 {
+    fn decode<R>(mut reader: R) -> Result<Self, Error>
     where
-        W: Write,
+        R: Read,
     {
-        let mut n = *self;
-
-        let mut bytes_written = 0;
-        loop {
-            let byte = n & (u8::MAX as u16);
-            let mut byte = byte as u8 & !CONTINUE_BIT;
-
-            n >>= 7;
-            if n != 0 {
-                byte |= CONTINUE_BIT;
-            }
-
-            writer.write_all(&[byte])?;
-            bytes_written += 1;
-
-            if n == 0 {
-                return Ok(bytes_written);
-            }
-        }
+        let mut buf = [0];
+        reader.read_exact(&mut buf)?;
+        Ok(buf[0])
     }
 }
 
-impl Encode for u32 {
-    fn encode<W>(&self, mut writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        let mut n = *self;
-
-        let mut bytes_written = 0;
-        loop {
-            let byte = n & (u8::MAX as u32);
-            let mut byte = byte as u8 & !CONTINUE_BIT;
-
-            n >>= 7;
-            if n != 0 {
-                byte |= CONTINUE_BIT;
-            }
-
-            writer.write_all(&[byte])?;
-            bytes_written += 1;
-
-            if n == 0 {
-                return Ok(bytes_written);
-            }
-        }
-    }
-}
-
-impl Encode for i8 {
+impl Encode for bool {
     fn encode<W>(&self, writer: W) -> Result<usize, Error>
     where
         W: Write,
     {
-        let n = ((*self << 1) ^ (*self >> 7)) as u8;
-        n.encode(writer)
+        (*self as u8).encode(writer)
     }
 }
 
-impl Encode for i16 {
-    fn encode<W>(&self, writer: W) -> Result<usize, Error>
+impl Decode for bool {
+    fn decode<R>(reader: R) -> Result<Self, Error>
     where
-        W: Write,
+        R: Read,
     {
-        let n = ((*self << 1) ^ (*self >> 15)) as u16;
-        n.encode(writer)
-    }
-}
-
-impl Encode for i32 {
-    fn encode<W>(&self, writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        let n = ((*self << 1) ^ (*self >> 31)) as u32;
-        n.encode(writer)
-    }
-}
-
-impl Encode for i64 {
-    fn encode<W>(&self, writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        let n = ((*self << 1) ^ (*self >> 63)) as u64;
-        n.encode(writer)
-    }
-}
-
-impl Encode for u64 {
-    fn encode<W>(&self, mut writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        let mut n = *self;
-
-        let mut bytes_written = 0;
-        loop {
-            let byte = n & (u8::MAX as u64);
-            let mut byte = byte as u8 & !CONTINUE_BIT;
-
-            n >>= 7;
-            if n != 0 {
-                byte |= CONTINUE_BIT;
-            }
-
-            writer.write_all(&[byte])?;
-            bytes_written += 1;
-
-            if n == 0 {
-                return Ok(bytes_written);
-            }
-        }
-    }
-}
-
-impl Encode for usize {
-    fn encode<W>(&self, mut writer: W) -> Result<usize, Error>
-    where
-        W: Write,
-    {
-        let mut n = *self;
-
-        let mut bytes_written = 0;
-        loop {
-            let byte = n & (u8::MAX as usize);
-            let mut byte = byte as u8 & !CONTINUE_BIT;
-
-            n >>= 7;
-            if n != 0 {
-                byte |= CONTINUE_BIT;
-            }
-
-            writer.write_all(&[byte])?;
-            bytes_written += 1;
-
-            if n == 0 {
-                return Ok(bytes_written);
-            }
+        match u8::decode(reader)? {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Error::InvalidVariant),
         }
     }
 }
@@ -435,94 +462,6 @@ impl Encode for str {
     }
 }
 
-// =======================
-// ===== Decode impl =====
-// =======================
-
-impl Decode for bool {
-    fn decode<R>(reader: R) -> Result<Self, Error>
-    where
-        R: Read,
-    {
-        match u8::decode(reader)? {
-            0 => Ok(false),
-            1 => Ok(true),
-            n => Err(Error::InvalidBool(n)),
-        }
-    }
-}
-
-impl Decode for u8 {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
-    where
-        R: Read,
-    {
-        let mut buf = [0];
-        reader.read_exact(&mut buf)?;
-        Ok(buf[0])
-    }
-}
-
-impl Decode for u64 {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
-    where
-        R: Read,
-    {
-        let mut n = 0;
-        let mut shift = 0;
-
-        loop {
-            let mut buf = [0];
-            reader.read_exact(&mut buf)?;
-
-            if shift == u64::BITS - 1 {
-                consume_trail(reader)?;
-                panic!("ULEB-128 overflow");
-            }
-
-            // Remove the continue bit.
-            n += ((buf[0] & !CONTINUE_BIT) as u64) << shift;
-
-            // Continue bit not set. This is the end of the integer.
-            if buf[0] & CONTINUE_BIT == 0 {
-                return Ok(n);
-            }
-
-            shift += 7;
-        }
-    }
-}
-
-impl Decode for usize {
-    fn decode<R>(mut reader: R) -> Result<Self, Error>
-    where
-        R: Read,
-    {
-        let mut n = 0;
-        let mut shift = 0;
-
-        loop {
-            let mut buf = [0];
-            reader.read_exact(&mut buf)?;
-
-            if shift > usize::BITS {
-                consume_trail(reader)?;
-                return Err(Error::VarintOverflow);
-            }
-
-            // Remove the continue bit.
-            n += ((buf[0] & !CONTINUE_BIT) as usize) << shift;
-
-            // Continue bit not set. This is the end of the integer.
-            if buf[0] & CONTINUE_BIT == 0 {
-                return Ok(n);
-            }
-
-            shift += 7;
-        }
-    }
-}
-
 impl<T> Decode for Vec<T>
 where
     T: Decode,
@@ -552,7 +491,7 @@ where
     {
         let len = usize::decode(&mut reader)?;
         if len != N {
-            return Err(Error::InvalidLength);
+            return Err(Error::InvalidSequence);
         }
 
         // SAFETY: An uninitialized `[MaybeUninit<_>; N]` is always valid.
@@ -808,7 +747,7 @@ mod tests {
         assert!(!bool::decode(&mut buf).unwrap());
         assert!(bool::decode(&mut buf).unwrap());
 
-        matches!(bool::decode(&mut buf).unwrap_err(), Error::InvalidBool(_));
+        matches!(bool::decode(&mut buf).unwrap_err(), Error::InvalidVariant);
     }
 
     #[test]
@@ -842,7 +781,7 @@ mod tests {
 
         // Invalid length
         let buf = Cursor::new([3, 1, 2, 3]);
-        matches!(<[u8; 5]>::decode(buf).unwrap_err(), Error::InvalidLength);
+        matches!(<[u8; 5]>::decode(buf).unwrap_err(), Error::InvalidSequence);
 
         // Test internal drop implementation.
         static ACTIVE: AtomicUsize = AtomicUsize::new(3);
