@@ -1,7 +1,5 @@
 # /v3/tournaments/:id/brackets/:id/matches
 
-## Note: The websocket protocol is currently unstable.
-
 This sub-endpoint is avaliable for all tournaments. It is only used to create a websocket connection and send/receive live updates the bracket state.
 
 ## GET `/v3/tournaments/:id/brackets/:id/matches`
