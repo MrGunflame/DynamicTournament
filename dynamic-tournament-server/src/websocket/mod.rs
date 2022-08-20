@@ -6,7 +6,9 @@ use std::mem;
 use crate::State;
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::brackets::matches::{Decode, Request, Response};
+use dynamic_tournament_api::v3::tournaments::brackets::matches::{
+    Decode, ErrorResponse, Request, Response,
+};
 
 use futures::{SinkExt, StreamExt};
 use hyper::upgrade::Upgraded;
@@ -290,8 +292,13 @@ where
                     self.init_write(Message::Binary(buf));
                     self.poll_write(cx)
                 }
-                // TODO: Add error handling for lagging
-                Err(_) => Poll::Ready(()),
+                // Lagged
+                Err(_) => {
+                    let resp = Response::Error(ErrorResponse::Lagged);
+
+                    self.init_write(Message::Binary(resp.to_bytes()));
+                    self.poll_write(cx)
+                }
             },
             Poll::Pending => Poll::Pending,
         }
@@ -352,7 +359,7 @@ where
                 }
                 Err(err) => {
                     log::debug!("Failed to validate token: {}", err);
-                    Some(Response::Error)
+                    Some(Response::Error(ErrorResponse::Unauthorized))
                 }
             },
             Request::SyncState => {
@@ -360,12 +367,20 @@ where
                 Some(Response::SyncState(matches))
             }
             Request::UpdateMatch { index, nodes } => {
-                self.bracket.update(index, nodes);
-                None
+                if self.is_authenticated {
+                    self.bracket.update(index, nodes);
+                    None
+                } else {
+                    Some(Response::Error(ErrorResponse::Unauthorized))
+                }
             }
             Request::ResetMatch { index } => {
-                self.bracket.reset(index as usize);
-                None
+                if self.is_authenticated {
+                    self.bracket.reset(index as usize);
+                    None
+                } else {
+                    Some(Response::Error(ErrorResponse::Unauthorized))
+                }
             }
         }
     }

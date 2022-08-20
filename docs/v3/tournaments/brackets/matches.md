@@ -170,7 +170,7 @@ The body contains the id of the error that happened.
 | Proto        | 1  | An unspecified error in the protocol. This usually happens when the client sends an invalid request. |
 | Unauthorized | 2  | A sent request required authentication, but it was set. This is also returned when an invalid token is provided. |
 | Lagged       | 3  | The event queue for this connection lagged behind and some events were lost. The client may want to request `SyncState`. This usually happens when the connection is very slow. |
-| ProtoInvalidBool  | 128 | A specialized protocol error: an invalid bool value was decoded. |
+| ProtoInvalidVariant  | 128 | A specialized protocol error: an invalid variant was decoded (e.g. a bool that was not true/false). |
 | ProtoInvalidSeq   | 129 | A specialized protocol error: a sequence was shorter than the provided length. |
 | ProtoInvalidStr   | 130 | A specialized protocol error: a string contained an invalid UTF-8 byte sequence. |
 | ProtoIntOverflow  | 131 | A specialized protocol error: A varint-encoded integer was too long. Note that this may also be returned when the varint is malformed. |

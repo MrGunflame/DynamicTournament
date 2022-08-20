@@ -113,7 +113,7 @@ impl Decode for Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Response {
     Reserved,
-    Error,
+    Error(ErrorResponse),
     SyncState(Matches<EntrantScore<u64>>),
     UpdateMatch {
         index: u64,
@@ -124,7 +124,7 @@ pub enum Response {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ErrorResponse {
     Internal,
     Proto,
@@ -192,7 +192,7 @@ impl Encode for Response {
     {
         let cmd: u8 = match self {
             Self::Reserved => 0,
-            Self::Error => 1,
+            Self::Error(_) => 1,
             Self::SyncState(_) => 2,
             Self::UpdateMatch { index: _, nodes: _ } => 3,
             Self::ResetMatch { index: _ } => 4,
@@ -201,7 +201,9 @@ impl Encode for Response {
 
         match self {
             Self::Reserved => (),
-            Self::Error => (),
+            Self::Error(err) => {
+                bytes_written += err.encode(writer)?;
+            }
             Self::SyncState(state) => {
                 let slice: &[_] = state.as_ref();
                 bytes_written += slice.encode(writer)?;
@@ -226,7 +228,11 @@ impl Decode for Response {
     {
         match u8::decode(&mut reader)? {
             0 => Ok(Self::Reserved),
-            1 => Ok(Self::Error),
+            1 => {
+                let err = ErrorResponse::decode(reader)?;
+
+                Ok(Self::Error(err))
+            }
             2 => {
                 let matches: Vec<Match<Node<EntrantScore<u64>>>> = Decode::decode(reader)?;
 
