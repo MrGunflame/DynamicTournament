@@ -254,21 +254,6 @@ impl Decode for Response {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Frame {
-    Reserved,
-    Authorize(String),
-    SyncMatchesRequest,
-    SyncMatchesResponse(Matches<EntrantScore<u64>>),
-    UpdateMatch {
-        index: u64,
-        nodes: [EntrantScore<u64>; 2],
-    },
-    ResetMatch {
-        index: usize,
-    },
-}
-
 const CONTINUE_BIT: u8 = 1 << 7;
 
 /// A type that can be encoded into a byte buffer.
