@@ -112,21 +112,18 @@ impl Component for Bracket {
 
                 match resp {
                     Response::Error(err) => {
-                        match err {
-                            // The connection lagged bebing. Try to synchronize with the
-                            // server again.
-                            ErrorResponse::Lagged => {
-                                log::debug!("Bracket is lagging");
+                        // The connection lagged bebing. Try to synchronize with the
+                        // server again.
+                        if err == ErrorResponse::Lagged {
+                            log::debug!("Bracket is lagging");
 
-                                let mut ws = self.websocket.clone().unwrap();
-                                ctx.link().send_future_batch(async move {
-                                    ws.send(Request::SyncState).await;
-                                    vec![]
-                                });
-                            }
-                            // We don't handle any other errors.
-                            _ => (),
+                            let mut ws = self.websocket.clone().unwrap();
+                            ctx.link().send_future_batch(async move {
+                                ws.send(Request::SyncState).await;
+                                vec![]
+                            });
                         }
+                        // We don't handle any other errors.
 
                         false
                     }
