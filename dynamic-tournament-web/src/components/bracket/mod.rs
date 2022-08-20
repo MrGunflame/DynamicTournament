@@ -2,7 +2,9 @@ mod entrant;
 mod r#match;
 mod renderer;
 
-use dynamic_tournament_api::v3::tournaments::brackets::matches::{Request, Response};
+use dynamic_tournament_api::v3::tournaments::brackets::matches::{
+    ErrorResponse, Request, Response,
+};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_core::options::TournamentOptionValues;
 use dynamic_tournament_core::tournament::TournamentKind;
@@ -109,6 +111,26 @@ impl Component for Bracket {
                 log::debug!("Received message: {:?}", resp);
 
                 match resp {
+                    Response::Error(err) => {
+                        match err {
+                            // The connection lagged bebing. Try to synchronize with the
+                            // server again.
+                            ErrorResponse::Lagged => {
+                                log::debug!("Bracket is lagging");
+
+                                let mut ws = self.websocket.clone().unwrap();
+                                ctx.link().send_future_batch(async move {
+                                    ws.send(Request::SyncState).await;
+                                    vec![]
+                                });
+                            }
+                            // We don't handle any other errors.
+                            _ => (),
+                        }
+
+                        false
+                    }
+
                     Response::UpdateMatch { index, nodes } => {
                         log::warn!(
                             "Received an UpdateMatch frame before initializing the state, ignoring"
@@ -141,6 +163,8 @@ impl Component for Bracket {
                                 }
                             });
                         }
+
+                        true
                     }
                     Response::ResetMatch { index } => {
                         log::warn!(
@@ -154,6 +178,8 @@ impl Component for Bracket {
                                 res.reset_default();
                             });
                         }
+
+                        true
                     }
                     Response::SyncState(matches) => {
                         let system_kind = match ctx.props().bracket.system {
@@ -202,11 +228,11 @@ impl Component for Bracket {
                                     None
                                 }
                             };
-                    }
-                    _ => (),
-                }
 
-                true
+                        true
+                    }
+                    _ => false,
+                }
             }
             Message::Action { index, action } => {
                 log::debug!("Called action {:?} on {}", action, index);
