@@ -35,7 +35,7 @@ impl LiveBracket {
                     res.winner_default(entrant);
                     loser_index = Some(match i {
                         0 => 1,
-                        _ => 1,
+                        _ => 0,
                     });
                 }
             }
