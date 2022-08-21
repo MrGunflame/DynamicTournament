@@ -5,7 +5,6 @@ pub mod systems;
 pub mod tournamentlist;
 pub mod tournaments;
 
-use crate::components::config_provider::ConfigProvider;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
@@ -33,30 +32,28 @@ impl Component for App {
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
-            <ConfigProvider>
-                <ClientProvider>
-                    <BrowserRouter>
-                        <div class="main-wrapper">
-                            <div>
-                                <Navbar />
-                                <div class="main">
-                                    <Switch<Route> render={Switch::render(switch)} />
-                                </div>
-                                <div id="popup-host"></div>
-                                <ErrorLog />
+            <ClientProvider>
+                <BrowserRouter>
+                    <div class="main-wrapper">
+                        <div>
+                            <Navbar />
+                            <div class="main">
+                                <Switch<Route> render={Switch::render(switch)} />
                             </div>
-                            <div class="footer">
-                                <p>
-                                    { "This viewer is still in an early stage, please report issues on " }
-                                    <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
-                                    { " or to MagiiTech#0534 on Discord." }
-                                </p>
-                                <a href="/privacy.html">{ "Privacy Policy" }</a>
-                            </div>
+                            <div id="popup-host"></div>
+                            <ErrorLog />
                         </div>
-                    </BrowserRouter>
-                </ClientProvider>
-            </ConfigProvider>
+                        <div class="footer">
+                            <p>
+                                { "This viewer is still in an early stage, please report issues on " }
+                                <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
+                                { " or to MagiiTech#0534 on Discord." }
+                            </p>
+                            <a href="/privacy.html">{ "Privacy Policy" }</a>
+                        </div>
+                    </div>
+                </BrowserRouter>
+            </ClientProvider>
         }
     }
 }

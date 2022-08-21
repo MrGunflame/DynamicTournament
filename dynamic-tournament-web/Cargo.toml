@@ -8,6 +8,9 @@ repository = "https://github.com/MrGunflame/DynamicTournament"
 license = "Apache-2.0"
 publish = false
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api", features = ["local-storage"] }
 dynamic-tournament-core = { version = "0.5.1", path = "../dynamic-tournament-core", features = ["serde"] }
@@ -21,7 +24,7 @@ gloo-console = "0.2.1"
 gloo-events = "0.1.2"
 gloo-timers = "0.2.3"
 web-sys = { version = "0.3.56", features = ["Document", "Element", "Node", "Window", "HtmlCollection", "HtmlInputElement", "TouchEvent", "TouchList", "Touch"] }
-log = { version = "0.4.16", features = ["release_max_level_warn"]}
+log = { version = "0.4.16" }
 futures = "0.3.21"
 wasm-bindgen-futures = "0.4.30"
 yew-agent = "0.1.0"

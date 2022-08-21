@@ -9,11 +9,13 @@ use crate::Mountpoint;
 ///
 /// Mount and start the application at the `<body>` html tag.
 /// ```
+/// # use dynamic_tournament_web::Mountpoint;
 /// pub const MOUNTPOINT: Mountpoint = Mountpoint::Body;
 /// ```
 ///
 /// Mount and start the application at the `<div id="main">` html tag.
 /// ```
+/// # use dynamic_tournament_web::Mountpoint;
 /// pub const MOUNTPOINT: Mountpoint = Mountpoint::Element("main");
 /// ```
 pub const MOUNTPOINT: Mountpoint = Mountpoint::Body;
