@@ -28,6 +28,9 @@ build: wasm-pack
 	$(RUSTUP) target add wasm32-unknown-unknown
 	cd $(PATH_ROOT) && $(PATH_BIN)/wasm-pack build --release --target web --no-typescript --out-dir $(PATH_DIST) $(PATH_PKG)
 
+	# Default index.html
+	cp $(PATH_PKG)/index.html $(PATH_DIST)
+
 prepare-hash:
 	@for path in find sed awk; \
 	do \
@@ -51,11 +54,12 @@ hash: prepare-hash build
 		echo "Moved $$file to $$DST"; \
 	done
 
-	# Update the wasm blob path in the js file.
+	# Update the wasm blob path in the js and html file.
 	WASM_FILE=$$(find $(PATH_DIST) -regextype sed -regex '.*\.wasm' | awk -F '/' '{ print $$NF }'); \
 	JS_FILE=$$(find $(PATH_DIST) -regextype sed -regex '.*\.js'); \
-	sed -i "s/dynamic_tournament_web_bg.wasm/$$WASM_FILE/" $$JS_FILE
-
+	sed -i "s/dynamic_tournament_web_bg.wasm/$$WASM_FILE/" $$JS_FILE $(PATH_DIST)/index.html; \
+	JS_FILE=$$(find $(PATH_DIST) -regextype sed -regex '.*\.js' | awk -F '/' '{ print $$NF }'); \
+	sed -i "s/dynamic_tournament_web.js/$$JS_FILE/" $(PATH_DIST)/index.html
 
 docker:
 	cd $(PATH_ROOT) && docker build --rm -t dynamic-tournament-web -f dynamic-tournament-web/Dockerfile .
