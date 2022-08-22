@@ -6,7 +6,6 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::routes::Route;
 use crate::utils::router::Redirect;
 use crate::utils::Rc;
 
@@ -44,7 +43,7 @@ impl Component for Admin {
             }
         } else {
             html! {
-                <Redirect<Route> to={Route::Login} />
+                <Redirect to={"/login"} />
             }
         }
     }

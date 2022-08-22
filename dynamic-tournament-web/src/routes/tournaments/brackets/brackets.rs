@@ -4,7 +4,7 @@ use yew::{html, Component, Context, Html, Properties};
 
 use super::Route;
 use crate::components::providers::{ClientProvider, Provider};
-use crate::utils::router::Redirect;
+use crate::utils::router::{Redirect, RouterContextExt};
 use crate::utils::{FetchData, Rc};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
@@ -48,11 +48,19 @@ impl Component for Brackets {
         true
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
+    fn view(&self, ctx: &Context<Self>) -> Html {
         self.brackets.render(|brackets| match brackets.first() {
-            Some(bracket) => html! {
-                <Redirect<Route> to={Route::Bracket{id:bracket.id}} />
-            },
+            Some(bracket) => {
+                let to = format!(
+                    "/tournaments/{}/brackets/{}",
+                    ctx.props().tournament.id,
+                    bracket.id
+                );
+
+                html! {
+                    <Redirect {to} />
+                }
+            }
             None => html! {
                 <span>{ "No brackets avaliable yet." }</span>
             },

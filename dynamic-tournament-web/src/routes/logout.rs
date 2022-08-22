@@ -1,6 +1,5 @@
 use yew::prelude::*;
 
-use super::Route;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::router::Redirect;
 
@@ -19,7 +18,7 @@ impl Component for Logout {
         ClientProvider::get(ctx).logout();
 
         html! {
-            <Redirect<Route> to={Route::Index} />
+            <Redirect to={"/"} />
         }
     }
 }

@@ -70,7 +70,7 @@ impl Component for Login {
         // Redirect to /.
         if client.is_authenticated() {
             return html! {
-                <Redirect<Route> to={Route::Index} />
+                <Redirect to={"/"} />
             };
         }
 

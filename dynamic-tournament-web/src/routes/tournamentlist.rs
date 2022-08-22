@@ -4,7 +4,6 @@ use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
-use super::tournaments::Route;
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::TournamentOverview;
 
@@ -47,7 +46,7 @@ impl Component for TournamentList {
                 true
             }
             Message::ClickTournament { id } => {
-                ctx.history().redirect(Route::Tournament { id });
+                ctx.history().push(format!("/tournaments/{}", id));
 
                 false
             }

@@ -46,7 +46,10 @@ impl Component for Entrants {
                 true
             }
             Message::OnClick(id) => {
-                ctx.history().redirect(Route::Entrant { id });
+                ctx.history().update(|path| {
+                    path.push(id);
+                });
+
                 false
             }
         }

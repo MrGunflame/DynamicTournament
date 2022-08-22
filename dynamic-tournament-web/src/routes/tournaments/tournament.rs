@@ -105,8 +105,10 @@ fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> H
             .map(|(r, name)| {
                 let classes = if r == *route { "active" } else { "" };
 
+                let to = format!("/tournaments/{}{}", tournament.id, r.to_path());
+
                 html! {
-                    <li><Link<Route> {classes} to={r}>{ name }</Link<Route>></li>
+                    <li><Link {classes} {to}>{ name }</Link></li>
                 }
             })
             .collect();
@@ -132,10 +134,10 @@ fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> H
 
         html! {
             <>
-                <Link<super::Route> classes="link-inline link-back" to={super::Route::Index}>
+                <Link classes="link-inline link-back" to={"/tournaments"}>
                     <i aria-hidden="true" class="fa-solid fa-angle-left"></i>
                     { "Back to Tournaments" }
-                </Link<super::Route>>
+                </Link>
 
                 <h2 class="tournament-name">{ tournament.name.clone() }</h2>
                 <div class="navbar">

@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 
 use wasm_bindgen::JsValue;
@@ -11,6 +11,7 @@ use yew::html::Classes;
 use yew::{html, Callback, Children, Component, Context, Html, Properties};
 
 use super::{history, Rc};
+use crate::statics::config;
 
 #[derive(Debug, PartialEq, Properties)]
 pub struct Props {
@@ -88,66 +89,73 @@ impl History {
         }
     }
 
-    pub fn push(&self, mut url: String) {
+    pub fn push(&self, url: String) {
+        let root = config().root();
+
+        let mut seg = url.as_str();
+        if url.starts_with("/") {
+            seg = url.strip_prefix("/").unwrap();
+        }
+
+        let mut url = if root.ends_with("/") {
+            format!("{}{}", root, seg)
+        } else {
+            format!("{}/{}", root, seg)
+        };
+
         // history.pushState doesn't allow passing an empty string as the url.
         // Pass a "/" instead.
         if url.is_empty() {
             url.push('/');
         }
 
+        log::debug!("History::push {:?}", url);
+
         self.history
             .push_state_with_url(&JsValue::NULL, "", Some(&url))
             .expect("Failed to push history");
 
-        log::debug!("History::push {:?}", url);
-
         self.callback.emit(url);
     }
 
-    pub fn redirect<R>(&self, route: impl Borrow<R>)
+    pub fn update<F>(&self, f: F)
     where
-        R: Routable,
+        F: FnOnce(&mut PathBuf),
     {
-        self.push(route.borrow().to_path());
+        let path = super::document().location().unwrap().pathname().unwrap();
+        let mut path = PathBuf::new(path);
+
+        f(&mut path);
+
+        self.push(path.to_string());
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Properties)]
-pub struct LinkProps<R>
-where
-    R: Routable + PartialEq,
-{
+pub struct LinkProps {
     pub children: Children,
     #[prop_or_default]
     pub classes: Classes,
-    pub to: R,
+    pub to: String,
 }
 
 #[derive(Debug)]
-pub struct Link<R>
-where
-    R: Routable + PartialEq + 'static,
-{
-    _marker: PhantomData<R>,
+pub struct Link {
+    _priv: (),
 }
 
-impl<R> Component for Link<R>
-where
-    R: Routable + PartialEq + 'static,
-{
+impl Component for Link {
     type Message = ();
-    type Properties = LinkProps<R>;
+    type Properties = LinkProps;
 
     fn create(_ctx: &Context<Self>) -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self { _priv: () }
     }
 
     fn update(&mut self, ctx: &Context<Self>, _msg: ()) -> bool {
         let (history, _) = ctx.link().context::<History>(Callback::noop()).unwrap();
 
-        history.push(ctx.props().to.to_path());
+        history.push(ctx.props().to.clone());
         false
     }
 
@@ -156,8 +164,10 @@ where
             event.prevent_default();
         });
 
+        let href = ctx.props().to.clone();
+
         html! {
-            <a href="/" {onclick}>
+            <a {href} {onclick}>
                 { for ctx.props().children.iter() }
             </a>
         }
@@ -267,40 +277,66 @@ where
 }
 
 #[derive(Debug, PartialEq, Properties)]
-pub struct RedirectProps<R>
-where
-    R: Routable + 'static,
-{
-    pub to: R,
+pub struct RedirectProps {
+    pub to: String,
 }
 
 #[derive(Debug)]
-pub struct Redirect<R>
-where
-    R: Routable + 'static,
-{
-    _marker: PhantomData<R>,
+pub struct Redirect {
+    _priv: (),
 }
 
-impl<R> Component for Redirect<R>
-where
-    R: Routable + 'static,
-{
+impl Component for Redirect {
     type Message = ();
-    type Properties = RedirectProps<R>;
+    type Properties = RedirectProps;
 
     fn create(_ctx: &Context<Self>) -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self { _priv: () }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let (history, _) = ctx.link().context::<History>(Callback::noop()).unwrap();
-
-        history.push(ctx.props().to.to_path());
+        history.push(ctx.props().to.clone());
 
         html! {}
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PathBuf {
+    segments: Vec<String>,
+}
+
+impl PathBuf {
+    fn new(path: String) -> Self {
+        let parts = path
+            .split('/')
+            .filter(|s| !(*s).is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        Self { segments: parts }
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut String> {
+        self.segments.last_mut()
+    }
+
+    pub fn push<T>(&mut self, segment: T)
+    where
+        T: ToString,
+    {
+        self.segments.push(segment.to_string());
+    }
+
+    pub fn pop(&mut self) {
+        self.segments.pop();
+    }
+}
+
+impl Display for PathBuf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "/{}", self.segments.join("/"))
     }
 }
 
@@ -328,6 +364,15 @@ impl Path {
         log::debug!("Taking part {}: {:?}", self.pos - 1, path);
 
         Some(path)
+    }
+
+    fn parsed_path(&self) -> String {
+        if self.pos == 0 {
+            String::new()
+        } else {
+            let path = &self.parts[0..self.pos];
+            format!("/{}", path.join("/"))
+        }
     }
 }
 

@@ -32,6 +32,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub struct Config {
     // We never need to resize this, so `Box<str>` saves us 1 * usize of space.
     api_base: Box<str>,
+    root: Box<str>,
 }
 
 impl Config {
@@ -39,6 +40,11 @@ impl Config {
     #[inline]
     pub fn api_base(&self) -> &'static str {
         &self.static_ref().api_base
+    }
+
+    #[inline]
+    pub fn root(&self) -> &'static str {
+        &self.static_ref().root
     }
 
     /// Converts a `&Config` reference into a `&'static Config` reference.

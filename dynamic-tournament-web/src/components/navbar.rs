@@ -41,20 +41,20 @@ impl Component for Navbar {
     fn view(&self, _ctx: &Context<Self>) -> Html {
         let login = if self.state == State::LoggedIn {
             html! {
-                <Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>>
+                <Link to={"/logout"}>{ "Logout" }</Link>
             }
         } else {
             html! {
-                <Link<Route> to={Route::Login}>{ "Login" }</Link<Route>>
+                <Link to={"/login"}>{ "Login" }</Link>
             }
         };
 
         html! {
             <div class="navbar">
                 <ul>
-                    <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                    <li><Link<Route> to={Route::Tournaments}>{ "Tournaments" }</Link<Route>></li>
-                    <li><Link<Route> to={Route::Systems}>{ "Systems" }</Link<Route>></li>
+                    <li><Link to={"/"}>{ "Home" }</Link></li>
+                    <li><Link to={"/tournaments"}>{ "Tournaments" }</Link></li>
+                    <li><Link to={"/systems"}>{ "Systems" }</Link></li>
                     <li>{ login }</li>
                 </ul>
             </div>

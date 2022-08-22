@@ -81,12 +81,12 @@ impl Routable for Route {
 
     fn to_path(&self) -> String {
         match self {
-            Self::Index => String::from(""),
-            Self::Login => String::from("login"),
-            Self::Logout => String::from("logout"),
-            Self::Tournaments => String::from("tournaments"),
-            Self::Systems => String::from("systems"),
-            Self::NotFound => String::from("404"),
+            Self::Index => String::from("/"),
+            Self::Login => String::from("/login"),
+            Self::Logout => String::from("/logout"),
+            Self::Tournaments => String::from("/tournaments"),
+            Self::Systems => String::from("/systems"),
+            Self::NotFound => String::from("/404"),
         }
     }
 
