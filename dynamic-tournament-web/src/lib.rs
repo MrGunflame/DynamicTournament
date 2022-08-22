@@ -10,6 +10,8 @@ mod utils;
 use wasm_bindgen::prelude::*;
 use yew::start_app_in_element;
 
+pub use statics::Config;
+
 use routes::App;
 
 use consts::{MOUNTPOINT, TITLE_BASE};
@@ -20,13 +22,17 @@ extern crate wee_alloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-pub fn main(config: &JsValue) {
+pub fn run(config: &JsValue) {
+    let config = config.into_serde().expect("Failed to parse config");
+    run_with_config(config);
+}
+
+pub fn run_with_config(config: Config) {
     // SAFETY: Called from a single threaded context. No race conditions can occur.
     unsafe {
         logger::init();
     }
 
-    let config = config.into_serde().unwrap();
     // SAFETY: There are no references to the config.
     unsafe {
         statics::set_config(config);
