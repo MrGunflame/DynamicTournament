@@ -19,6 +19,7 @@
 //! `serde`: Adds `Serialize` and `Deserialize` impls to almost all types.
 //!
 #![deny(missing_debug_implementations)]
+#![deny(elided_lifetimes_in_paths)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod options;
