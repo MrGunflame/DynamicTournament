@@ -163,10 +163,11 @@ impl Component for Link {
             event.prevent_default();
         });
 
+        let classes = ctx.props().classes.clone();
         let href = ctx.props().to.clone();
 
         html! {
-            <a {href} {onclick}>
+            <a class={classes} {href} {onclick}>
                 { for ctx.props().children.iter() }
             </a>
         }
