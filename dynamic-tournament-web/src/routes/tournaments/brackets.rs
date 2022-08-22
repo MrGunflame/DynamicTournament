@@ -34,7 +34,7 @@ impl Component for Brackets {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
     Brackets,
     Bracket { id: BracketId },

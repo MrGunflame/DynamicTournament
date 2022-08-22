@@ -13,10 +13,8 @@ use self::admin::Admin;
 use self::brackets::Brackets;
 
 use crate::utils::router::{Path, Routable, Switch};
-use crate::utils::{FetchData, Rc};
 
 use dynamic_tournament_api::v3::id::TournamentId;
-use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
 use self::tournament::Tournament;
 use overview::Overview;

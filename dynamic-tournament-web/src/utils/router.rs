@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display, Formatter};
@@ -93,11 +92,11 @@ impl History {
         let root = config().root();
 
         let mut seg = url.as_str();
-        if url.starts_with("/") {
-            seg = url.strip_prefix("/").unwrap();
+        if url.starts_with('/') {
+            seg = url.strip_prefix('/').unwrap();
         }
 
-        let mut url = if root.ends_with("/") {
+        let mut url = if root.ends_with('/') {
             format!("{}{}", root, seg)
         } else {
             format!("{}/{}", root, seg)
@@ -276,7 +275,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Properties)]
+#[derive(Debug, PartialEq, Eq, Properties)]
 pub struct RedirectProps {
     pub to: String,
 }
@@ -328,10 +327,6 @@ impl PathBuf {
     {
         self.segments.push(segment.to_string());
     }
-
-    pub fn pop(&mut self) {
-        self.segments.pop();
-    }
 }
 
 impl Display for PathBuf {
@@ -364,15 +359,6 @@ impl Path {
         log::debug!("Taking part {}: {:?}", self.pos - 1, path);
 
         Some(path)
-    }
-
-    fn parsed_path(&self) -> String {
-        if self.pos == 0 {
-            String::new()
-        } else {
-            let path = &self.parts[0..self.pos];
-            format!("/{}", path.join("/"))
-        }
     }
 }
 

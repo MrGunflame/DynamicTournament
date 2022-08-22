@@ -2,7 +2,6 @@ use yew::{html, Component, Context, Html};
 
 use crate::api::{Action, State};
 use crate::components::providers::{ClientProvider, Provider};
-use crate::routes::Route;
 use crate::utils::router::Link;
 
 #[derive(Debug)]

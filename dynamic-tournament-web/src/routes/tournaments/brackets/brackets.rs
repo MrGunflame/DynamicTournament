@@ -2,12 +2,11 @@ use dynamic_tournament_api::v3::tournaments::brackets::BracketOverview;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
-use super::Route;
 use crate::components::providers::{ClientProvider, Provider};
-use crate::utils::router::{Redirect, RouterContextExt};
+use crate::utils::router::Redirect;
 use crate::utils::{FetchData, Rc};
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

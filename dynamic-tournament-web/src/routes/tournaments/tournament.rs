@@ -8,7 +8,7 @@ use crate::utils::{FetchData, Rc};
 
 use super::{Admin, Brackets, Entrants, Overview};
 
-#[derive(Copy, Clone, Debug, PartialEq, Properties)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub id: TournamentId,
 }

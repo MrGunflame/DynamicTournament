@@ -4,7 +4,6 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
 
-use super::Route;
 use crate::components::bracket::Bracket as BracketComponent;
 use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};

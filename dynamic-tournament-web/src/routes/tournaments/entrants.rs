@@ -7,7 +7,7 @@ use yew::{html, Component, Context, Html, Properties};
 
 use crate::utils::router::{Path, Routable, Switch};
 
-#[derive(Copy, Clone, Debug, PartialEq, Properties)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament_id: TournamentId,
 }

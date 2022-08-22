@@ -2,7 +2,6 @@ use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use yew::{html, Component, Context, Html, Properties};
 
-use super::Route;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::router::RouterContextExt;
 use crate::utils::FetchData;
