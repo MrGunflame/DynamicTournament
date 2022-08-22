@@ -1,12 +1,12 @@
 use hyper::Method;
 
+use crate::auth::password_hash;
 use crate::http::{Request, RequestUri, Response, Result};
 use crate::{method, StatusCodeError};
 
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_api::v3::users::User;
-use sha2::{Digest, Sha512};
 
 pub async fn route(req: Request, uri: RequestUri<'_>) -> Result {
     match uri.take_all() {
@@ -32,12 +32,7 @@ async fn login(mut req: Request) -> Result {
 
     // Get the salted password hash by first hashing the password, then the user id.
     // Note that the id is passed as bytes. The id is not converted to a string.
-    let mut hasher = Sha512::new();
-    hasher.update(user.username.as_bytes());
-    hasher.update(user.id.0.to_le_bytes());
-
-    let res = hasher.finalize();
-    let hash = hex::encode(res);
+    let hash = password_hash(input.password, user.id.0.to_le_bytes());
 
     // Match password hashes
     if hash != user.password {

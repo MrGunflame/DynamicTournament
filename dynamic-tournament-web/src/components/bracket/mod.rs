@@ -2,7 +2,9 @@ mod entrant;
 mod r#match;
 mod renderer;
 
-use dynamic_tournament_api::v3::tournaments::brackets::matches::Frame;
+use dynamic_tournament_api::v3::tournaments::brackets::matches::{
+    ErrorResponse, Request, Response,
+};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_core::options::TournamentOptionValues;
 use dynamic_tournament_core::tournament::TournamentKind;
@@ -50,7 +52,7 @@ impl Component for Bracket {
                 Ok(websocket) => {
                     let mut ws = websocket.clone();
                     ctx.link().send_future_batch(async move {
-                        ws.send(Frame::SyncMatchesRequest).await;
+                        ws.send(Request::SyncState).await;
 
                         vec![]
                     });
@@ -66,7 +68,7 @@ impl Component for Bracket {
         Self {
             state: None,
             websocket,
-            _producer: EventBus::bridge(ctx.link().callback(Message::HandleFrame)),
+            _producer: EventBus::bridge(ctx.link().callback(Message::HandleResponse)),
             popup: None,
         }
     }
@@ -84,7 +86,7 @@ impl Component for Bracket {
                 Ok(websocket) => {
                     let mut ws = websocket.clone();
                     ctx.link().send_future_batch(async move {
-                        ws.send(Frame::SyncMatchesRequest).await;
+                        ws.send(Request::SyncState).await;
 
                         vec![]
                     });
@@ -98,18 +100,35 @@ impl Component for Bracket {
             };
 
         self.websocket = websocket;
-        self._producer = EventBus::bridge(ctx.link().callback(Message::HandleFrame));
+        self._producer = EventBus::bridge(ctx.link().callback(Message::HandleResponse));
 
         true
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::HandleFrame(msg) => {
-                log::debug!("Received message: {:?}", msg);
+            Message::HandleResponse(resp) => {
+                log::debug!("Received message: {:?}", resp);
 
-                match msg {
-                    Frame::UpdateMatch { index, nodes } => {
+                match resp {
+                    Response::Error(err) => {
+                        // The connection lagged bebing. Try to synchronize with the
+                        // server again.
+                        if err == ErrorResponse::Lagged {
+                            log::debug!("Bracket is lagging");
+
+                            let mut ws = self.websocket.clone().unwrap();
+                            ctx.link().send_future_batch(async move {
+                                ws.send(Request::SyncState).await;
+                                vec![]
+                            });
+                        }
+                        // We don't handle any other errors.
+
+                        false
+                    }
+
+                    Response::UpdateMatch { index, nodes } => {
                         log::warn!(
                             "Received an UpdateMatch frame before initializing the state, ignoring"
                         );
@@ -131,7 +150,7 @@ impl Component for Bracket {
                                         res.winner_default(entrant);
                                         loser_index = Some(match i {
                                             0 => 1,
-                                            _ => 1,
+                                            _ => 0,
                                         });
                                     }
                                 }
@@ -141,8 +160,10 @@ impl Component for Bracket {
                                 }
                             });
                         }
+
+                        true
                     }
-                    Frame::ResetMatch { index } => {
+                    Response::ResetMatch { index } => {
                         log::warn!(
                             "Received a ResetMatch frame before initializing the state, ignoring"
                         );
@@ -150,12 +171,14 @@ impl Component for Bracket {
                         let bracket = self.state.as_mut().unwrap();
 
                         {
-                            bracket.update_match(index, |_, res| {
+                            bracket.update_match(index as usize, |_, res| {
                                 res.reset_default();
                             });
                         }
+
+                        true
                     }
-                    Frame::SyncMatchesResponse(matches) => {
+                    Response::SyncState(matches) => {
                         let system_kind = match ctx.props().bracket.system {
                             SystemId(1) => TournamentKind::SingleElimination,
                             SystemId(2) => TournamentKind::DoubleElimination,
@@ -202,11 +225,11 @@ impl Component for Bracket {
                                     None
                                 }
                             };
-                    }
-                    _ => (),
-                }
 
-                true
+                        true
+                    }
+                    _ => false,
+                }
             }
             Message::Action { index, action } => {
                 log::debug!("Called action {:?} on {}", action, index);
@@ -233,7 +256,7 @@ impl Component for Bracket {
 
                     ctx.link().send_future_batch(async move {
                         websocket
-                            .send(Frame::UpdateMatch {
+                            .send(Request::UpdateMatch {
                                 index: index.try_into().unwrap(),
                                 nodes,
                             })
@@ -249,7 +272,11 @@ impl Component for Bracket {
                 if let Some(websocket) = &self.websocket {
                     let mut websocket = websocket.clone();
                     ctx.link().send_future_batch(async move {
-                        websocket.send(Frame::ResetMatch { index }).await;
+                        websocket
+                            .send(Request::ResetMatch {
+                                index: index.try_into().unwrap(),
+                            })
+                            .await;
 
                         vec![Message::ClosePopup]
                     });
@@ -313,7 +340,7 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    HandleFrame(Frame),
+    HandleResponse(Response),
     Action {
         index: usize,
         action: Action,

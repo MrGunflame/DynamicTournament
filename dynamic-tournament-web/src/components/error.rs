@@ -20,7 +20,7 @@ impl Component for Error {
     }
 }
 
-#[derive(Clone, Debug, Properties, PartialEq)]
+#[derive(Clone, Debug, Properties, PartialEq, Eq)]
 pub struct ErrorProperties {
     pub error: String,
 }

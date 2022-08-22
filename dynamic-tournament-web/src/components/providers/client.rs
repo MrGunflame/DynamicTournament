@@ -3,7 +3,7 @@ use yew::prelude::*;
 
 use super::Provider;
 use crate::api::Client;
-use crate::components::config_provider::Config;
+use crate::statics::config;
 
 #[derive(Debug)]
 pub struct ClientProvider {
@@ -14,13 +14,8 @@ impl Component for ClientProvider {
     type Message = ();
     type Properties = Properties;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        let (config, _) = ctx
-            .link()
-            .context::<Config>(Callback::noop())
-            .expect("No ConfigProvider given");
-
-        let client = Client::new(config.api_url);
+    fn create(_ctx: &Context<Self>) -> Self {
+        let client = Client::new(config().api_base());
 
         Self { client }
     }

@@ -2,8 +2,15 @@ use std::fmt::{self, Debug, Formatter};
 
 use chrono::Utc;
 use dynamic_tournament_api::auth::{Claims, Token, TokenPair};
+use dynamic_tournament_api::v3::id::UserId;
+use dynamic_tournament_api::v3::users::User;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use rand::distributions::Alphanumeric;
+use rand::rngs::OsRng;
+use rand::Rng;
+use sha2::{Digest, Sha512};
 
+use crate::http::v3::users::USER_ID_GENERATOR;
 use crate::Error;
 
 /// Auth token expiration time.
@@ -12,6 +19,46 @@ const AUTH_TOKEN_EXP: u64 = 60 * 60;
 const REFRESH_TOKEN_EXP: u64 = 60 * 60 * 24;
 
 pub const SECRET: &[u8] = include_bytes!("../jwt-secret");
+
+/// Creates the hex-encoded password has for the given `password` and `salt`.
+pub fn password_hash<T, U>(password: T, salt: U) -> String
+where
+    T: AsRef<[u8]>,
+    U: AsRef<[u8]>,
+{
+    let mut hasher = Sha512::new();
+    hasher.update(password.as_ref());
+    hasher.update(salt.as_ref());
+
+    hex::encode(hasher.finalize())
+}
+
+/// Generate a new admin user with a random password. The password will be written out to
+/// `stdout` and the returned [`User`] contains the hashed password.
+pub fn generate_admin_user() -> User {
+    let password: String = OsRng
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    let id: u64 = USER_ID_GENERATOR.generate();
+
+    // TODO: Write all lines at once instead of flusing every line.
+    println!("{}", (0..32 + 6 * 2).map(|_| '-').collect::<String>());
+    println!("-------------- ADMIN PASSWORD --------------");
+    println!("----- {} -----", password);
+    println!("{}", (0..32 + 6 * 2).map(|_| '-').collect::<String>());
+
+    // Hash the password.
+    let password = password_hash(password, id.to_le_bytes());
+
+    User {
+        id: UserId(id),
+        username: String::from("admin"),
+        password,
+    }
+}
 
 /// A utility type to handle all [`Token`] encoding, decoding and validating.
 #[derive(Clone)]

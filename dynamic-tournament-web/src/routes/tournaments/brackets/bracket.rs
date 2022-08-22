@@ -12,7 +12,7 @@ use crate::components::BracketList;
 use crate::utils::router::RouterContextExt;
 use crate::utils::{FetchData, Rc};
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
     pub bracket_id: BracketId,

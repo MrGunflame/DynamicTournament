@@ -1,16 +1,20 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::task::{Context, Poll};
 
-use dynamic_tournament_api::v3::{
-    id::{BracketId, EntrantId, SystemId, TournamentId},
-    tournaments::brackets::matches::Frame,
-};
+use dynamic_tournament_api::v3::id::{BracketId, EntrantId, SystemId, TournamentId};
+use dynamic_tournament_api::v3::tournaments::brackets::matches::Response;
 use dynamic_tournament_core::{
     tournament::{Tournament, TournamentKind},
     EntrantScore, EntrantSpot, Matches, System,
 };
+use futures::StreamExt;
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{store::Store, Error};
 
@@ -35,7 +39,7 @@ impl LiveBracket {
                     res.winner_default(entrant);
                     loser_index = Some(match i {
                         0 => 1,
-                        _ => 1,
+                        _ => 0,
                     });
                 }
             }
@@ -45,7 +49,17 @@ impl LiveBracket {
             }
         });
 
-        let _ = self.inner.tx.send(Frame::UpdateMatch { index, nodes });
+        let _ = self
+            .inner
+            .tx
+            .send(BracketChange::UpdateMatch { index, nodes });
+
+        let bracket = self.clone();
+        tokio::task::spawn(async move {
+            if let Err(err) = bracket.store().await {
+                log::error!("Failed to save bracket state: {}", err);
+            }
+        });
     }
 
     pub fn reset(&self, index: usize) {
@@ -55,7 +69,14 @@ impl LiveBracket {
             res.reset_default();
         });
 
-        let _ = self.inner.tx.send(Frame::ResetMatch { index });
+        let _ = self.inner.tx.send(BracketChange::ResetMatch { index });
+
+        let bracket = self.clone();
+        tokio::task::spawn(async move {
+            if let Err(err) = bracket.store().await {
+                log::error!("Failed to save bracket state: {}", err);
+            }
+        });
     }
 
     pub fn matches(&self) -> Matches<EntrantScore<u64>> {
@@ -63,17 +84,42 @@ impl LiveBracket {
         bracket.into_matches()
     }
 
-    pub fn receiver(&self) -> broadcast::Receiver<Frame> {
+    pub fn receiver(&self) -> broadcast::Receiver<BracketChange> {
         self.inner.tx.subscribe()
+    }
+
+    pub fn changed(&self) -> Changed<'_> {
+        let rx = self.receiver();
+
+        Changed {
+            _bracket: self,
+            state: BroadcastStream::new(rx),
+            next: None,
+        }
+    }
+
+    pub async fn store(&self) -> Result<(), Error> {
+        let matches = self.inner.bracket.read().clone().into_matches();
+
+        self.inner
+            .store
+            .update_bracket_state(
+                self.inner.tournament_id,
+                self.inner.bracket_id,
+                &Some(matches),
+            )
+            .await?;
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct LiveBracketInner {
+    store: Store,
     tournament_id: TournamentId,
     bracket_id: BracketId,
     bracket: RwLock<Tournament<EntrantId, EntrantScore<u64>>>,
-    tx: broadcast::Sender<Frame>,
+    tx: broadcast::Sender<BracketChange>,
 
     #[allow(clippy::type_complexity)]
     live_brackets: Arc<RwLock<HashMap<(TournamentId, BracketId), Weak<LiveBracketInner>>>>,
@@ -167,6 +213,7 @@ impl LiveBrackets {
 
         let bracket = LiveBracket {
             inner: Arc::new(LiveBracketInner {
+                store: self.store.clone(),
                 tournament_id,
                 bracket_id,
                 bracket: RwLock::new(tournament),
@@ -183,17 +230,75 @@ impl LiveBrackets {
 
         Ok(bracket)
     }
+}
 
-    pub async fn store(&self, bracket: &LiveBracket) -> Result<(), Error> {
-        let matches = bracket.inner.bracket.read().clone().into_matches();
+pub struct Changed<'a> {
+    _bracket: &'a LiveBracket,
+    // TODO: Get rid the Box here once the asyncsync has a strong-typed broadcast channel.
+    state: BroadcastStream<BracketChange>,
+    next: Option<futures::stream::Next<'static, BroadcastStream<BracketChange>>>,
+}
 
-        self.store
-            .update_bracket_state(
-                bracket.inner.tournament_id,
-                bracket.inner.bracket_id,
-                &Some(matches),
-            )
-            .await?;
+impl<'a> Future for Changed<'a> {
+    type Output = Result<BracketChange, ChangeError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.next.is_none() {
+            let next = self.state.next();
+            // Extend to lifetime of Next to 'static.
+            // SAFETY: This is safe since the reference only exists for the same
+            // lifetime as the owner.
+            let next = unsafe { std::mem::transmute(next) };
+
+            self.next = Some(next);
+        }
+
+        let next = unsafe { self.map_unchecked_mut(|this| this.next.as_mut().unwrap()) };
+
+        match next.poll(cx) {
+            Poll::Ready(res) => match res {
+                Some(Ok(c)) => Poll::Ready(Ok(c)),
+                Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
+                    Poll::Ready(Err(ChangeError::Lagged))
+                }
+                // This error cannot ever occur because we keep an instance to a sender
+                // ourself.
+                None => unreachable!(),
+            },
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl<'a> std::fmt::Debug for Changed<'a> {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ChangeError {
+    Lagged,
+}
+
+#[derive(Clone, Debug)]
+pub enum BracketChange {
+    UpdateMatch {
+        index: u64,
+        nodes: [EntrantScore<u64>; 2],
+    },
+    ResetMatch {
+        index: usize,
+    },
+}
+
+impl From<BracketChange> for Response {
+    fn from(this: BracketChange) -> Self {
+        match this {
+            BracketChange::UpdateMatch { index, nodes } => Response::UpdateMatch { index, nodes },
+            BracketChange::ResetMatch { index } => Response::ResetMatch {
+                index: index as u64,
+            },
+        }
     }
 }

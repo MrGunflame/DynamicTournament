@@ -12,7 +12,7 @@ use crate::utils::Rc;
 
 use self::danger_zone::DangerZone;
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

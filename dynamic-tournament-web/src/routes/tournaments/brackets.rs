@@ -9,7 +9,7 @@ use yew::{html, Component, Context, Html, Properties};
 use crate::utils::router::{Path, Routable, Switch};
 use crate::utils::Rc;
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
 }

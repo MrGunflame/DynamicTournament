@@ -20,6 +20,7 @@ impl<T, D> DoubleElimination<T, D>
 where
     D: EntrantData,
 {
+    /// Creates a new `DoubleElimination` tournament with the given `entrants`.
     pub fn new<I>(entrants: I) -> Self
     where
         I: Iterator<Item = T>,

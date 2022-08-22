@@ -1,6 +1,6 @@
 mod v1;
 pub mod v2;
-mod v3;
+pub mod v3;
 
 #[cfg(feature = "metrics")]
 mod metrics;

@@ -15,7 +15,7 @@ use crate::{
     utils::FetchData,
 };
 
-#[derive(Clone, Debug, PartialEq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament_id: TournamentId,
     pub id: EntrantId,

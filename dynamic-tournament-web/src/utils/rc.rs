@@ -50,3 +50,5 @@ impl<T> PartialEq for Rc<T> {
         Self::ptr_eq(self, other)
     }
 }
+
+impl<T> Eq for Rc<T> {}

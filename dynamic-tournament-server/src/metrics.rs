@@ -68,6 +68,37 @@ impl Gauge {
     }
 }
 
+/// A guard around a [`Gauge`]. The gauge is automatically incremented when created
+/// and decremented when the guard is dropped.
+#[derive(Debug)]
+pub struct GaugeGuard {
+    gauge: Gauge,
+}
+
+impl GaugeGuard {
+    /// Creates a new `GaugeGuard`. This will increment the gauge.
+    #[inline]
+    pub fn new(gauge: Gauge) -> Self {
+        gauge.inc();
+
+        Self { gauge }
+    }
+}
+
+impl Clone for GaugeGuard {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self::new(self.gauge.clone())
+    }
+}
+
+impl Drop for GaugeGuard {
+    #[inline]
+    fn drop(&mut self) {
+        self.gauge.dec();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Metrics;

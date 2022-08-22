@@ -12,7 +12,7 @@ mod metrics;
 
 use config::Config;
 
-use crate::state::State;
+use crate::{signal::ShutdownListener, state::State};
 use clap::Parser;
 use hyper::StatusCode;
 use thiserror::Error;
@@ -104,21 +104,46 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+
+            match state.store.users().get("admin").await {
+                Ok(Some(_)) => log::debug!("Admin user already exists"),
+                Ok(None) => {
+                    log::debug!("Creating admin user");
+
+                    // Generate admin user if it doesn't exist.
+                    let user = auth::generate_admin_user();
+                    match state.store.users().insert(&user).await {
+                        Ok(()) => log::debug!("Admin user created"),
+                        Err(err) => {
+                            log::error!("Failed to create admin user: {}", err);
+                        }
+                    }
+                }
+                Err(err) => log::error!("Failed to create admin user: {}", err),
+            }
         });
     }
 
     tokio::task::spawn(async move {
-        loop {
-            match http::bind(state.config.bind.clone(), state.clone()).await {
-                Ok(()) => break,
-                Err(err) => log::error!("Failed to bind server: {}", err),
-            }
-        }
+        tokio::signal::ctrl_c().await.unwrap();
+        log::info!("Interrupt");
+        signal::terminate().await;
     });
 
-    tokio::signal::ctrl_c().await.unwrap();
-    log::info!("Interrupt");
-    signal::terminate().await;
+    loop {
+        let shutdown = ShutdownListener::new();
+        tokio::select! {
+            res = http::bind(state.config.bind.clone(), state.clone()) => {
+                match res {
+                    Ok(()) => break,
+                    Err(err) => log::error!("Failed to bind server: {}", err),
+                }
+            }
+            _ = shutdown => {
+                break;
+            }
+        }
+    }
 
     Ok(())
 }

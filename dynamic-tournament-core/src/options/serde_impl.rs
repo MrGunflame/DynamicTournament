@@ -37,7 +37,7 @@ impl<'de> Visitor<'de> for OptionValueVisitor {
     type Value = OptionValue;
 
     #[inline]
-    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         formatter.write_str("a bool, i64, u64 or string")
     }
 

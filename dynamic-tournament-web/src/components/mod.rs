@@ -1,7 +1,6 @@
 pub mod bracket;
 pub mod bracket_list;
 pub mod button;
-pub mod config_provider;
 pub mod confirmation;
 pub mod error;
 pub mod errorlog;
