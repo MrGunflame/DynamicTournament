@@ -1,6 +1,6 @@
 mod systems;
 mod tournaments;
-mod users;
+pub mod users;
 
 use crate::http::{Request, RequestUri, Result};
 use crate::StatusCodeError;

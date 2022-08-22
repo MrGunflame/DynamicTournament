@@ -104,6 +104,23 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+
+            match state.store.users().get("admin").await {
+                Ok(Some(_)) => log::debug!("Admin user already exists"),
+                Ok(None) => {
+                    log::debug!("Creating admin user");
+
+                    // Generate admin user if it doesn't exist.
+                    let user = auth::generate_admin_user();
+                    match state.store.users().insert(&user).await {
+                        Ok(()) => log::debug!("Admin user created"),
+                        Err(err) => {
+                            log::error!("Failed to create admin user: {}", err);
+                        }
+                    }
+                }
+                Err(err) => log::error!("Failed to create admin user: {}", err),
+            }
         });
     }
 
