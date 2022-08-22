@@ -10,7 +10,7 @@ use super::{Admin, Brackets, Entrants, Overview};
 
 #[derive(Copy, Clone, Debug, PartialEq, Properties)]
 pub struct Props {
-    id: TournamentId,
+    pub id: TournamentId,
 }
 
 #[derive(Debug)]

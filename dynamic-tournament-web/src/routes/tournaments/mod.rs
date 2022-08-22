@@ -12,14 +12,13 @@ use yew::prelude::*;
 use self::admin::Admin;
 use self::brackets::Brackets;
 
-use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::router::{Path, Routable, Switch};
 use crate::utils::{FetchData, Rc};
-use crate::Title;
 
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
+use self::tournament::Tournament;
 use overview::Overview;
 
 pub struct Tournaments;
@@ -39,63 +38,9 @@ impl Component for Tournaments {
     }
 }
 
-pub struct Tournament {
-    tournament: FetchData<Rc<ApiTournament>>,
-}
-
-impl Component for Tournament {
-    type Message = Msg;
-    type Properties = Props;
-
-    fn create(ctx: &Context<Self>) -> Self {
-        let link = ctx.link();
-        let client = ClientProvider::get(ctx);
-
-        let id = ctx.props().id;
-        link.send_future(async move {
-            let tournament = match client.v3().tournaments().get(id).await {
-                Ok(tournament) => FetchData::from(Rc::new(tournament)),
-                Err(err) => FetchData::from_err(err),
-            };
-
-            Msg::Update(tournament)
-        });
-
-        Self {
-            tournament: FetchData::default(),
-        }
-    }
-
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            Msg::Update(data) => {
-                self.tournament = data;
-
-                true
-            }
-        }
-    }
-
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        self.tournament.render(|tournament| {
-            Title::set(&tournament.name);
-
-            html! {
-                <>
-                    <Switch<Route> render={Switch::render(switch)} />
-                </>
-            }
-        })
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub id: TournamentId,
-}
-
-pub enum Msg {
-    Update(FetchData<Rc<ApiTournament>>),
 }
 
 #[derive(Clone, PartialEq, Eq)]
