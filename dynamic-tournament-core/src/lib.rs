@@ -18,6 +18,9 @@
 //!
 //! `serde`: Adds `Serialize` and `Deserialize` impls to almost all types.
 //!
+#![deny(missing_debug_implementations)]
+#![deny(unsafe_op_in_unsafe_fn)]
+
 pub mod options;
 pub mod render;
 
@@ -139,6 +142,7 @@ pub struct Matches<T> {
 }
 
 impl<T> Matches<T> {
+    /// Creates a new, empty `Matches` list.
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -146,6 +150,7 @@ impl<T> Matches<T> {
         }
     }
 
+    /// Creates a new `Matches` list with space for at least `capacity` matches.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -160,8 +165,11 @@ impl<T> Matches<T> {
     /// See [`Vec::from_raw_parts`]
     #[inline]
     pub unsafe fn from_raw_parts(ptr: *mut Match<Node<T>>, length: usize, capacity: usize) -> Self {
-        Self {
-            matches: Vec::from_raw_parts(ptr, length, capacity),
+        // SAFETY: The caller must guarantee that ptr, length and capacity are valid.
+        unsafe {
+            Self {
+                matches: Vec::from_raw_parts(ptr, length, capacity),
+            }
         }
     }
 }
@@ -235,6 +243,7 @@ impl<D> Node<D> {
         }
     }
 
+    /// Creates a new `Node` using the given `index` and `data`.
     #[inline]
     pub fn new_with_data(index: usize, data: D) -> Self {
         Self { index, data }
@@ -264,20 +273,24 @@ impl<D> Node<D> {
     where
         U: Borrow<Entrants<T>>,
     {
-        entrants.borrow().get_unchecked(self.index)
+        // SAFETY: The caller must guarantee that `entrants` has a sufficient length.
+        unsafe { entrants.borrow().get_unchecked(self.index) }
     }
 }
 
 /// An `Result<T>` using [`enum@Error`] as an error type.
 pub type Result<T> = result::Result<T, Error>;
 
+/// An error that can occur when resuming a tournament.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum Error {
+    /// The tournament has an incompatible number of matches.
     #[error("invalid number of matches: expected {expected}, found {found}")]
     InvalidNumberOfMatches { expected: usize, found: usize },
     #[error(
         "invalid entrant: match refers to entrant at {index} but only {length} entrants are given"
     )]
+    /// The tournament defined an entrant that does not exist.
     InvalidEntrant { index: usize, length: usize },
 }
 
@@ -312,6 +325,7 @@ impl<D> MatchResult<D> {
         self
     }
 
+    /// Sets the winner of this [`Match`] and uses `data` as the starting data for the next match.
     pub fn winner(&mut self, entrant: &EntrantSpot<Node<D>>, data: D) -> &mut Self {
         self.winner = Some((entrant.as_ref().map(|e| e.index), data));
         self
@@ -326,6 +340,7 @@ impl<D> MatchResult<D> {
         self.winner(entrant, D::default())
     }
 
+    /// Sets the loser of this [`Match`] and uses `data` as the starting data for the next match.
     pub fn loser(&mut self, entrant: &EntrantSpot<Node<D>>, data: D) -> &mut Self {
         self.loser = Some((entrant.as_ref().map(|e| e.index), data));
         self
@@ -349,11 +364,14 @@ pub struct Match<T> {
 }
 
 impl<T> Match<T> {
+    /// Creates a new `Match` with the given entrants.
     #[inline]
     pub fn new(entrants: [EntrantSpot<T>; 2]) -> Self {
         Self { entrants }
     }
 
+    /// Returns `true` if the match is a *placeholder match*. This is `true` when either spot
+    /// contains an [`EntrantSpot::Empty`] variant.
     #[inline]
     pub(crate) fn is_placeholder(&self) -> bool {
         matches!(self.entrants[0], EntrantSpot::Empty)
@@ -379,7 +397,8 @@ impl<T> Match<T> {
     /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &EntrantSpot<T> {
-        self.entrants.get_unchecked(index)
+        // SAFETY: The caller must guarantee that `index` is in bounds.
+        unsafe { self.entrants.get_unchecked(index) }
     }
 
     /// Returns a mutable reference to the entrant at `index` without checking bounds.
@@ -389,7 +408,8 @@ impl<T> Match<T> {
     /// Calling this method with an `index` that is out-of-bounds is undefined behavoir.
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntrantSpot<T> {
-        self.entrants.get_unchecked_mut(index)
+        // SAFETY: The caller must guarantee that `index` is in bounds.
+        unsafe { self.entrants.get_unchecked_mut(index) }
     }
 }
 
@@ -413,8 +433,11 @@ impl<T> IndexMut<usize> for Match<T> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum EntrantSpot<T> {
+    /// A spot that contains an entrant.
     Entrant(T),
+    /// A spot that is always empty forever.
     Empty,
+    /// A spot that is currently empty, but will be filled once a previous match ends.
     TBD,
 }
 
@@ -569,7 +592,9 @@ impl<T> EntrantSpot<T> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EntrantScore<S> {
+    /// The score of the entrant for this match.
     pub score: S,
+    /// Whether the entrant is the winner for this match.
     pub winner: bool,
 }
 
@@ -641,6 +666,8 @@ pub struct NextMatches {
 }
 
 impl NextMatches {
+    /// Returns a mutable reference to the [`Match`] with the winner using the given [`Matches`].
+    /// Returns `None` if no winner is defined.
     pub fn winner_match_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
@@ -652,6 +679,8 @@ impl NextMatches {
         }
     }
 
+    /// Returns a mutable reference to the [`Match`] with the loser using the given [`Matches`].
+    /// Returns `None` if no loser is defined.
     pub fn loser_match_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
@@ -663,6 +692,10 @@ impl NextMatches {
         }
     }
 
+    /// Creates a new `NextMatches` instance with the specified `winner` and `loser`.
+    ///
+    /// The first value in the tuple defines the index, the second defines the position. Use `None`
+    /// to set no winner/loser.
     pub fn new(winner: Option<(usize, usize)>, loser: Option<(usize, usize)>) -> Self {
         let (winner_index, winner_position) = winner
             .map(|(index, position)| (SmallOption::new_unchecked(index), position))
@@ -680,6 +713,8 @@ impl NextMatches {
         }
     }
 
+    /// Returns a mutable reference to the [`EntrantSpot`] of the winner. Returns `None` if no
+    /// winner is defined.
     pub fn winner_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
@@ -695,6 +730,8 @@ impl NextMatches {
         }
     }
 
+    /// Returns a mutable reference to the [`EntrantSpot`] of the loser. Returns `None` if no
+    /// loser is defined.
     pub fn loser_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
@@ -725,7 +762,11 @@ impl Default for NextMatches {
 
 /// A tournament system.
 pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
+    /// The type of Entrant this `System` accepts.
     type Entrant;
+
+    /// The data that is stored for every entrant in every node. This usually is where scores
+    /// should be stored.
     type NodeData: EntrantData;
 
     /// Returns a reference to the [`Entrants`] of the `Tournament`.
@@ -781,6 +822,7 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     /// Returns the next round between `range`.
     fn next_round(&self, range: Range<usize>) -> Range<usize>;
 
+    /// Returns the [`Position`] at which to render the match with the given `index`.
     fn render_match_position(&self, _index: usize) -> Position {
         Position::default()
     }

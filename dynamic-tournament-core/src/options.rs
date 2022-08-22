@@ -255,7 +255,8 @@ impl OptionValue {
     pub unsafe fn unwrap_bool_unchecked(self) -> bool {
         match self {
             Self::Bool(val) => val,
-            _ => hint::unreachable_unchecked(),
+            // SAFETY: The caller must guarantee that this branch never executed.
+            _ => unsafe { hint::unreachable_unchecked() },
         }
     }
 
@@ -363,7 +364,8 @@ impl OptionValue {
     pub unsafe fn unwrap_i64_unchecked(self) -> i64 {
         match self {
             Self::I64(val) => val,
-            _ => hint::unreachable_unchecked(),
+            // SAFETY: The caller must guarantee that this branch never executed.
+            _ => unsafe { hint::unreachable_unchecked() },
         }
     }
 
@@ -477,7 +479,8 @@ impl OptionValue {
     pub unsafe fn unwrap_u64_unchecked(self) -> u64 {
         match self {
             Self::U64(val) => val,
-            _ => hint::unreachable_unchecked(),
+            // SAFETY: The caller must guarantee that this branch never executed.
+            _ => unsafe { hint::unreachable_unchecked() },
         }
     }
 
@@ -591,7 +594,8 @@ impl OptionValue {
     pub unsafe fn unwrap_string_unchecked(self) -> String {
         match self {
             Self::String(val) => val,
-            _ => hint::unreachable_unchecked(),
+            // SAFETY: The caller must guarantee that this branch never executed.
+            _ => unsafe { hint::unreachable_unchecked() },
         }
     }
 

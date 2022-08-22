@@ -124,9 +124,11 @@ where
     }
 
     unsafe fn entrants_mut(&mut self) -> &mut Entrants<Self::Entrant> {
-        match &mut self.inner {
-            InnerTournament::SingleElimination(t) => t.entrants_mut(),
-            InnerTournament::DoubleElimination(t) => t.entrants_mut(),
+        unsafe {
+            match &mut self.inner {
+                InnerTournament::SingleElimination(t) => t.entrants_mut(),
+                InnerTournament::DoubleElimination(t) => t.entrants_mut(),
+            }
         }
     }
 
@@ -145,9 +147,11 @@ where
     }
 
     unsafe fn matches_mut(&mut self) -> &mut Matches<Self::NodeData> {
-        match &mut self.inner {
-            InnerTournament::SingleElimination(t) => t.matches_mut(),
-            InnerTournament::DoubleElimination(t) => t.matches_mut(),
+        unsafe {
+            match &mut self.inner {
+                InnerTournament::SingleElimination(t) => t.matches_mut(),
+                InnerTournament::DoubleElimination(t) => t.matches_mut(),
+            }
         }
     }
 

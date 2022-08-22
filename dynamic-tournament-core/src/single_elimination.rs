@@ -19,6 +19,7 @@ impl<T, D> SingleElimination<T, D>
 where
     D: EntrantData + Default,
 {
+    /// Creates a new `SingleElimination` tournament with the given `entrants`.
     pub fn new<I>(entrants: I) -> Self
     where
         I: Iterator<Item = T>,
@@ -26,7 +27,12 @@ where
         Self::new_with_options(entrants, Self::options())
     }
 
-    /// Creates a new `SingleElimination`.
+    /// Creates a new `SingleElimination` tournament with the given `entrants` and using the
+    /// given `options`.
+    ///
+    /// If you don't need to specify the options consider using [`new`].
+    ///
+    /// [`new`]: Self::new
     pub fn new_with_options<I, O>(entrants: I, options: O) -> Self
     where
         I: Iterator<Item = T>,
@@ -125,6 +131,7 @@ where
         }
     }
 
+    /// Returns the [`TournamentOptions`] accepted by this system.
     pub fn options() -> TournamentOptions {
         TournamentOptions::builder()
             .option(
