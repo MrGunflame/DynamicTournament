@@ -61,6 +61,8 @@ The process of decoding an ULEB128 encoded integer is as follows:
 2. Remove every 8th bit (MSB) from the bytes, creating groups of 7-bit
 3. Accumulate all bytes from little-endian
 
+See [leb128.c](leb128.c) for an example encode and decode implementation.
+
 Signed integers are converted into their unsigned variant using a zigzag encoding. This 
 encoding stores the sign bit in the LSB.
 

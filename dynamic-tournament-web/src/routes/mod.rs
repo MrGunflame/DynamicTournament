@@ -8,17 +8,16 @@ pub mod tournaments;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
+use crate::utils::router::{self, PathBuf, Routable, Switch};
 
 use yew::prelude::*;
-use yew_router::prelude::*;
-use yew_router::Routable;
 
 use login::Login;
 use logout::Logout;
 
 use not_found::NotFound;
 
-use dynamic_tournament_api::v3::id::TournamentId;
+use self::tournaments::Tournaments;
 
 pub struct App;
 
@@ -27,66 +26,79 @@ impl Component for App {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
+        // Initialize the router.
+        // SAFETY: Called from a single-threaded context. Since App is only
+        // created once during the lifetime of the program, the value is never
+        // overwritten without being dropped.
+        unsafe {
+            router::init();
+        }
+
         Self
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <ClientProvider>
-                <BrowserRouter>
-                    <div class="main-wrapper">
-                        <div>
-                            <Navbar />
-                            <div class="main">
-                                <Switch<Route> render={Switch::render(switch)} />
-                            </div>
-                            <div id="popup-host"></div>
-                            <ErrorLog />
+                <div class="main-wrapper">
+                    <div>
+                        <Navbar />
+                        <div class="main">
+                            <Switch<Route> render={Switch::render(switch)} />
                         </div>
-                        <div class="footer">
-                            <p>
-                                { "This viewer is still in an early stage, please report issues on " }
-                                <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
-                                { " or to MagiiTech#0534 on Discord." }
-                            </p>
-                            <a href="/privacy.html">{ "Privacy Policy" }</a>
-                        </div>
+                        <div id="popup-host"></div>
+                        <ErrorLog />
                     </div>
-                </BrowserRouter>
+                    <div class="footer">
+                        <p>
+                            { "This viewer is still in an early stage, please report issues on " }
+                            <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
+                            { " or to MagiiTech#0534 on Discord." }
+                        </p>
+                        <a href="/privacy.html">{ "Privacy Policy" }</a>
+                    </div>
+                </div>
             </ClientProvider>
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Routable)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
-    #[at("/")]
     Index,
-    #[at("/login")]
     Login,
-    #[at("/logout")]
     Logout,
-    #[not_found]
-    #[at("/404")]
-    NotFound,
-    #[at("/tournaments")]
-    TournamentList,
-    #[at("/tournaments/:id")]
-    TournamentR { id: u64 },
-    #[at("/tournaments/:id/:s")]
-    Tournament { id: u64 },
-    #[at("/tournaments/:id/:name/brackets")]
-    TournamentBrackets { id: u64 },
-    #[at("/tournaments/:id/:name/brackets/:s/:s")]
-    TournamentBracket { id: u64 },
-    #[at("/tournaments/:id/:name/entrants")]
-    TournamentTeams { id: u64 },
-    #[at("/tournaments/:id/:name/entrants/:s")]
-    TournamentTeam { id: u64 },
-    #[at("/tournaments/:id/:name/admin")]
-    Admin { id: u64 },
-    #[at("/systems")]
+    Tournaments,
     Systems,
+    NotFound,
+}
+
+impl Routable for Route {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
+        match path.take().as_deref() {
+            None => Some(Self::Index),
+            Some("login") => Some(Self::Login),
+            Some("logout") => Some(Self::Logout),
+            Some("tournaments") => Some(Self::Tournaments),
+            Some("systems") => Some(Self::Systems),
+            Some(_) => None,
+        }
+    }
+
+    fn to_path(&self) -> String {
+        match self {
+            Self::Index => String::from("/"),
+            Self::Login => String::from("/login"),
+            Self::Logout => String::from("/logout"),
+            Self::Tournaments => String::from("/tournaments"),
+            Self::Systems => String::from("/systems"),
+            Self::NotFound => String::from("/404"),
+        }
+    }
+
+    fn not_found() -> Option<Self> {
+        Some(Self::NotFound)
+    }
 }
 
 pub fn switch(route: &Route) -> Html {
@@ -94,33 +106,14 @@ pub fn switch(route: &Route) -> Html {
         Route::Index => html! { "this is index" },
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
-        Route::NotFound => html! { <NotFound /> },
-        Route::TournamentList => html! {
-            <tournamentlist::TournamentList />
-        },
-        Route::TournamentR { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::Tournament { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentTeam { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentBracket { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentBrackets { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::TournamentTeams { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
-        },
-        Route::Admin { id } => html! {
-            <tournaments::Tournament id={TournamentId(*id)} />
+        Route::Tournaments => html! {
+            <Tournaments />
         },
         Route::Systems => html! {
             <systems::Systems />
+        },
+        Route::NotFound => html! {
+            <NotFound />
         },
     }
 }

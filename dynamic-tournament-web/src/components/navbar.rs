@@ -1,9 +1,8 @@
 use yew::{html, Component, Context, Html};
-use yew_router::components::Link;
 
 use crate::api::{Action, State};
 use crate::components::providers::{ClientProvider, Provider};
-use crate::routes::Route;
+use crate::utils::router::Link;
 
 #[derive(Debug)]
 pub struct Navbar {
@@ -21,8 +20,8 @@ impl Component for Navbar {
         let link = ctx.link().clone();
         ctx.link().send_future_batch(async move {
             loop {
-                let msg = client.changed().await;
-                link.send_message(msg);
+                let action = client.changed().await;
+                link.send_message(action);
             }
         });
 
@@ -41,20 +40,20 @@ impl Component for Navbar {
     fn view(&self, _ctx: &Context<Self>) -> Html {
         let login = if self.state == State::LoggedIn {
             html! {
-                <Link<Route> to={Route::Logout}>{ "Logout" }</Link<Route>>
+                <Link to={"/logout"}>{ "Logout" }</Link>
             }
         } else {
             html! {
-                <Link<Route> to={Route::Login}>{ "Login" }</Link<Route>>
+                <Link to={"/login"}>{ "Login" }</Link>
             }
         };
 
         html! {
             <div class="navbar">
                 <ul>
-                    <li><Link<Route> to={Route::Index}>{ "Home" }</Link<Route>></li>
-                    <li><Link<Route> to={Route::TournamentList}>{ "Tournaments" }</Link<Route>></li>
-                    <li><Link<Route> to={Route::Systems}>{ "Systems" }</Link<Route>></li>
+                    <li><Link to={"/"}>{ "Home" }</Link></li>
+                    <li><Link to={"/tournaments"}>{ "Tournaments" }</Link></li>
+                    <li><Link to={"/systems"}>{ "Systems" }</Link></li>
                     <li>{ login }</li>
                 </ul>
             </div>

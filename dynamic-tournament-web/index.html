@@ -13,19 +13,19 @@
 
 <body>
     <script type=" module">
-    import init, { main } from './dynamic_tournament_web.js';
+    import init, { run } from './dynamic_tournament_web.js';
 
     const config = {
         api_base: "http://localhost:3030",
     };
 
-    async function run() {
+    async function start() {
         await init();
 
-        main(config);
+        run(config);
     }
     
-    run();
+    start();
     </script>
 </body>
 

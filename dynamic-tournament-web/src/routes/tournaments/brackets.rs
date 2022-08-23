@@ -1,22 +1,13 @@
-use dynamic_tournament_api::v3::{
-    id::BracketId,
-    tournaments::{brackets::BracketOverview, Tournament},
-};
+mod bracket;
+#[allow(clippy::module_inception)]
+mod brackets;
+
+use dynamic_tournament_api::v3::id::BracketId;
+use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
-use yew_router::{history::History, prelude::RouterScopeExt};
 
-use crate::utils::FetchData;
-use crate::{
-    components::{
-        providers::{ClientProvider, Provider},
-        BracketList,
-    },
-    utils::Rc,
-};
-
-use super::Route;
-
-pub mod bracket;
+use crate::utils::router::{PathBuf, Routable, Switch};
+use crate::utils::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
@@ -24,95 +15,64 @@ pub struct Props {
 }
 
 #[derive(Debug)]
-pub struct Brackets {
-    brackets: FetchData<Rc<Vec<BracketOverview>>>,
-}
+pub struct Brackets;
 
 impl Component for Brackets {
-    type Message = Message;
+    type Message = ();
     type Properties = Props;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        let client = ClientProvider::get(ctx);
-
-        let tournament_id = ctx.props().tournament.id;
-        ctx.link().send_future(async move {
-            let msg = match client
-                .v3()
-                .tournaments()
-                .brackets(tournament_id)
-                .list()
-                .await
-            {
-                Ok(brackets) => FetchData::from(Rc::new(brackets)),
-                Err(err) => FetchData::from_err(err),
-            };
-
-            Message::Update(msg)
-        });
-
-        Self {
-            brackets: FetchData::new(),
-        }
-    }
-
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            Message::Update(brackets) => {
-                self.brackets = brackets;
-
-                // Redirect to the bracket when there's only one avaliable.
-                self.brackets.as_ref().map(|brackets| {
-                    if !brackets.is_empty() {
-                        let bracket = &brackets[0];
-
-                        log::debug!("Redirecting to bracket {}", bracket.id);
-
-                        ctx.link()
-                            .send_message(Message::OnClick(bracket.id, bracket.name.clone()));
-                    }
-                });
-            }
-            Message::OnClick(id, name) => {
-                let tournament_id = ctx.props().tournament.id;
-                let tournament_name = ctx.props().tournament.name.clone();
-
-                ctx.link()
-                    .history()
-                    .expect("no history in context")
-                    .push(Route::Bracket {
-                        tournament_id,
-                        tournament_name,
-                        bracket_id: id,
-                        bracket_name: name,
-                    });
-            }
-        }
-
-        true
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        self.brackets.render(|brackets| {
-            if brackets.is_empty() {
-                return html! {
-                    <div>{ "There are currently no brackets avaliable." }</div>
-                };
-            }
+        let tournament = ctx.props().tournament.clone();
 
-            let brackets = brackets.clone();
-            let onclick = ctx
-                .link()
-                .callback(move |(_, id)| Message::OnClick(id, "a".into()));
-
-            html! {
-                <BracketList {brackets} {onclick} />
-            }
-        })
+        html! {
+            <Switch<Route> render={Switch::render(switch(tournament))} />
+        }
     }
 }
 
-pub enum Message {
-    Update(FetchData<Rc<Vec<BracketOverview>>>),
-    OnClick(BracketId, String),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Route {
+    Brackets,
+    Bracket { id: BracketId },
+}
+
+impl Routable for Route {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
+        match path.take() {
+            None => Some(Self::Brackets),
+            Some(s) => match s.parse() {
+                Ok(id) => Some(Self::Bracket { id }),
+                Err(_) => None,
+            },
+        }
+    }
+
+    fn to_path(&self) -> String {
+        match self {
+            Self::Brackets => String::from("/"),
+            Self::Bracket { id } => format!("/{}", id),
+        }
+    }
+}
+
+fn switch(tournament: Rc<Tournament>) -> impl Fn(&Route) -> Html {
+    use bracket::Bracket;
+    use brackets::Brackets;
+
+    move |route| {
+        let tournament = tournament.clone();
+
+        match route {
+            Route::Brackets => html! {
+                <Brackets {tournament} />
+            },
+            Route::Bracket { id } => html! {
+                <Bracket {tournament} bracket_id={*id} />
+            },
+        }
+    }
 }

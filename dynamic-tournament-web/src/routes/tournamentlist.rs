@@ -1,15 +1,13 @@
 use crate::components::providers::{ClientProvider, Provider};
-use crate::routes::tournaments::Route;
 use crate::utils::FetchData;
 use crate::Title;
 use chrono::Local;
 use yew::prelude::*;
 
-use yew_router::history::History;
-use yew_router::prelude::RouterScopeExt;
-
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::TournamentOverview;
+
+use crate::utils::router::RouterContextExt;
 
 pub struct TournamentList {
     tournaments: FetchData<Vec<TournamentOverview>>,
@@ -47,14 +45,8 @@ impl Component for TournamentList {
                 self.tournaments = tournaments;
                 true
             }
-            Message::ClickTournament { id, name } => {
-                ctx.link()
-                    .history()
-                    .expect("failed to read history")
-                    .push(Route::Index {
-                        tournament_id: id,
-                        tournament_name: name,
-                    });
+            Message::ClickTournament { id } => {
+                ctx.router().push(format!("/tournaments/{}", id));
 
                 false
             }
@@ -74,11 +66,9 @@ impl Component for TournamentList {
                         .with_timezone(&self.timezone)
                         .format("%B %d, %Y %H:%M");
 
-                    let tournament_name = name.clone();
-                    let on_click = ctx.link().callback(move |_| Message::ClickTournament {
-                        id,
-                        name: tournament_name.clone(),
-                    });
+                    let on_click = ctx
+                        .link()
+                        .callback(move |_| Message::ClickTournament { id });
 
                     html! {
                         <tr class="tr-link" onclick={on_click}>
@@ -113,5 +103,5 @@ impl Component for TournamentList {
 
 pub enum Message {
     Update(FetchData<Vec<TournamentOverview>>),
-    ClickTournament { id: TournamentId, name: String },
+    ClickTournament { id: TournamentId },
 }

@@ -3,20 +3,18 @@ use dynamic_tournament_api::v3::tournaments::entrants::Entrant;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
-use yew_router::history::History;
-use yew_router::prelude::RouterScopeExt;
 
 use crate::components::bracket::Bracket as BracketComponent;
 use crate::components::movable_boxed::MovableBoxed;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
-use crate::routes::tournaments::Route;
+use crate::utils::router::RouterContextExt;
 use crate::utils::{FetchData, Rc};
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
     pub tournament: Rc<Tournament>,
-    pub id: BracketId,
+    pub bracket_id: BracketId,
 }
 
 pub struct Bracket {
@@ -33,7 +31,7 @@ impl Component for Bracket {
         let client = ClientProvider::get(ctx);
 
         let tournament_id = ctx.props().tournament.id;
-        let id = ctx.props().id;
+        let id = ctx.props().bracket_id;
         {
             let client = client.clone();
 
@@ -98,9 +96,8 @@ impl Component for Bracket {
             Message::UpdateBrackets(bracket) => self.brackets = bracket,
             Message::UpdateEntrants(entrants) => self.entrants = entrants,
             Message::UpdateBracket(bracket) => self.bracket = bracket,
-            Message::OnClick(id, name) => {
+            Message::OnClick(id) => {
                 let tournament_id = ctx.props().tournament.id;
-                let tournament_name = ctx.props().tournament.name.clone();
 
                 // Don't update when requesting the same bracket.
                 if self.bracket.has_value() && self.bracket.as_ref().unwrap().id == id {
@@ -124,15 +121,9 @@ impl Component for Bracket {
                     Message::UpdateBracket(msg)
                 });
 
-                ctx.link()
-                    .history()
-                    .expect("no history in context")
-                    .push(Route::Bracket {
-                        tournament_id,
-                        tournament_name,
-                        bracket_id: id,
-                        bracket_name: name,
-                    });
+                ctx.router().update(|path| {
+                    path.last_mut().unwrap().replace(id.to_string());
+                });
             }
         }
 
@@ -146,9 +137,7 @@ impl Component for Bracket {
             let entrants = self.entrants.clone().unwrap();
             let bracket = self.bracket.clone().unwrap();
 
-            let onclick = ctx
-                .link()
-                .callback(move |(_, id)| Message::OnClick(id, "a".into()));
+            let onclick = ctx.link().callback(move |(_, id)| Message::OnClick(id));
 
             html! {
                 <>
@@ -170,5 +159,5 @@ pub enum Message {
     UpdateBrackets(FetchData<Rc<Vec<BracketOverview>>>),
     UpdateBracket(FetchData<Rc<ApiBracket>>),
     UpdateEntrants(FetchData<Rc<Vec<Entrant>>>),
-    OnClick(BracketId, String),
+    OnClick(BracketId),
 }

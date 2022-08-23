@@ -37,6 +37,12 @@ impl<T> FetchData<T> {
         }
     }
 
+    fn from_raw_err(err: Rc<dyn std::error::Error + Send + Sync + 'static>) -> Self {
+        Self {
+            inner: Some(Err(err)),
+        }
+    }
+
     #[allow(unused)]
     pub fn as_ref(&self) -> FetchData<&T> {
         match &self.inner {
@@ -65,6 +71,24 @@ impl<T> FetchData<T> {
         match self.inner {
             Some(ref res) => res.is_ok(),
             None => false,
+        }
+    }
+
+    pub fn zip<'a, U>(&'a self, other: &'a FetchData<U>) -> FetchData<(&'a T, &'a U)> {
+        let val = match &self.inner {
+            Some(res) => match res {
+                Ok(val) => val,
+                Err(err) => return FetchData::from_raw_err(err.clone()),
+            },
+            None => return FetchData::new(),
+        };
+
+        match &other.inner {
+            Some(res) => match res {
+                Ok(other) => FetchData::from((val, other)),
+                Err(err) => FetchData::from_raw_err(err.clone()),
+            },
+            None => FetchData::new(),
         }
     }
 

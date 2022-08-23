@@ -64,20 +64,20 @@ impl Client {
         self.waker.notify_all();
     }
 
+    /// Returns an [`Action`] when the state of the client changes.
+    pub fn changed(&self) -> Changed<'_> {
+        Changed {
+            on_login: self.on_login.notified(),
+            on_logout: self.on_logout.notified(),
+        }
+    }
+
     /// Returns the current [`State`] of the `Client`.
     pub fn state(&self) -> State {
         // Skips validating the actual token currently.
         match self.inner.authorization().refresh_token() {
             Some(_) => State::LoggedIn,
             None => State::LoggedOut,
-        }
-    }
-
-    /// Returns a future that returns an [`Action`] once the state of the client changes.
-    pub fn changed(&self) -> Changed<'_> {
-        Changed {
-            on_login: self.on_login.notified(),
-            on_logout: self.on_logout.notified(),
         }
     }
 
@@ -177,6 +177,7 @@ impl PartialEq for Client {
     }
 }
 
+/// An change action from a [`Client`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
     Login,
