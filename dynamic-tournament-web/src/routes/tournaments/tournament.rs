@@ -3,7 +3,7 @@ use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::providers::{ClientProvider, Provider};
-use crate::utils::router::{Link, Path, Routable, Switch};
+use crate::utils::router::{Link, PathBuf, Routable, Switch};
 use crate::utils::{FetchData, Rc};
 
 use super::{Admin, Brackets, Entrants, Overview};
@@ -68,8 +68,8 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &mut Path) -> Option<Self> {
-        match path.take() {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
+        match path.take().as_deref() {
             None => Some(Self::Index),
             Some("brackets") => Some(Self::Brackets),
             Some("entrants") => Some(Self::Entrants),

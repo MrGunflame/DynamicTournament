@@ -12,7 +12,7 @@ use yew::prelude::*;
 use self::admin::Admin;
 use self::brackets::Brackets;
 
-use crate::utils::router::{Path, Routable, Switch};
+use crate::utils::router::{PathBuf, Routable, Switch};
 
 use dynamic_tournament_api::v3::id::TournamentId;
 
@@ -48,7 +48,7 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &mut Path) -> Option<Self> {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
         match path.take() {
             None => Some(Self::Index),
             Some(s) => {

@@ -8,7 +8,7 @@ pub mod tournaments;
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
-use crate::utils::router::{Path, Routable, Router, Switch};
+use crate::utils::router::{self, PathBuf, Routable, Switch};
 
 use yew::prelude::*;
 
@@ -26,32 +26,38 @@ impl Component for App {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
+        // Initialize the router.
+        // SAFETY: Called from a single-threaded context. Since App is only
+        // created once during the lifetime of the program, the value is never
+        // overwritten without being dropped.
+        unsafe {
+            router::init();
+        }
+
         Self
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         html! {
             <ClientProvider>
-                <Router>
-                    <div class="main-wrapper">
-                        <div>
-                            <Navbar />
-                            <div class="main">
-                                <Switch<Route> render={Switch::render(switch)} />
-                            </div>
-                            <div id="popup-host"></div>
-                            <ErrorLog />
+                <div class="main-wrapper">
+                    <div>
+                        <Navbar />
+                        <div class="main">
+                            <Switch<Route> render={Switch::render(switch)} />
                         </div>
-                        <div class="footer">
-                            <p>
-                                { "This viewer is still in an early stage, please report issues on " }
-                                <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
-                                { " or to MagiiTech#0534 on Discord." }
-                            </p>
-                            <a href="/privacy.html">{ "Privacy Policy" }</a>
-                        </div>
+                        <div id="popup-host"></div>
+                        <ErrorLog />
                     </div>
-                </Router>
+                    <div class="footer">
+                        <p>
+                            { "This viewer is still in an early stage, please report issues on " }
+                            <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
+                            { " or to MagiiTech#0534 on Discord." }
+                        </p>
+                        <a href="/privacy.html">{ "Privacy Policy" }</a>
+                    </div>
+                </div>
             </ClientProvider>
         }
     }
@@ -68,8 +74,8 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &mut Path) -> Option<Self> {
-        match path.take() {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
+        match path.take().as_deref() {
             None => Some(Self::Index),
             Some("login") => Some(Self::Login),
             Some("logout") => Some(Self::Logout),

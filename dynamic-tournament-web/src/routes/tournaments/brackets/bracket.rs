@@ -121,8 +121,8 @@ impl Component for Bracket {
                     Message::UpdateBracket(msg)
                 });
 
-                ctx.history().update(|path| {
-                    *path.last_mut().unwrap() = id.to_string();
+                ctx.router().update(|path| {
+                    path.last_mut().unwrap().replace(id.to_string());
                 });
             }
         }

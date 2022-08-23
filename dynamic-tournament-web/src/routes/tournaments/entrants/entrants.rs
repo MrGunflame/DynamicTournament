@@ -45,8 +45,8 @@ impl Component for Entrants {
                 true
             }
             Message::OnClick(id) => {
-                ctx.history().update(|path| {
-                    path.push(id);
+                ctx.router().update(|path| {
+                    path.push(id.to_string());
                 });
 
                 false

@@ -5,7 +5,7 @@ mod entrants;
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::utils::router::{Path, Routable, Switch};
+use crate::utils::router::{PathBuf, Routable, Switch};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
@@ -39,7 +39,7 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &mut Path) -> Option<Self> {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
         match path.take() {
             None => Some(Self::Entrants),
             Some(s) => match s.parse() {

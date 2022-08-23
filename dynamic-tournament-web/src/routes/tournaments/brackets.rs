@@ -6,7 +6,7 @@ use dynamic_tournament_api::v3::id::BracketId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::utils::router::{Path, Routable, Switch};
+use crate::utils::router::{PathBuf, Routable, Switch};
 use crate::utils::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
@@ -41,7 +41,7 @@ pub enum Route {
 }
 
 impl Routable for Route {
-    fn from_path(path: &mut Path) -> Option<Self> {
+    fn from_path(path: &mut PathBuf) -> Option<Self> {
         match path.take() {
             None => Some(Self::Brackets),
             Some(s) => match s.parse() {
