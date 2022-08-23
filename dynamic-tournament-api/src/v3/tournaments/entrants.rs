@@ -163,6 +163,21 @@ impl<'a> EntrantsClient<'a> {
         self.client.send(req).await?;
         Ok(())
     }
+
+    pub async fn patch(&self, id: EntrantId, entrant: &Entrant) -> Result<Entrant> {
+        let req = self
+            .client
+            .request()
+            .uri(&format!(
+                "/v3/tournaments/{}/entrants/{}",
+                self.tournament_id, id
+            ))
+            .patch()
+            .body(entrant)
+            .build();
+
+        self.client.send(req).await?.json().await
+    }
 }
 
 #[cfg(test)]
