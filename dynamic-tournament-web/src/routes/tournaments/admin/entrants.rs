@@ -1,3 +1,5 @@
+mod entrant;
+
 use dynamic_tournament_api::{
     v3::{
         id::EntrantId,
@@ -10,6 +12,7 @@ use dynamic_tournament_api::{
 };
 use yew::{html, Component, Context, Html, Properties};
 
+use self::entrant::UpdateEntrant;
 use crate::services::MessageLog;
 use crate::utils::FetchData;
 use crate::{
@@ -30,6 +33,8 @@ pub(super) struct Entrants {
     entrants: FetchData<Vec<Entrant>>,
     // Expanded teams
     expanded: Vec<bool>,
+    // index of the entrant being updated
+    update_entrant: Option<usize>,
 }
 
 impl Component for Entrants {
@@ -50,6 +55,7 @@ impl Component for Entrants {
         Self {
             entrants: FetchData::new(),
             expanded: Vec::new(),
+            update_entrant: None,
         }
     }
 
@@ -62,6 +68,23 @@ impl Component for Entrants {
 
                 self.entrants = entrants;
                 true
+            }
+            Message::PatchEntrant(entrant) => {
+                let client = ClientProvider::get(ctx);
+
+                let tournament_id = ctx.props().tournament.id;
+                ctx.link().send_future(async move {
+                    let res = client
+                        .v3()
+                        .tournaments()
+                        .entrants(tournament_id)
+                        .patch(entrant.id, &entrant)
+                        .await;
+
+                    Message::PatchEntrantResult(res)
+                });
+
+                false
             }
             Message::DeleteEntrant(id) => {
                 let client = ClientProvider::get(ctx);
@@ -80,6 +103,22 @@ impl Component for Entrants {
 
                 false
             }
+            Message::PatchEntrantResult(res) => match res {
+                Ok(entrant) => {
+                    for e in self.entrants.as_mut().unwrap() {
+                        if e.id == entrant.id {
+                            *e = entrant;
+                            break;
+                        }
+                    }
+
+                    true
+                }
+                Err(err) => {
+                    MessageLog::error(err);
+                    false
+                }
+            },
             Message::DeleteEntrantResult(res) => match res {
                 Ok(id) => {
                     // Remove the entrant locally.
@@ -99,6 +138,14 @@ impl Component for Entrants {
                 self.expanded[index] = !self.expanded[index];
                 true
             }
+            Message::UpdateEntrantStart(index) => {
+                self.update_entrant = Some(index);
+                true
+            }
+            Message::UpdateEntrantCancel => {
+                self.update_entrant = None;
+                true
+            }
         }
     }
 
@@ -111,12 +158,19 @@ impl Component for Entrants {
                 .map(|(index, (e, expanded))| {
                     let id = e.id;
                     let delete = ctx.link().callback(move |_| Message::DeleteEntrant(id));
+                    let edit = ctx.link().callback(move |_|Message::UpdateEntrantStart(index));
 
                     match &e.inner {
                         EntrantVariant::Player(player) => html! {
                             <tr>
                                 <td>{ player.name.clone() }</td>
                                 <td>{ player.rating.unwrap_or(0) }</td>
+                                <td>
+                                    <Button title="Edit" onclick={edit}>
+                                        <i aria-hidden="true" class="fa-solid fa-pen-to-square"></i>
+                                        <span class="sr-only">{ "Edit" }</span>
+                                    </Button>
+                                </td>
                                 <td>
                                     <Button title="Delete" onclick={delete}>
                                         <i aria-hidden="true" class="fa-solid fa-trash"></i>
@@ -162,7 +216,7 @@ impl Component for Entrants {
                             };
 
                             let players = html! {
-                                <table>
+                                <table class="table-striped">
                                     { players }
                                 </table>
                             };
@@ -176,6 +230,12 @@ impl Component for Entrants {
                                         </td>
                                         <td>{ e.rating().unwrap_or(0) }</td>
                                         <td>{ team.players.len() }</td>
+                                        <td>
+                                            <Button title="Edit" onclick={edit}>
+                                                <i aria-hidden="true" class="fa-solid fa-pen-to-square"></i>
+                                                <span class="sr-only">{ "Edit" }</span>
+                                            </Button>
+                                        </td>
                                         <td>
                                             <Button title="Delete" onclick={delete}>
                                                 <i aria-hidden="true" class="fa-solid fa-trash"></i>
@@ -196,6 +256,7 @@ impl Component for Entrants {
                     <tr>
                         <th>{ "Name" }</th>
                         <th>{ "Rating" }</th>
+                        <th>{ "Edit" }</th>
                         <th>{ "Delete" }</th>
                     </tr>
                 },
@@ -204,19 +265,37 @@ impl Component for Entrants {
                         <th>{ "Name" }</th>
                         <th>{ "Rating" }</th>
                         <th>{ "Players" }</th>
+                        <th>{ "Edit" }</th>
                         <th>{ "Delete" }</th>
                     </tr>
                 },
             };
 
+            let popup = match self.update_entrant {
+                Some(index) =>  {
+                    let entrant = self.entrants.as_ref().unwrap()[index].clone();
+                    let oncancel = ctx.link().callback(|_|Message::UpdateEntrantCancel);
+                    let onsubmit = ctx.link().callback(Message::PatchEntrant);
+
+                    html! {
+                        <UpdateEntrant {entrant} {oncancel} {onsubmit} />
+                    }
+                }
+                None => html! {},
+            };
+
             html! {
-                <div>
-                    <h2>{ "Entrants" }</h2>
-                    <table>
-                        { head }
-                        { body }
-                    </table>
-                </div>
+                <>
+                    { popup }
+
+                    <div>
+                        <h2>{ "Entrants" }</h2>
+                        <table class="table-striped">
+                            { head }
+                            { body }
+                        </table>
+                    </div>
+                </>
             }
         })
     }
@@ -224,7 +303,11 @@ impl Component for Entrants {
 
 pub enum Message {
     UpdateEntrants(FetchData<Vec<Entrant>>),
+    PatchEntrant(Entrant),
+    PatchEntrantResult(Result<Entrant, Error>),
     DeleteEntrant(EntrantId),
     DeleteEntrantResult(Result<EntrantId, Error>),
     ExpandTeam(usize),
+    UpdateEntrantStart(usize),
+    UpdateEntrantCancel,
 }
