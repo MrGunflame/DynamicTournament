@@ -137,7 +137,7 @@ impl<'a> EntrantsClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn create(&self, entrant: &Entrant) -> Result<()> {
+    pub async fn create(&self, entrant: &Entrant) -> Result<Entrant> {
         let req = self
             .client
             .request()

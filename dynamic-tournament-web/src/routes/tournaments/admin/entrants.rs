@@ -4,7 +4,7 @@ use dynamic_tournament_api::{
     v3::{
         id::EntrantId,
         tournaments::{
-            entrants::{Entrant, EntrantVariant},
+            entrants::{Entrant, EntrantVariant, Player, Team},
             EntrantKind, Tournament,
         },
     },
@@ -34,7 +34,7 @@ pub(super) struct Entrants {
     // Expanded teams
     expanded: Vec<bool>,
     // index of the entrant being updated
-    update_entrant: Option<usize>,
+    update_entrant: Option<PopupState>,
 }
 
 impl Component for Entrants {
@@ -69,6 +69,36 @@ impl Component for Entrants {
                 self.entrants = entrants;
                 true
             }
+            Message::CreateEntrant(entrant) => {
+                let client = ClientProvider::get(ctx);
+
+                let tournament_id = ctx.props().tournament.id;
+                ctx.link().send_future(async move {
+                    let res = client
+                        .v3()
+                        .tournaments()
+                        .entrants(tournament_id)
+                        .create(&entrant)
+                        .await;
+
+                    Message::CreateEntrantResult(res)
+                });
+
+                false
+            }
+            Message::CreateEntrantResult(res) => match res {
+                Ok(entrant) => {
+                    self.entrants.as_mut().unwrap().push(entrant);
+                    self.expanded.push(false);
+                    self.update_entrant = None;
+
+                    true
+                }
+                Err(err) => {
+                    MessageLog::error(err);
+                    false
+                }
+            },
             Message::PatchEntrant(entrant) => {
                 let client = ClientProvider::get(ctx);
 
@@ -112,6 +142,8 @@ impl Component for Entrants {
                         }
                     }
 
+                    self.update_entrant = None;
+
                     true
                 }
                 Err(err) => {
@@ -138,8 +170,12 @@ impl Component for Entrants {
                 self.expanded[index] = !self.expanded[index];
                 true
             }
+            Message::CreateEntrantStart => {
+                self.update_entrant = Some(PopupState::Create);
+                true
+            }
             Message::UpdateEntrantStart(index) => {
-                self.update_entrant = Some(index);
+                self.update_entrant = Some(PopupState::Update(index));
                 true
             }
             Message::UpdateEntrantCancel => {
@@ -272,17 +308,37 @@ impl Component for Entrants {
             };
 
             let popup = match self.update_entrant {
-                Some(index) =>  {
-                    let entrant = self.entrants.as_ref().unwrap()[index].clone();
+                Some(state) =>  {
                     let oncancel = ctx.link().callback(|_|Message::UpdateEntrantCancel);
-                    let onsubmit = ctx.link().callback(Message::PatchEntrant);
 
-                    html! {
-                        <UpdateEntrant {entrant} {oncancel} {onsubmit} />
+                    match state {
+                        PopupState::Create => {
+                            let entrant = match ctx.props().tournament.kind {
+                                EntrantKind::Player => Entrant::player(Player { name: String::new(), role: 0.into(), rating: None }),
+                                EntrantKind::Team => Entrant::team(Team { name: String::new(), players: Vec::new() }),
+                            };
+
+                            let onsubmit = ctx.link().callback(Message::CreateEntrant);
+
+                            html! {
+                                <UpdateEntrant {entrant} {oncancel} {onsubmit} />
+                            }
+                        }
+                        PopupState::Update(index) => {
+                            let entrant = self.entrants.as_ref().unwrap()[index].clone();
+                            let onsubmit = ctx.link().callback(Message::PatchEntrant);
+
+                            html! {
+                                <UpdateEntrant {entrant} {oncancel} {onsubmit} />
+                            }
+                        }
                     }
+
                 }
                 None => html! {},
             };
+
+            let create = ctx.link().callback(|_|Message::CreateEntrantStart);
 
             html! {
                 <>
@@ -290,6 +346,12 @@ impl Component for Entrants {
 
                     <div>
                         <h2>{ "Entrants" }</h2>
+                        <div class="admin-entrants-actions">
+                            <Button title="Add" onclick={create}>
+                                <i aria-hidden="true" class="fa-solid fa-plus"></i>
+                                <span class="sr-only">{ "Add" }</span>
+                            </Button>
+                        </div>
                         <table class="table-striped">
                             { head }
                             { body }
@@ -303,11 +365,20 @@ impl Component for Entrants {
 
 pub enum Message {
     UpdateEntrants(FetchData<Vec<Entrant>>),
+    CreateEntrant(Entrant),
+    CreateEntrantResult(Result<Entrant, Error>),
     PatchEntrant(Entrant),
     PatchEntrantResult(Result<Entrant, Error>),
     DeleteEntrant(EntrantId),
     DeleteEntrantResult(Result<EntrantId, Error>),
     ExpandTeam(usize),
     UpdateEntrantStart(usize),
+    CreateEntrantStart,
     UpdateEntrantCancel,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum PopupState {
+    Create,
+    Update(usize),
 }
