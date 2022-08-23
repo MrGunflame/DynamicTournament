@@ -313,6 +313,8 @@ impl Component for Redirect {
 }
 
 /// An owned url path buffer. This can be used to mutate the state.
+// TODO: PathBuf should track the string buffer and the segments (positions) separately
+// for better performance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PathBuf {
     buf: Vec<String>,
@@ -387,7 +389,7 @@ impl PathBuf {
             panic!("Path cannot contain '/'");
         }
 
-        self.buf.push(format!("{}", path.as_ref()));
+        self.buf.push(path.as_ref().to_string());
     }
 }
 
@@ -454,7 +456,7 @@ impl<'a> PathMut<'a> {
             panic!("Path cannot contain '/'");
         }
 
-        self.buf.buf[self.segment] = format!("{}", path.as_ref());
+        self.buf.buf[self.segment] = path.as_ref().to_string();
     }
 
     /// Removes the whole segment from the buffer.
@@ -494,6 +496,12 @@ impl<T> PartialEq<T> for PathBuf
 where
     T: AsRef<str>,
 {
+    // Unfortunately we cannot cannot compare the path directly. We need to join the segments
+    // together to create the path format used by `other`. This is not possible without cloning
+    // and allocation in this case.
+    // This can be resolved when `PathBuf` keeps track of the segments separately from the
+    // internal string buffer.
+    #[allow(clippy::cmp_owned)]
     #[inline]
     fn eq(&self, other: &T) -> bool {
         self.to_string() == other.as_ref()
