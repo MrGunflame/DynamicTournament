@@ -144,24 +144,43 @@ impl Component for Settings {
             <div>
                 <h2>{ "Settings" }</h2>
                 <div>
-                    <span>{ "Name" }</span>
-                    <Input kind={"text"} value={name} onchange={on_change_name} />
-                </div>
-
-                <div>
-                    <span>{ "Date" }</span>
-                    <ParseInput<Date> value={date} onchange={on_change_date} />
-
-                    <span>{ "Time" }</span>
-                    <ParseInput<Time> value={time} onchange={on_change_time} />
-                </div>
-
-                <div>
-                    <span>{ "Entrant Type" }</span>
-                    <select {disabled}>
-                        <option selected={kind_player}>{ "Player" }</option>
-                        <option selected={kind_team}>{ "Team" }</option>
-                    </select>
+                    <table class="table-striped">
+                        <tr>
+                            <td>
+                                { "Name" }
+                            </td>
+                            <td>
+                                <Input kind={"text"} value={name} onchange={on_change_name} />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                { "Date" }
+                            </td>
+                            <td>
+                                <ParseInput<Date> value={date} onchange={on_change_date} />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                { "Time" }
+                            </td>
+                            <td>
+                                <ParseInput<Time> value={time} onchange={on_change_time} />
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                { "Type" }
+                            </td>
+                            <td>
+                                <select {disabled}>
+                                    <option selected={kind_player}>{ "Player" }</option>
+                                    <option selected={kind_team}>{ "Team" }</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
 
                 <button class="button" onclick={on_update}>{ "Update" }</button>
