@@ -9,6 +9,10 @@
 
     <link rel="preload" href="./dynamic_tournament_web_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
     <link rel="modulepreload" href="./dynamic_tournament_web.js">
+
+    <link rel="stylesheet" href="./dynamic_tournament_web_index.css">
+    <link rel="stylesheet" href="./dynamic_tournament_web_hosted.css">
+    <link rel="stylesheet" href="/assets/fontawesome/css/all.min.css">
 </head>
 
 <body>
@@ -17,6 +21,7 @@
 
     const config = {
         api_base: "http://localhost:3030",
+        root: "/",
     };
 
     async function start() {

@@ -10,9 +10,9 @@ PATH_DIST := $(PATH_BUILD)/dist
 RUSTUP := rustup
 CARGO := cargo
 
-.PHONY: wasm-pack build prepare-hash hash docker clean
+.PHONY: wasm-pack build assets prepare-hash hash docker clean
 
-all: build hash
+all: build assets hash
 
 wasm-pack:
 	@if [ ! -f "$(PATH_BUILD)/bin/wasm-pack" ]; \
@@ -31,6 +31,12 @@ build: wasm-pack
 	# Default index.html
 	cp $(PATH_PKG)/index.html $(PATH_DIST)
 
+# Move assets into $(PATH_DIST)
+assets:
+	cp -r $(PATH_ROOT)/assets $(PATH_DIST)
+	cp $(PATH_ROOT)/index.css $(PATH_DIST)
+	cp $(PATH_ROOT)/hosted.css $(PATH_DIST)
+
 prepare-hash:
 	@for path in find sed awk; \
 	do \
@@ -42,7 +48,7 @@ prepare-hash:
 		fi \
 	done
 
-hash: prepare-hash build
+hash: prepare-hash build assets
 	@for file in $$(find $(PATH_DIST) -regextype sed -regex '^.*\.\(wasm\|css\|js\)$$'); \
 	do \
 		DIR=$$(ls $$file | sed 's/[^\/]*$$//'); \
