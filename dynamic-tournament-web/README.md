@@ -15,7 +15,7 @@ Include the entire `assets` directory.
 
 ```html
 <head>
-    <link rel="preload" href="/dynamic_tournament_web_bg.wasm" as="fetch" type="application/json">
+    <link rel="preload" href="/dynamic_tournament_web_bg.wasm" as="fetch" type="application/wasm">
     <link rel="modulepreload" href="/dynamic_tournament_web.js">
 
     <link rel="stylesheet" href="./dynamic_tournament_web_index.css">
