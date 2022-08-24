@@ -9,7 +9,7 @@ use crate::config::BindAddr;
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
@@ -413,6 +413,20 @@ impl Request {
         }
     }
 
+    pub fn x_fowarded_for(&self) -> std::result::Result<Option<ForwardChain>, Error> {
+        match self.headers().get("X-Fowarded-For") {
+            Some(val) => match val
+                .to_str()
+                .map_err(|_| Error::from(StatusCodeError::bad_request()))?
+                .parse()
+            {
+                Ok(val) => Ok(Some(val)),
+                Err(_) => Err(StatusCodeError::bad_request().into()),
+            },
+            None => Ok(None),
+        }
+    }
+
     /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
     pub fn require_authentication(&self) -> std::result::Result<(), Error> {
         let header = self.authorization()?;
@@ -598,6 +612,35 @@ impl Response {
         *resp.status_mut() = self.status;
         *resp.headers_mut() = self.headers;
         resp
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ForwardChain {
+    client: IpAddr,
+    proxies: Vec<IpAddr>,
+}
+
+impl ForwardChain {
+    pub fn client(&self) -> IpAddr {
+        self.client
+    }
+}
+
+impl FromStr for ForwardChain {
+    type Err = <IpAddr as FromStr>::Err;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let mut addrs = Vec::new();
+
+        for addr in s.split(',') {
+            addrs.push(addr.parse()?);
+        }
+
+        Ok(Self {
+            client: addrs.remove(0),
+            proxies: addrs,
+        })
     }
 }
 
