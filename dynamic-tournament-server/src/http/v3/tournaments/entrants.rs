@@ -71,7 +71,10 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
             }
             EntrantVariant::Team(team) => {
                 for player in &team.players {
-                    if !roles.iter().any(|role| player.role == role.id) {
+                    if !roles
+                        .iter()
+                        .any(|role| player.role == 0 || player.role == role.id)
+                    {
                         return Err(StatusCodeError::bad_request()
                             .message(format!("invalid role {} for player", player.role))
                             .into());

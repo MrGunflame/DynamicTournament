@@ -14,6 +14,8 @@ where
 {
     pub value: Option<String>,
     pub onchange: Callback<T>,
+    #[prop_or("text")]
+    pub kind: &'static str,
 }
 
 impl<T> PartialEq for Props<T>

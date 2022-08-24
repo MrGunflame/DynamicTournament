@@ -1,8 +1,10 @@
-use dynamic_tournament_api::v3::tournaments::entrants::{Entrant as ApiEntrant, EntrantVariant};
+use dynamic_tournament_api::v3::tournaments::entrants::{
+    Entrant as ApiEntrant, EntrantVariant, Player,
+};
 use yew::{html, Callback, Component, Context, Html, Properties};
 
 use crate::components::popup::Popup;
-use crate::components::Input;
+use crate::components::{Button, Input, ParseInput};
 
 #[derive(Clone, Debug, Properties)]
 pub struct Props {
@@ -42,11 +44,36 @@ impl Component for UpdateEntrant {
 
                 true
             }
-            Message::UpdatePlayerName(index, name) => {
+            Message::CreatePlayer => {
                 match &mut self.entrant.inner {
                     EntrantVariant::Player(_) => unreachable!(),
-                    EntrantVariant::Team(team) => team.players[index].name = name,
+                    EntrantVariant::Team(team) => team.players.push(Player {
+                        name: String::new(),
+                        role: 0.into(),
+                        rating: None,
+                    }),
                 }
+
+                true
+            }
+            Message::UpdatePlayer(index, field) => {
+                let player = match &mut self.entrant.inner {
+                    EntrantVariant::Player(_) => unreachable!(),
+                    EntrantVariant::Team(team) => &mut team.players[index],
+                };
+
+                match field {
+                    Field::Name(name) => player.name = name,
+                    Field::Rating(rating) => player.rating = rating,
+                }
+
+                true
+            }
+            Message::DeletePlayer(index) => {
+                match &mut self.entrant.inner {
+                    EntrantVariant::Player(_) => unreachable!(),
+                    EntrantVariant::Team(team) => team.players.remove(index),
+                };
 
                 true
             }
@@ -78,25 +105,52 @@ impl Component for UpdateEntrant {
                     .players
                     .iter().enumerate()
                     .map(|(index,player)| {
-                        let update_name = ctx.link().callback(move|name|Message::UpdatePlayerName(index,name));
+                        let update_name = ctx.link().callback(move|name|Message::UpdatePlayer(index, Field::Name(name)));
+                        let update_rating = ctx.link().callback(move |rating| Message::UpdatePlayer(index, Field::Rating(Some(rating))));
+                        let delete = ctx.link().callback(move |_|Message::DeletePlayer(index));
 
                         html! {
                             <tr>
                                 <td>
                                     <Input kind="text" value={player.name.clone()} onchange={update_name} />
                                 </td>
+                                <td>
+                                    { "WIP" }
+                                </td>
+                                <td>
+                                    <ParseInput<u64> kind="number" value={player.rating.unwrap_or(0).to_string()} onchange={update_rating} />
+                                </td>
+                                <td>
+                                    <Button title="Delete" onclick={delete}>
+                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
+                                        <span class="sr-only"></span>
+                                    </Button>
+                                </td>
                             </tr>
                         }
                     })
                     .collect();
 
+                let create = ctx.link().callback(|_| Message::CreatePlayer);
+
                 html! {
                     <div>
+                        <h3>{ "Name" }</h3>
                         <Input kind="text" value={team.name.clone()} onchange={update_name} />
 
+                        <h3>{ "Members" }</h3>
+                        <div>
+                            <Button title="Add" onclick={create}>
+                                <i aria-hidden="true" class="fa-solid fa-plus"></i>
+                                <span class="sr-only">{ "Add" }</span>
+                            </Button>
+                        </div>
                         <table class="table-striped">
                             <tr>
                                 <th>{ "Name" }</th>
+                                <th>{ "Role" }</th>
+                                <th>{ "Rating" }</th>
+                                <th>{ "Delete" }</th>
                             </tr>
                             { players }
                         </table>
@@ -118,7 +172,15 @@ impl Component for UpdateEntrant {
 
 pub enum Message {
     UpdateName(String),
-    UpdatePlayerName(usize, String),
+    /// Create a new player in a team.
+    CreatePlayer,
+    UpdatePlayer(usize, Field),
+    DeletePlayer(usize),
     Cancel,
     Submit,
+}
+
+pub enum Field {
+    Name(String),
+    Rating(Option<u64>),
 }
