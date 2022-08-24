@@ -17,6 +17,8 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: Tournam
 
             method!(req, {
                 Method::GET => get(req, tournament_id, id).await,
+                Method::PATCH => patch(req, tournament_id, id).await,
+                Method::DELETE => delete(req, tournament_id, id).await,
             })
         }
     }
@@ -93,4 +95,27 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     }
 
     Ok(Response::created().json(&entrants))
+}
+
+async fn delete(req: Request, tournament_id: TournamentId, id: EntrantId) -> Result {
+    req.require_authentication()?;
+
+    req.state().store.entrants(tournament_id).delete(id).await?;
+
+    Ok(Response::ok())
+}
+
+async fn patch(mut req: Request, tournament_id: TournamentId, id: EntrantId) -> Result {
+    req.require_authentication()?;
+
+    let mut entrant = req.json().await?;
+    req.state()
+        .store
+        .entrants(tournament_id)
+        .update(id, &entrant)
+        .await?;
+
+    entrant.id = id;
+
+    Ok(Response::ok().json(&entrant))
 }

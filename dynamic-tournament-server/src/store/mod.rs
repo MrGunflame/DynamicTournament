@@ -537,6 +537,32 @@ impl<'a> EntrantsClient<'a> {
 
         Ok(EntrantId(res.last_insert_id()))
     }
+
+    pub async fn delete(&self, id: EntrantId) -> Result<(), Error> {
+        sqlx::query(&format!(
+            "DELETE FROM {}entrants WHERE tournament_id = ? AND id = ?",
+            self.store.table_prefix
+        ))
+        .bind(self.id.0)
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn update(&self, id: EntrantId, entrant: &Entrant) -> Result<(), Error> {
+        sqlx::query(&format!(
+            "UPDATE {}entrants SET data = ? WHERE id = ?",
+            self.store.table_prefix,
+        ))
+        .bind(serde_json::to_vec(entrant)?)
+        .bind(id.0)
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
