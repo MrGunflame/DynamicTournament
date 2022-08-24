@@ -31,8 +31,6 @@ pub(super) struct Props {
 #[derive(Debug)]
 pub(super) struct Entrants {
     entrants: FetchData<Vec<Entrant>>,
-    // Expanded teams
-    expanded: Vec<bool>,
     // index of the entrant being updated
     update_entrant: Option<PopupState>,
 }
@@ -54,7 +52,6 @@ impl Component for Entrants {
 
         Self {
             entrants: FetchData::new(),
-            expanded: Vec::new(),
             update_entrant: None,
         }
     }
@@ -62,10 +59,6 @@ impl Component for Entrants {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::UpdateEntrants(entrants) => {
-                if entrants.has_value() {
-                    self.expanded = vec![false; entrants.as_ref().unwrap().len()];
-                }
-
                 self.entrants = entrants;
                 true
             }
@@ -89,7 +82,6 @@ impl Component for Entrants {
             Message::CreateEntrantResult(res) => match res {
                 Ok(entrant) => {
                     self.entrants.as_mut().unwrap().push(entrant);
-                    self.expanded.push(false);
                     self.update_entrant = None;
 
                     true
@@ -166,10 +158,6 @@ impl Component for Entrants {
                     false
                 }
             },
-            Message::ExpandTeam(index) => {
-                self.expanded[index] = !self.expanded[index];
-                true
-            }
             Message::CreateEntrantStart => {
                 self.update_entrant = Some(PopupState::Create);
                 true
@@ -189,9 +177,8 @@ impl Component for Entrants {
         self.entrants.render(|entrants| {
             let body = entrants
                 .iter()
-                .zip(self.expanded.iter())
                 .enumerate()
-                .map(|(index, (e, expanded))| {
+                .map(|(index, e)| {
                     let id = e.id;
                     let delete = ctx.link().callback(move |_| Message::DeleteEntrant(id));
                     let edit = ctx.link().callback(move |_|Message::UpdateEntrantStart(index));
@@ -216,52 +203,11 @@ impl Component for Entrants {
                             </tr>
                         },
                         EntrantVariant::Team(team) => {
-                            let expand = ctx.link().callback(move |_| Message::ExpandTeam(index));
-
-                            let expand = if *expanded {
-                                html! {
-                                    <Button title="Shrink" onclick={expand}>
-                                        <i aria-hidden="true" class="fa-solid fa-caret-down" style="transition: .5s;"></i>
-                                        <span class="sr-only">{ "Shrink" }</span>
-                                    </Button>
-                                }
-                            } else {
-                                html! {
-                                    <Button title="Expand" onclick={expand}>
-                                        <i aria-hidden="true" class="fa-solid fa-caret-down" style="transform: rotate(-90deg); transition: .3s;"></i>
-                                        <span class="sr-only">{ "Expand" }</span>
-                                    </Button>
-                                }
-                            };
-
-                            // Show all players when the team is expanded.
-                            let players = if *expanded {
-                                team.players
-                                    .iter()
-                                    .map(|player| {
-                                        html! {
-                                            <tr>
-                                                <td>{ player.name.clone() }</td>
-                                                <td>{ player.rating.unwrap_or(0) }</td>
-                                            </tr>
-                                        }
-                                    })
-                                    .collect::<Html>()
-                            } else {
-                                html! {}
-                            };
-
-                            let players = html! {
-                                <table class="table-striped">
-                                    { players }
-                                </table>
-                            };
 
                             html! {
                                 <>
                                     <tr>
                                         <td>
-                                            { expand }
                                             { team.name.clone() }
                                         </td>
                                         <td>{ e.rating().unwrap_or(0) }</td>
@@ -279,7 +225,6 @@ impl Component for Entrants {
                                             </Button>
                                         </td>
                                     </tr>
-                                    { players }
                                 </>
                             }
                         }
@@ -371,7 +316,6 @@ pub enum Message {
     PatchEntrantResult(Result<Entrant, Error>),
     DeleteEntrant(EntrantId),
     DeleteEntrantResult(Result<EntrantId, Error>),
-    ExpandTeam(usize),
     UpdateEntrantStart(usize),
     CreateEntrantStart,
     UpdateEntrantCancel,
