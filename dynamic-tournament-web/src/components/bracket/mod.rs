@@ -129,51 +129,50 @@ impl Component for Bracket {
                     }
 
                     Response::UpdateMatch { index, nodes } => {
-                        log::warn!(
-                            "Received an UpdateMatch frame before initializing the state, ignoring"
-                        );
+                        match &mut self.state {
+                            Some(bracket) => {
+                                bracket.update_match(index.try_into().unwrap(), |m, res| {
+                                    let mut loser_index = None;
 
-                        let bracket = self.state.as_mut().unwrap();
+                                    for (i, (entrant, node)) in
+                                        m.entrants.iter_mut().zip(nodes).enumerate()
+                                    {
+                                        if let EntrantSpot::Entrant(entrant) = entrant {
+                                            entrant.data = node;
+                                        }
 
-                        {
-                            bracket.update_match(index.try_into().unwrap(), |m, res| {
-                                let mut loser_index = None;
-
-                                for (i, (entrant, node)) in
-                                    m.entrants.iter_mut().zip(nodes).enumerate()
-                                {
-                                    if let EntrantSpot::Entrant(entrant) = entrant {
-                                        entrant.data = node;
+                                        if node.winner {
+                                            res.winner_default(entrant);
+                                            loser_index = Some(match i {
+                                                0 => 1,
+                                                _ => 0,
+                                            });
+                                        }
                                     }
 
-                                    if node.winner {
-                                        res.winner_default(entrant);
-                                        loser_index = Some(match i {
-                                            0 => 1,
-                                            _ => 0,
-                                        });
+                                    if let Some(loser_index) = loser_index {
+                                        res.loser_default(&m.entrants[loser_index]);
                                     }
-                                }
-
-                                if let Some(loser_index) = loser_index {
-                                    res.loser_default(&m.entrants[loser_index]);
-                                }
-                            });
+                                });
+                            }
+                            // We have no data to update the bracket yet.
+                            None => {
+                                log::warn!("Received an UpdateMatch frame before initializing the state, ignoring");
+                            }
                         }
 
                         true
                     }
                     Response::ResetMatch { index } => {
-                        log::warn!(
-                            "Received a ResetMatch frame before initializing the state, ignoring"
-                        );
-
-                        let bracket = self.state.as_mut().unwrap();
-
-                        {
-                            bracket.update_match(index as usize, |_, res| {
-                                res.reset_default();
-                            });
+                        match &mut self.state {
+                            Some(state) => {
+                                state.update_match(index as usize, |_, res| {
+                                    res.reset_default();
+                                });
+                            }
+                            None => {
+                                log::warn!("Received a ResetMatch frame before initializing the state, ignoring");
+                            }
                         }
 
                         true
