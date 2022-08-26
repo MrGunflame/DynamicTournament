@@ -10,7 +10,7 @@ use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     Decode, ErrorResponse, Request, Response,
 };
 
-use futures::{SinkExt, StreamExt};
+use futures::{SinkExt, Stream, StreamExt};
 use hyper::upgrade::Upgraded;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::select;
@@ -29,7 +29,7 @@ use live_bracket::LiveBracket;
 #[cfg(feature = "metrics")]
 use crate::metrics::GaugeGuard;
 
-use self::live_bracket::Changed;
+use self::live_bracket::EventStream;
 
 pub async fn handle(
     conn: Upgraded,
@@ -37,6 +37,8 @@ pub async fn handle(
     tournament_id: TournamentId,
     bracket_id: BracketId,
 ) {
+    log::debug!("Accepting new websocket connection");
+
     // Update the active connections gauge.
     #[cfg(feature = "metrics")]
     let _metrics_guard = {
@@ -93,7 +95,7 @@ where
     is_authenticated: bool,
     global_state: State,
     bracket: LiveBracket,
-    changed: Changed<'static>,
+    changed: EventStream<'static>,
 }
 
 impl<S> Connection<S>
@@ -144,6 +146,9 @@ where
     fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_read");
 
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::Read(_)));
+
         loop {
             let fut = match &mut self.state {
                 ConnectionState::Init => unreachable!(),
@@ -158,7 +163,6 @@ where
                         match msg {
                             Ok(Message::Text(_)) => {
                                 log::debug!("Received a text frame from client, that's illegal!");
-                                continue;
                             }
                             Ok(Message::Binary(buf)) => {
                                 log::debug!("Received a binary frame from client");
@@ -169,7 +173,10 @@ where
                                     Ok(req) => req,
                                     Err(err) => {
                                         log::debug!("Failed to decode request: {}", err);
-                                        return Poll::Ready(());
+
+                                        let resp = Response::Error(ErrorResponse::Proto);
+                                        self.init_write(Message::Binary(resp.to_bytes()));
+                                        return self.poll_write(cx);
                                     }
                                 };
 
@@ -180,7 +187,7 @@ where
                                         self.init_write(Message::Binary(buf));
                                         return self.poll_write(cx);
                                     }
-                                    None => continue,
+                                    None => (),
                                 }
                             }
                             Ok(Message::Ping(buf)) => {
@@ -204,6 +211,9 @@ where
                                 return Poll::Ready(());
                             }
                         }
+
+                        // Next item
+                        self.init_read();
                     } else {
                         return Poll::Ready(());
                     }
@@ -215,6 +225,9 @@ where
 
     fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_write");
+
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::Write(_)));
 
         let fut = match &mut self.state {
             ConnectionState::Init => unreachable!(),
@@ -236,6 +249,9 @@ where
     fn poll_write_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_write_close");
 
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::WriteClose(_)));
+
         let fut = match &mut self.state {
             ConnectionState::WriteClose(fut) => Pin::new(fut),
             _ => unreachable!(),
@@ -256,6 +272,9 @@ where
     fn poll_tick(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_tick");
 
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::Read(_)));
+
         match self.ping_interval.poll_tick(cx) {
             Poll::Ready(_) => {
                 self.init_write(Message::Ping(vec![0]));
@@ -270,23 +289,23 @@ where
     fn poll_changed(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_changed");
 
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::Read(_)));
+
         let changed = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.changed) };
 
-        match changed.poll(cx) {
-            Poll::Ready(res) => match res {
-                Ok(change) => {
-                    let buf = Response::from(change).to_bytes();
-                    self.init_write(Message::Binary(buf));
-                    self.poll_write(cx)
-                }
-                // Lagged
-                Err(_) => {
-                    let resp = Response::Error(ErrorResponse::Lagged);
+        match changed.poll_next(cx) {
+            Poll::Ready(res) => {
+                let buf = match res {
+                    Some(Ok(change)) => Response::from(change).to_bytes(),
+                    // Lagged
+                    Some(Err(_)) => Response::Error(ErrorResponse::Lagged).to_bytes(),
+                    None => unreachable!(),
+                };
 
-                    self.init_write(Message::Binary(resp.to_bytes()));
-                    self.poll_write(cx)
-                }
-            },
+                self.init_write(Message::Binary(buf));
+                self.poll_write(cx)
+            }
             Poll::Pending => Poll::Pending,
         }
     }
@@ -399,6 +418,8 @@ where
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        log::trace!("Connection.poll");
+
         loop {
             match self.as_mut().state {
                 // First call to poll, initialize the reader.

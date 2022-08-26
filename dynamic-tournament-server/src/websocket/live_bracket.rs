@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
@@ -10,7 +9,7 @@ use dynamic_tournament_core::{
     tournament::{Tournament, TournamentKind},
     EntrantScore, EntrantSpot, Matches, System,
 };
-use futures::StreamExt;
+use futures::{ready, Stream};
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -49,10 +48,7 @@ impl LiveBracket {
             }
         });
 
-        let _ = self
-            .inner
-            .tx
-            .send(BracketChange::UpdateMatch { index, nodes });
+        self.notify(BracketChange::UpdateMatch { index, nodes });
 
         let bracket = self.clone();
         tokio::task::spawn(async move {
@@ -69,7 +65,7 @@ impl LiveBracket {
             res.reset_default();
         });
 
-        let _ = self.inner.tx.send(BracketChange::ResetMatch { index });
+        self.notify(BracketChange::ResetMatch { index });
 
         let bracket = self.clone();
         tokio::task::spawn(async move {
@@ -77,6 +73,16 @@ impl LiveBracket {
                 log::error!("Failed to save bracket state: {}", err);
             }
         });
+    }
+
+    fn notify(&self, event: BracketChange) {
+        log::debug!(
+            "Notify {} listeners for LiveBracket",
+            self.inner.tx.receiver_count()
+        );
+
+        // Note that this operation can never fail. We keep a receiver ourselves.
+        let _ = self.inner.tx.send(event);
     }
 
     pub fn matches(&self) -> Matches<EntrantScore<u64>> {
@@ -88,13 +94,13 @@ impl LiveBracket {
         self.inner.tx.subscribe()
     }
 
-    pub fn changed(&self) -> Changed<'_> {
+    pub fn changed(&self) -> EventStream<'_> {
         let rx = self.receiver();
 
-        Changed {
+        EventStream {
             _bracket: self,
             state: BroadcastStream::new(rx),
-            next: None,
+            buf: None,
         }
     }
 
@@ -232,47 +238,62 @@ impl LiveBrackets {
     }
 }
 
-pub struct Changed<'a> {
+/// A [`Stream`] over all upcoming [`BracketChange`] events.
+#[derive(Debug)]
+pub struct EventStream<'a> {
     _bracket: &'a LiveBracket,
-    // TODO: Get rid the Box here once the asyncsync has a strong-typed broadcast channel.
     state: BroadcastStream<BracketChange>,
-    next: Option<futures::stream::Next<'static, BroadcastStream<BracketChange>>>,
+    // Since `BroadcastStream::poll_next` doesn't register for future values we need to
+    // manually poll after the poll is complete. If the value returns immediately we store
+    // them in the buffer.
+    buf: Option<Result<BracketChange, ChangeError>>,
 }
 
-impl<'a> Future for Changed<'a> {
-    type Output = Result<BracketChange, ChangeError>;
+impl<'a> Stream for EventStream<'a> {
+    type Item = Result<BracketChange, ChangeError>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.next.is_none() {
-            let next = self.state.next();
-            // Extend to lifetime of Next to 'static.
-            // SAFETY: This is safe since the reference only exists for the same
-            // lifetime as the owner.
-            let next = unsafe { std::mem::transmute(next) };
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        log::trace!("EventStream.poll_next");
 
-            self.next = Some(next);
+        // We have an item stored in the buffer.
+        if let Some(buf) = self.buf.take() {
+            let state = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.state) };
+
+            if let Poll::Ready(val) = state.poll_next(cx) {
+                let val = match val {
+                    Some(Ok(c)) => Ok(c),
+                    Some(Err(BroadcastStreamRecvError::Lagged(_))) => Err(ChangeError::Lagged),
+                    None => unreachable!(),
+                };
+
+                self.buf = Some(val);
+            }
+
+            return Poll::Ready(Some(buf));
         }
 
-        let next = unsafe { self.map_unchecked_mut(|this| this.next.as_mut().unwrap()) };
+        let mut state = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.state) };
 
-        match next.poll(cx) {
-            Poll::Ready(res) => match res {
-                Some(Ok(c)) => Poll::Ready(Ok(c)),
-                Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
-                    Poll::Ready(Err(ChangeError::Lagged))
-                }
-                // This error cannot ever occur because we keep an instance to a sender
-                // ourself.
+        let res = ready!(state.as_mut().poll_next(cx));
+
+        if let Poll::Ready(val) = state.poll_next(cx) {
+            let val = match val {
+                Some(Ok(c)) => Ok(c),
+                Some(Err(BroadcastStreamRecvError::Lagged(_))) => Err(ChangeError::Lagged),
                 None => unreachable!(),
-            },
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}
+            };
 
-impl<'a> std::fmt::Debug for Changed<'a> {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+            self.buf = Some(val);
+        }
+
+        match res {
+            Some(Ok(c)) => Poll::Ready(Some(Ok(c))),
+            Some(Err(BroadcastStreamRecvError::Lagged(_))) => {
+                Poll::Ready(Some(Err(ChangeError::Lagged)))
+            }
+            // This is unreachable because we always keep a sender in `self._bracket`.
+            None => unreachable!(),
+        }
     }
 }
 
