@@ -27,6 +27,10 @@ between *Requests*, which are only sent by the client  and *Response*, which are
 be the server. The protocol is full-duplex: both the client and server can start sending
 data independently from each other.
 
+The protocol only carries information about the matches itself. It does not provide any information about how matches are rendered or about how changes are propagated.
+
+Requests can be differentiated between read and write queries. Read queries are avaliable to all clients, while write queries require previous authentication. The [Authorize](#authorize) request upgrades the current connection and allows write requests to be sent.
+
 ### Encoding
 
 The protocol has support for encoding/decoding the following types:
@@ -67,6 +71,39 @@ Signed integers are converted into their unsigned variant using a zigzag encodin
 encoding stores the sign bit in the LSB.
 
 An signed integer `n` with `k` bits can be encoded using `(n << 1) ^ (n >> k - 1)`.
+
+#### General structure
+
+##### Entrant Score
+
+This struct contains the score for a single team in a match (heat). It also contains a byte
+indicating whether the entrant is the winner of the match. The *Entrant Score* is commonly used
+as a sequence of two, representing both entrants in a single match. Only a single entrant can have
+the winner byte set, causing the other to be treated as the loser.
+
+| Name   | Type |
+| ------ | ---- |
+| score  | u64  |
+| winner | bool |
+
+##### Match
+
+A match represents a single match (heat) in the bracket. It always contains a sequence of
+two *Node*s.
+
+| Name     | Type   |
+| -------- | ------ |
+| entrants | []Node |
+
+##### Node
+
+A *Node* describes a single team in a match. It contains the *Entrant Score* of the entrant (see above), and an index used to identify the entrant. The entrant can be resolved by
+indexing the `entrants` field returned by the [`/v3/tournaments/:id/brackets` endpoint](../brackets.md#bracket).
+
+| Name  | Type            |
+| ----- | --------------- |
+| index | u64             |
+| score | *Entrant Score* |
 
 ##### bool
 
