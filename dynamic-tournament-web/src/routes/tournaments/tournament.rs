@@ -6,6 +6,7 @@ use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::router::{Link, PathBuf, Routable, Switch};
 use crate::utils::{FetchData, Rc};
 
+use super::navbar::Navbar;
 use super::{Admin, Brackets, Entrants, Overview};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Properties)]
@@ -16,7 +17,6 @@ pub struct Props {
 #[derive(Debug)]
 pub struct Tournament {
     tournament: FetchData<Rc<ApiTournament>>,
-    is_admin: bool,
 }
 
 impl Component for Tournament {
@@ -25,8 +25,6 @@ impl Component for Tournament {
 
     fn create(ctx: &Context<Self>) -> Self {
         let client = ClientProvider::get(ctx);
-
-        let is_admin = client.is_authenticated();
 
         let id = ctx.props().id;
         ctx.link().send_future(async move {
@@ -38,7 +36,6 @@ impl Component for Tournament {
 
         Self {
             tournament: FetchData::new(),
-            is_admin,
         }
     }
 
@@ -50,10 +47,9 @@ impl Component for Tournament {
     fn view(&self, _ctx: &Context<Self>) -> Html {
         self.tournament.render(|tournament| {
             let tournament = tournament.clone();
-            let is_admin = self.is_admin;
 
             html! {
-                <Switch<Route> render={Switch::render(switch(tournament, is_admin))} />
+                <Switch<Route> render={Switch::render(switch(tournament))} />
             }
         })
     }
@@ -88,31 +84,8 @@ impl Routable for Route {
     }
 }
 
-fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> Html {
+fn switch(tournament: Rc<ApiTournament>) -> impl Fn(&Route) -> Html {
     move |route| {
-        let mut links = vec![
-            (Route::Index, "Overview"),
-            (Route::Brackets, "Brackets"),
-            (Route::Entrants, "Entrants"),
-        ];
-
-        if is_admin {
-            links.push((Route::Admin, "Admin"));
-        }
-
-        let routes: Html = links
-            .into_iter()
-            .map(|(r, name)| {
-                let classes = if r == *route { "active" } else { "" };
-
-                let to = format!("/tournaments/{}{}", tournament.id, r.to_path());
-
-                html! {
-                    <li><Link {classes} {to}>{ name }</Link></li>
-                }
-            })
-            .collect();
-
         let content = {
             let tournament = tournament.clone();
 
@@ -140,11 +113,7 @@ fn switch(tournament: Rc<ApiTournament>, is_admin: bool) -> impl Fn(&Route) -> H
                 </Link>
 
                 <h2 class="tournament-name">{ tournament.name.clone() }</h2>
-                <div class="navbar">
-                    <ul>
-                        { routes }
-                    </ul>
-                </div>
+                <Navbar tournament_id={tournament.id} route={*route} />
                 { content }
             </>
         }
