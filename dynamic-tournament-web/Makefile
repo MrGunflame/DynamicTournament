@@ -26,7 +26,7 @@ build: wasm-pack
 
 	$(RUSTUP) toolchain install stable
 	$(RUSTUP) target add wasm32-unknown-unknown
-	cd $(PATH_ROOT) && $(PATH_BIN)/wasm-pack build --release --target web --no-typescript --out-dir $(PATH_DIST) $(PATH_PKG)
+	cd $(PATH_ROOT) && $(PATH_BIN)/wasm-pack build --release --target web --no-typescript --out-dir $(PATH_DIST) $(PATH_PKG) --features log/release_max_level_error
 
 	# Default index.html
 	cp $(PATH_PKG)/index.html $(PATH_DIST)
