@@ -242,7 +242,10 @@ where
 
         if let Some((entrant, data)) = res.winner {
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                log::debug!("Next winner match is {}", *next_matches.winner_index);
+                log::debug!(
+                    "Next winner match is {}",
+                    next_matches.winner_index().unwrap()
+                );
 
                 *spot = entrant.map(|index| Node::new_with_data(index, data));
             }
@@ -250,7 +253,10 @@ where
 
         if let Some((entrant, data)) = res.loser {
             if let Some(m) = next_matches.loser_match_mut(&mut self.matches) {
-                log::debug!("Next loser match is {}", *next_matches.loser_index);
+                log::debug!(
+                    "Next loser match is {}",
+                    next_matches.loser_index().unwrap()
+                );
 
                 let mut index = 0;
                 let entrant = entrant.map(|i| {
@@ -259,19 +265,19 @@ where
                 });
 
                 unsafe {
-                    *m.get_unchecked_mut(next_matches.loser_position) = entrant;
+                    *m.get_unchecked_mut(next_matches.loser_position().unwrap()) = entrant;
                 }
 
                 if m.is_placeholder() {
                     unsafe {
                         if let EntrantSpot::Entrant(entrant) =
-                            m.get_unchecked_mut(next_matches.loser_position)
+                            m.get_unchecked_mut(next_matches.loser_position().unwrap())
                         {
                             entrant.data.set_winner(true);
                         }
                     }
 
-                    let next_matches = self.next_matches(*next_matches.loser_index);
+                    let next_matches = self.next_matches(next_matches.loser_index().unwrap());
 
                     if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
                         *spot = EntrantSpot::Entrant(Node::new(index));
@@ -438,7 +444,10 @@ where
 
         if let Some((entrant, data)) = res.winner {
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                log::debug!("Next winner match is {}", *next_matches.winner_index);
+                log::debug!(
+                    "Next winner match is {}",
+                    next_matches.winner_index().unwrap()
+                );
 
                 *spot = entrant.map(|index| Node::new_with_data(index, data));
             }
@@ -446,7 +455,10 @@ where
 
         if let Some((entrant, data)) = res.loser {
             if let Some(m) = next_matches.loser_match_mut(&mut self.matches) {
-                log::debug!("Next loser match is {}", *next_matches.loser_index);
+                log::debug!(
+                    "Next loser match is {}",
+                    next_matches.loser_index().unwrap()
+                );
 
                 let mut index = 0;
                 let entrant = entrant.map(|i| {
@@ -455,19 +467,19 @@ where
                 });
 
                 unsafe {
-                    *m.get_unchecked_mut(next_matches.loser_position) = entrant;
+                    *m.get_unchecked_mut(next_matches.loser_position().unwrap()) = entrant;
                 }
 
                 if m.is_placeholder() {
                     unsafe {
                         if let EntrantSpot::Entrant(entrant) =
-                            m.get_unchecked_mut(next_matches.loser_position)
+                            m.get_unchecked_mut(next_matches.loser_position().unwrap())
                         {
                             entrant.data.set_winner(true);
                         }
                     }
 
-                    let next_matches = self.next_matches(*next_matches.loser_index);
+                    let next_matches = self.next_matches(next_matches.loser_index().unwrap());
 
                     if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
                         *spot = EntrantSpot::Entrant(Node::new(index));

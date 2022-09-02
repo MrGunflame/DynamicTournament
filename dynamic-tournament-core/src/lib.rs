@@ -28,12 +28,10 @@ pub mod render;
 mod double_elimination;
 mod single_elimination;
 pub mod tournament;
-mod utils;
 
 pub use double_elimination::DoubleElimination;
 use render::{BracketRounds, Position, Renderer};
 pub use single_elimination::SingleElimination;
-use utils::SmallOption;
 
 use thiserror::Error;
 
@@ -650,33 +648,75 @@ where
 }
 
 /// Information about the next match.
-///
-/// # Safety
-///
-/// The methods on `NextMatches` assume that the given indexes and positions are valid, as long as
-/// those values are not `None`.
-///
-/// Calling methods with an value that is out-of-bounds for the given matches is undefined
-/// behavoir.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NextMatches {
-    winner_index: SmallOption<usize>,
-    pub(crate) winner_position: usize,
-    loser_index: SmallOption<usize>,
-    pub(crate) loser_position: usize,
+    winner: Option<(usize, usize)>,
+    loser: Option<(usize, usize)>,
 }
 
 impl NextMatches {
+    /// Creates a new `NextMatches` instance with the specified `winner` and `loser`.
+    ///
+    /// The first value in the tuple defines the index, the second defines the position. Use `None`
+    /// to set no winner/loser.
+    pub fn new(winner: Option<(usize, usize)>, loser: Option<(usize, usize)>) -> Self {
+        Self { winner, loser }
+    }
+
+    /// Returns the match index of the winner. Returns `None` if no winner is defined.
+    #[inline]
+    pub fn winner_index(&self) -> Option<usize> {
+        self.winner.map(|(index, _)| index)
+    }
+
+    /// Returns the position of the winner in the new match. Returns `None` if no winner is
+    /// defined.
+    #[inline]
+    pub fn winner_position(&self) -> Option<usize> {
+        self.winner.map(|(_, pos)| pos)
+    }
+
+    /// Returns the match index of the loser. Returns `None` if no loser is defined.
+    #[inline]
+    pub fn loser_index(&self) -> Option<usize> {
+        self.loser.map(|(index, _)| index)
+    }
+
+    /// Returns the position of the loser in the new match. Returns `None` if no loser is defined.
+    #[inline]
+    pub fn loser_position(&self) -> Option<usize> {
+        self.loser.map(|(_, pos)| pos)
+    }
+
     /// Returns a mutable reference to the [`Match`] with the winner using the given [`Matches`].
     /// Returns `None` if no winner is defined.
+    #[inline]
     pub fn winner_match_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
     ) -> Option<&'a mut Match<Node<T>>> {
-        if self.winner_index.is_some() {
-            unsafe { Some(matches.get_unchecked_mut(*self.winner_index)) }
-        } else {
-            None
+        match self.winner_index() {
+            Some(index) => matches.get_mut(index),
+            None => None,
+        }
+    }
+
+    /// Returns a mutable reference to the [`Match`] with the winner. Returns `None` if no winner
+    /// is defined. This method does not check whether the index of the winner is out of bounds.
+    ///
+    /// # Safety
+    ///
+    /// This method does no bounds checking. Calling this method with a [`Matches`] slice smaller
+    /// than or equal to the winner index is undefined behavoir.
+    #[inline]
+    pub unsafe fn winner_match_mut_unchecked<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a Match<Node<T>>> {
+        match self.winner_index() {
+            // SAFETY: The caller guarantees that index is in bounds of `matches`.
+            Some(index) => unsafe { Some(matches.get_unchecked_mut(index)) },
+            None => None,
         }
     }
 
@@ -686,77 +726,98 @@ impl NextMatches {
         &self,
         matches: &'a mut Matches<T>,
     ) -> Option<&'a mut Match<Node<T>>> {
-        if self.loser_index.is_some() {
-            unsafe { Some(matches.get_unchecked_mut(*self.loser_index)) }
-        } else {
-            None
+        match self.loser_index() {
+            Some(index) => matches.get_mut(index),
+            None => None,
         }
     }
 
-    /// Creates a new `NextMatches` instance with the specified `winner` and `loser`.
+    /// Returns a mutable reference to the [`Match`] with the loser. Returns `None` if no loser is
+    /// defined. This method does not check whether the index of the loser is out of bounds.
     ///
-    /// The first value in the tuple defines the index, the second defines the position. Use `None`
-    /// to set no winner/loser.
-    pub fn new(winner: Option<(usize, usize)>, loser: Option<(usize, usize)>) -> Self {
-        let (winner_index, winner_position) = winner
-            .map(|(index, position)| (SmallOption::new_unchecked(index), position))
-            .unwrap_or_default();
-
-        let (loser_index, loser_position) = loser
-            .map(|(index, position)| (SmallOption::new_unchecked(index), position))
-            .unwrap_or_default();
-
-        Self {
-            winner_index,
-            winner_position,
-            loser_index,
-            loser_position,
+    /// # Safety
+    ///
+    /// This method does no bounds checking. Calling this method with a [`Matches`] slice smaller
+    /// than or equal to the loser index is undefined behavoir.
+    pub unsafe fn loser_match_mut_unchecked<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a Match<Node<T>>> {
+        match self.loser_index() {
+            Some(index) => unsafe { Some(matches.get_unchecked_mut(index)) },
+            None => None,
         }
     }
 
     /// Returns a mutable reference to the [`EntrantSpot`] of the winner. Returns `None` if no
     /// winner is defined.
+    #[inline]
     pub fn winner_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
     ) -> Option<&'a mut EntrantSpot<Node<T>>> {
-        if self.winner_index.is_some() {
-            unsafe {
-                let r#match = matches.get_unchecked_mut(*self.winner_index);
+        match self.winner {
+            Some((index, pos)) => matches.get_mut(index)?.get_mut(pos),
+            None => None,
+        }
+    }
 
-                Some(r#match.get_unchecked_mut(self.winner_position))
+    /// Returns the [`EntrantSpot`] of the winner in the next match. Returns `None` if no winner is
+    /// defined. This method does no check whether the index or position of the winner are out of
+    /// bounds.
+    ///
+    /// # Safety
+    ///
+    /// This method does no bounds checking. Calling this method with a [`Matches`] slice smaller
+    /// than or equal to the winner index is undefined behavoir. The [`Match`] returned at the
+    /// winner index must have at least `position` slots.
+    #[inline]
+    pub unsafe fn winner_mut_unchecked<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut EntrantSpot<Node<T>>> {
+        match self.winner {
+            Some((index, pos)) => {
+                // SAFETY: The caller must guarantee that both `index` and `pos` are in bounds.
+                unsafe { Some(matches.get_unchecked_mut(index).get_unchecked_mut(pos)) }
             }
-        } else {
-            None
+            None => None,
         }
     }
 
     /// Returns a mutable reference to the [`EntrantSpot`] of the loser. Returns `None` if no
     /// loser is defined.
+    #[inline]
     pub fn loser_mut<'a, T>(
         &self,
         matches: &'a mut Matches<T>,
     ) -> Option<&'a mut EntrantSpot<Node<T>>> {
-        if self.loser_index.is_some() {
-            unsafe {
-                let r#match = matches.get_unchecked_mut(*self.loser_index);
-
-                Some(r#match.get_unchecked_mut(self.loser_position))
-            }
-        } else {
-            None
+        match self.loser {
+            Some((index, pos)) => matches.get_mut(index)?.get_mut(pos),
+            None => None,
         }
     }
-}
 
-impl Default for NextMatches {
+    /// Returns the [`EntrantSpot`] of the loser in the next match. Returns `None` if no loser is
+    /// defined. This method does no check whether the index or position of the loser are out of
+    /// bounds.
+    ///
+    /// # Safety
+    ///
+    /// This method does no bounds checking. Calling this method with a [`Matches`] slice smaller
+    /// than or equal to the loser index is undefined behavoir. The [`Match`] returned at the
+    /// loser index must have at least `position` slots.
     #[inline]
-    fn default() -> Self {
-        Self {
-            winner_index: SmallOption::none(),
-            winner_position: 0,
-            loser_index: SmallOption::none(),
-            loser_position: 0,
+    pub unsafe fn loser_mut_unchecked<'a, T>(
+        &self,
+        matches: &'a mut Matches<T>,
+    ) -> Option<&'a mut EntrantSpot<Node<T>>> {
+        match self.loser {
+            Some((index, pos)) => {
+                // SAFETY: The caller must guarantee that both `index` and `pos` are in bounds.
+                unsafe { Some(matches.get_unchecked_mut(index).get_unchecked_mut(pos)) }
+            }
+            None => None,
         }
     }
 }

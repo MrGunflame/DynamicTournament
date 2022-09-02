@@ -355,7 +355,7 @@ where
         if let Some((entrant, data)) = res.winner {
             // Only update the next match if it actually exists.
             if let Some(spot) = next_matches.winner_mut(&mut self.matches) {
-                log::debug!("Next winner match is {}", *next_matches.winner_index);
+                log::debug!("Next winner match is {:?}", next_matches.winner_index());
 
                 *spot = match entrant {
                     EntrantSpot::Entrant(index) => {
@@ -369,7 +369,7 @@ where
 
         if let Some((entrant, data)) = res.loser {
             if let Some(spot) = next_matches.loser_mut(&mut self.matches) {
-                log::debug!("Next loser match is {}", *next_matches.loser_index);
+                log::debug!("Next loser match is {:?}", next_matches.loser_index());
 
                 *spot = match entrant {
                     EntrantSpot::Entrant(index) => {
@@ -394,20 +394,23 @@ where
             // Reset all following matches.
             loop {
                 let next_matches = self.next_matches(next_index);
-                if next_matches.winner_index.is_none() {
+                if next_matches.winner.is_none() {
                     break;
                 }
 
                 // Note: Loser matches don't have any following matches.
-                if next_matches.loser_index.is_some() {
-                    let r#match = self.matches.get_mut(*next_matches.loser_index).unwrap();
-                    r#match[next_matches.loser_position] = EntrantSpot::TBD;
+                if next_matches.loser_index().is_some() {
+                    let r#match = self
+                        .matches
+                        .get_mut(next_matches.loser_index().unwrap())
+                        .unwrap();
+                    r#match[next_matches.loser_position().unwrap()] = EntrantSpot::TBD;
                 }
 
-                next_index = *next_matches.winner_index;
+                next_index = next_matches.winner_index().unwrap();
 
                 let r#match = self.matches.get_mut(next_index).unwrap();
-                r#match[next_matches.winner_position] = EntrantSpot::TBD;
+                r#match[next_matches.winner_position().unwrap()] = EntrantSpot::TBD;
             }
         }
     }
