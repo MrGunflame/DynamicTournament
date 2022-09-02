@@ -27,11 +27,12 @@ body {
 
 .team-label>span {
   padding: 10px;
+  white-space: nowrap;
 }
 
 .team-score {
   background-color: #151b27;
-  width: 12px;
+  min-width: 12px;
   padding: 10px;
 }
 
