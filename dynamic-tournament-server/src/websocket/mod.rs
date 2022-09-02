@@ -42,6 +42,8 @@ pub async fn handle(
     // Update the active connections gauge.
     #[cfg(feature = "metrics")]
     let _metrics_guard = {
+        state.metrics.websocket_connections_total.inc();
+
         let gauge = state.metrics.websocket_connections_current.clone();
         GaugeGuard::new(gauge)
     };
