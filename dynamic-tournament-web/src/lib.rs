@@ -16,11 +16,6 @@ use routes::App;
 
 use consts::{MOUNTPOINT, TITLE_BASE};
 
-extern crate wee_alloc;
-
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 #[wasm_bindgen]
 pub fn run(config: &JsValue) {
     let config = config.into_serde().expect("Failed to parse config");
