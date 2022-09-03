@@ -157,6 +157,7 @@ where
                 ConnectionState::Read(fut) => Pin::new(fut),
                 ConnectionState::Write(_) => unreachable!(),
                 ConnectionState::WriteClose(_) => unreachable!(),
+                ConnectionState::Closed => unreachable!(),
             };
 
             match fut.poll(cx) {
@@ -236,6 +237,7 @@ where
             ConnectionState::Read(_) => unreachable!(),
             ConnectionState::Write(fut) => Pin::new(fut),
             ConnectionState::WriteClose(_) => unreachable!(),
+            ConnectionState::Closed => unreachable!(),
         };
 
         match fut.poll(cx) {
@@ -399,6 +401,7 @@ where
             ConnectionState::Read(_) => "Read",
             ConnectionState::Write(_) => "Write",
             ConnectionState::WriteClose(_) => "WriteClose",
+            ConnectionState::Closed => "Closed",
         }
     }
 }
@@ -411,6 +414,7 @@ enum ConnectionState<'a, S> {
     Read(futures::stream::Next<'a, S>),
     Write(futures::sink::Send<'a, S, Message>),
     WriteClose(futures::sink::Send<'a, S, Message>),
+    Closed,
 }
 
 impl<S> Future for Connection<S>
@@ -431,7 +435,14 @@ where
                 }
                 // Try to read, check for bracket updates and then tick.
                 ConnectionState::Read(_) => match self.as_mut().poll_read(cx) {
-                    Poll::Ready(_) => {}
+                    // When `poll_read` returns `Poll::Ready` the connection is done.
+                    Poll::Ready(()) => {
+                        let prev = self.state_str();
+                        self.state = ConnectionState::Closed;
+                        log::trace!("Connection.state {} -> {}", prev, self.state_str());
+
+                        return Poll::Ready(());
+                    }
                     Poll::Pending => match self.as_mut().poll_changed(cx) {
                         Poll::Ready(()) => {}
                         Poll::Pending => return self.as_mut().poll_tick(cx),
@@ -446,6 +457,7 @@ where
                     Poll::Pending => return Poll::Pending,
                 },
                 ConnectionState::WriteClose(_) => return self.poll_write_close(cx),
+                ConnectionState::Closed => return Poll::Ready(()),
             }
         }
     }
