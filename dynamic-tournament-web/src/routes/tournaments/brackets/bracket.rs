@@ -4,8 +4,7 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::components::bracket::Bracket as BracketComponent;
-use crate::components::movable_boxed::MovableBoxed;
+use crate::components::bracket::LiveBracket;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
 use crate::utils::router::RouterContextExt;
@@ -142,9 +141,7 @@ impl Component for Bracket {
             html! {
                 <>
                     <BracketList {brackets} {onclick} />
-                    <MovableBoxed>
-                        <BracketComponent {tournament} {bracket} {entrants} />
-                    </MovableBoxed>
+                    <LiveBracket {tournament} {bracket} {entrants} />
                 </>
             }
         } else {

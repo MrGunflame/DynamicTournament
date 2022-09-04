@@ -57,9 +57,9 @@ impl WebSocketService {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Req {
-    Message(Response),
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Message {
+    Response(Response),
     Close,
 }
 
@@ -71,8 +71,8 @@ pub struct EventBus {
 impl Agent for EventBus {
     type Reach = Context<Self>;
     type Message = ();
-    type Input = Req;
-    type Output = Response;
+    type Input = Message;
+    type Output = Message;
 
     fn create(link: AgentLink<Self>) -> Self {
         Self {
@@ -84,13 +84,8 @@ impl Agent for EventBus {
     fn update(&mut self, _msg: Self::Message) {}
 
     fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
-        match msg {
-            Req::Message(msg) => {
-                for sub in self.subscribers.iter() {
-                    self.link.respond(*sub, msg.clone());
-                }
-            }
-            Req::Close => {}
+        for sub in self.subscribers.iter() {
+            self.link.respond(*sub, msg.clone());
         }
     }
 
@@ -114,14 +109,14 @@ impl EventHandler for Handler {
                 let mut buf = Cursor::new(buf);
 
                 match Response::decode(&mut buf) {
-                    Ok(resp) => self.0.send(Req::Message(resp)),
+                    Ok(resp) => self.0.send(Message::Response(resp)),
                     Err(err) => {
                         log::error!("Failed to decode websocket response: {}", err);
                     }
                 }
             }
             WebSocketMessage::Text(_) => (),
-            WebSocketMessage::Close => self.0.send(Req::Close),
+            WebSocketMessage::Close => self.0.send(Message::Close),
         }
     }
 }
