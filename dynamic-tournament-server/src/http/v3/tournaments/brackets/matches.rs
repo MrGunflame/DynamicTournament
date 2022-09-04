@@ -2,7 +2,7 @@ use crate::http::{Request, RequestUri, Response, Result};
 use crate::StatusCodeError;
 
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
-use dynamic_tournament_macros::method;
+use dynamic_tournament_macros::{method, path};
 use hyper::header::{
     HeaderValue, CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION,
     UPGRADE,
@@ -17,13 +17,11 @@ pub async fn route(
     id: TournamentId,
     bracket_id: BracketId,
 ) -> Result {
-    if uri.take().is_none() {
-        method!(req, {
+    path!(uri, {
+        @ => method!(req, {
             GET => serve(req, id, bracket_id).await,
         })
-    } else {
-        Err(StatusCodeError::not_found().into())
-    }
+    })
 }
 
 async fn serve(req: Request, id: TournamentId, bracket_id: BracketId) -> Result {

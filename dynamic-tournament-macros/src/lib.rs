@@ -34,3 +34,9 @@ use proc_macro::TokenStream;
 pub fn method(input: TokenStream) -> TokenStream {
     server::method(input)
 }
+
+#[cfg(feature = "server")]
+#[proc_macro]
+pub fn path(input: TokenStream) -> TokenStream {
+    server::path(input)
+}
