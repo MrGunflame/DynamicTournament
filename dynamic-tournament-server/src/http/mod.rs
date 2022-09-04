@@ -600,28 +600,3 @@ impl Response {
         resp
     }
 }
-
-/// Checks the request method and runs the specified path. If no matching method is found
-/// an method_not_allowed error is returned.
-#[macro_export]
-macro_rules! method {
-    ($req:expr, {$($method:expr => $branch:expr),* $(,)?}) => {
-        match $req.method() {
-            $(
-                method if method == $method => $branch,
-            )*
-            method if method == hyper::Method::OPTIONS => {
-                use $crate::http::Response;
-                use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
-
-                let allow = vec![$($method.as_str()),*];
-                let allow = HeaderValue::from_bytes(allow.join(",").as_bytes()).unwrap();
-
-                Ok(Response::no_content()
-                    .header(ALLOW, allow.clone())
-                    .header(ACCESS_CONTROL_ALLOW_METHODS,allow))
-            }
-            _ => Err($crate::StatusCodeError::method_not_allowed().into()),
-        }
-    };
-}

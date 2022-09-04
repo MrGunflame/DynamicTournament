@@ -1,23 +1,23 @@
 use dynamic_tournament_core::options::TournamentOptions;
-use hyper::Method;
 
 use crate::http::{Request, RequestUri, Response, Result};
-use crate::{method, StatusCodeError};
+use crate::StatusCodeError;
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
 use dynamic_tournament_core::{EntrantScore, SingleElimination};
+use dynamic_tournament_macros::method;
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req).await,
+            GET => list(req).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             method!(req, {
-                Method::GET => get(req, id).await,
+                GET => get(req, id).await,
             })
         }
     }

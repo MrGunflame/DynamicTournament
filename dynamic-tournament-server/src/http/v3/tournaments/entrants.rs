@@ -1,24 +1,24 @@
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
 use dynamic_tournament_api::Payload;
-use hyper::Method;
+use dynamic_tournament_macros::method;
 
 use crate::http::{Request, RequestUri, Response, Result};
-use crate::{method, StatusCodeError};
+use crate::StatusCodeError;
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: TournamentId) -> Result {
     match uri.take() {
         None => method!(req, {
-            Method::GET => list(req, tournament_id).await,
-            Method::POST => create(req, tournament_id).await,
+            GET => list(req, tournament_id).await,
+            POST => create(req, tournament_id).await,
         }),
         Some(part) => {
             let id = part.parse()?;
 
             method!(req, {
-                Method::GET => get(req, tournament_id, id).await,
-                Method::PATCH => patch(req, tournament_id, id).await,
-                Method::DELETE => delete(req, tournament_id, id).await,
+                GET => get(req, tournament_id, id).await,
+                PATCH => patch(req, tournament_id, id).await,
+                DELETE => delete(req, tournament_id, id).await,
             })
         }
     }

@@ -1,20 +1,19 @@
-use hyper::Method;
-
 use crate::auth::password_hash;
 use crate::http::{Request, RequestUri, Response, Result};
-use crate::{method, StatusCodeError};
+use crate::StatusCodeError;
 
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_api::v3::users::User;
+use dynamic_tournament_macros::method;
 
 pub async fn route(req: Request, uri: RequestUri<'_>) -> Result {
     match uri.take_all() {
         Some("login") => method!(req, {
-            Method::POST => login(req).await,
+            POST => login(req).await,
         }),
         Some("refresh") => method!(req, {
-            Method::POST => refresh(req).await,
+            POST => refresh(req).await,
         }),
         _ => Err(StatusCodeError::not_found().into()),
     }
