@@ -179,8 +179,6 @@ mod wasm {
                                     break;
                                 }
                                 None => {
-                                    log::debug!("Writer done");
-
                                     break;
                                 }
                             }
@@ -203,8 +201,6 @@ mod wasm {
                                 }
                                 None => {
                                     log::debug!("ws reader closed");
-
-                                    handler.dispatch(WebSocketMessage::Close);
                                     break;
                                 }
                             }
@@ -213,6 +209,7 @@ mod wasm {
                 }
 
                 let _ = ws.into_inner().close(None, None);
+                handler.dispatch(WebSocketMessage::Close);
                 log::debug!("Dropped ws");
             });
 
