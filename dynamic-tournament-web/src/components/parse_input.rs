@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
-use yew::{html, Callback, Component, Context, Html, Properties};
+use yew::{html, Callback, Classes, Component, Context, Html, Properties};
 
 use crate::components::Input;
 
@@ -16,6 +16,8 @@ where
     pub onchange: Callback<T>,
     #[prop_or("text")]
     pub kind: &'static str,
+    #[prop_or_default]
+    pub classes: Classes,
 }
 
 impl<T> PartialEq for Props<T>
@@ -85,10 +87,11 @@ where
 
         let onchange = ctx.link().callback(|val: String| val);
         let value = self.value.clone();
+        let classes = ctx.props().classes.clone();
 
         html! {
             <div>
-                <Input kind="text" {value} {onchange} />
+                <Input kind="text" {value} {onchange} {classes} />
                 { error }
             </div>
         }

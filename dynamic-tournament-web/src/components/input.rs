@@ -1,12 +1,14 @@
 use wasm_bindgen::JsCast;
 use web_sys::{Event, HtmlInputElement};
-use yew::{html, Callback, Component, Context, Html, Properties};
+use yew::{html, Callback, Classes, Component, Context, Html, Properties};
 
 #[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Props {
     pub kind: &'static str,
     pub value: String,
     pub onchange: Callback<String>,
+    #[prop_or_default]
+    pub classes: Classes,
 }
 
 #[derive(Debug)]
@@ -44,8 +46,13 @@ impl Component for Input {
             None => unreachable!(),
         });
 
+        let classes = match &ctx.props().classes.is_empty() {
+            false => ctx.props().classes.clone(),
+            true => Classes::from("dt-input"),
+        };
+
         html! {
-            <input class="dt-input" type={kind} {value} {onchange} />
+            <input class={classes} type={kind} {value} {onchange} />
         }
     }
 }
