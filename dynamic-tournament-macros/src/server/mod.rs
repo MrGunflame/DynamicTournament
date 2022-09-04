@@ -1,3 +1,5 @@
+mod path;
+
 use std::collections::HashMap;
 
 use proc_macro::TokenStream;
@@ -5,6 +7,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, parse_macro_input, Expr, Ident, Result, Token};
+
+pub use path::path;
 
 pub fn method(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as MethodRoot);
@@ -18,7 +22,7 @@ struct MethodRoot {
 
 impl MethodRoot {
     fn expand_head(&self) -> TokenStream2 {
-        match self.branches.get(&Method::GET) {
+        match self.branches.get(&Method::Get) {
             Some(branch) => {
                 quote! {
                     method if method == hyper::Method::HEAD => {
@@ -115,21 +119,21 @@ impl Parse for MethodRoot {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum Method {
-    GET,
-    POST,
-    PATCH,
-    PUT,
-    DELETE,
+    Get,
+    Post,
+    Patch,
+    Put,
+    Delete,
 }
 
 impl Method {
     fn as_str(&self) -> &str {
         match self {
-            Self::GET => "GET",
-            Self::POST => "POST",
-            Self::PATCH => "PATCH",
-            Self::PUT => "PUT",
-            Self::DELETE => "DELETE",
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Patch => "PATCH",
+            Self::Put => "PUT",
+            Self::Delete => "DELETE",
         }
     }
 }
@@ -139,11 +143,11 @@ impl Parse for Method {
         let ident = input.parse::<Ident>()?;
 
         match ident.to_string().as_str() {
-            "GET" => Ok(Self::GET),
-            "POST" => Ok(Self::POST),
-            "PATCH" => Ok(Self::PATCH),
-            "PUT" => Ok(Self::PUT),
-            "DELETE" => Ok(Self::DELETE),
+            "GET" => Ok(Self::Get),
+            "POST" => Ok(Self::Post),
+            "PATCH" => Ok(Self::Patch),
+            "PUT" => Ok(Self::Put),
+            "DELETE" => Ok(Self::Delete),
             "OPTIONS" => panic!("OPTIONS is not allowed"),
             "HEAD" => panic!("HEAD is not allowed"),
             "TRACE" => panic!("TRACE is not allowed"),
