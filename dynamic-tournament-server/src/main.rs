@@ -41,6 +41,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         },
     };
 
+    signal::init();
     logger::init(config.log.clone());
 
     log::info!("Using config: {:?}", config);
@@ -124,27 +125,25 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // Spawn the http server.
     tokio::task::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        log::info!("Interrupt");
-        signal::terminate().await;
-    });
-
-    loop {
-        let shutdown = ShutdownListener::new();
-        tokio::select! {
-            res = http::bind(state.config.bind.clone(), state.clone()) => {
-                match res {
-                    Ok(()) => break,
-                    Err(err) => log::error!("Failed to bind server: {}", err),
+        loop {
+            let shutdown = ShutdownListener::new();
+            tokio::select! {
+                res = http::bind(state.config.bind.clone(), state.clone()) => {
+                    match res {
+                        Ok(()) => break,
+                        Err(err) => log::error!("Failed to bind server: {}", err),
+                    }
+                }
+                _ = shutdown => {
+                    break;
                 }
             }
-            _ = shutdown => {
-                break;
-            }
         }
-    }
+    });
 
+    signal::await_shutdown().await;
     Ok(())
 }
 
