@@ -5,6 +5,7 @@ use dynamic_tournament_core::{EntrantScore, EntrantSpot};
 
 use super::BracketEntrant;
 use crate::components::button::Button;
+use crate::components::icons::{FaPen, FaRotateLeft, FaSize};
 use crate::components::providers::{ClientProvider, Provider};
 
 use std::fmt::Display;
@@ -75,12 +76,10 @@ where
                     html! {
                         <div class="match-action-buttons">
                             <Button classes="" {onclick} title="Edit">
-                                <i aria-hidden="true" class="fa-solid fa-pen fa-xl"></i>
-                                <span class="sr-only">{ "Edit" }</span>
+                                <FaPen label="Edit" size={FaSize::ExtraLarge} />
                             </Button>
                             <Button classes="" onclick={on_reset} title="Reset">
-                                <i aria-hidden="true" class="fa-solid fa-rotate-left fa-xl"></i>
-                                <span class="sr-only">{ "Reset" }</span>
+                                <FaRotateLeft label="Reset" size={FaSize::ExtraLarge} />
                             </Button>
                         </div>
                     }
@@ -88,12 +87,10 @@ where
                     html! {
                         <div class="match-action-buttons">
                             <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
-                                <i aria-hidden="true" class="fa-solid fa-pen fa-xl"></i>
-                                <span class="sr-only">{ "Edit (Some entrant spots are not occupied.)" }</span>
+                                <FaPen label="Edit (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
                             </Button>
                             <Button classes="" title="Reset (Some entrant spots are not occupied.)" disabled=true>
-                                <i aria-hidden="true" class="fa-solid fa-rotate-left fa-xl"></i>
-                                <span class="sr-only">{ "Reset (Some entrant spots are not occupied.)" }</span>
+                                <FaRotateLeft label="Reset (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
                             </Button>
                         </div>
                     }

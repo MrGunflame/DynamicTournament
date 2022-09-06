@@ -3,6 +3,7 @@ use dynamic_tournament_api::v3::tournaments::entrants::{
 };
 use yew::{html, Callback, Component, Context, Html, Properties};
 
+use crate::components::icons::{FaPlus, FaTrash};
 use crate::components::popup::Popup;
 use crate::components::{Button, Input, ParseInput};
 
@@ -122,8 +123,7 @@ impl Component for UpdateEntrant {
                                 </td>
                                 <td>
                                     <Button title="Delete" onclick={delete}>
-                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
-                                        <span class="sr-only"></span>
+                                        <FaTrash label="Delete" />
                                     </Button>
                                 </td>
                             </tr>
@@ -141,8 +141,7 @@ impl Component for UpdateEntrant {
                         <h3>{ "Members" }</h3>
                         <div>
                             <Button title="Add" onclick={create}>
-                                <i aria-hidden="true" class="fa-solid fa-plus"></i>
-                                <span class="sr-only">{ "Add" }</span>
+                                <FaPlus label="Add" />
                             </Button>
                         </div>
                         <table class="table-striped">

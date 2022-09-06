@@ -12,6 +12,7 @@ pub mod parse_input;
 pub mod popup;
 pub mod providers;
 pub mod update_bracket;
+pub mod icons;
 
 pub use bracket_list::BracketList;
 pub use button::Button;
