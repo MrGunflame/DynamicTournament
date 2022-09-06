@@ -8,6 +8,7 @@ use crate::utils::{FetchData, Rc};
 
 use super::navbar::Navbar;
 use super::{Admin, Brackets, Entrants, Overview};
+use crate::components::icons::FaAngleLeft;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
@@ -108,7 +109,7 @@ fn switch(tournament: Rc<ApiTournament>) -> impl Fn(&Route) -> Html {
         html! {
             <>
                 <Link classes="link-inline link-back" to={"/tournaments"}>
-                    <i aria-hidden="true" class="fa-solid fa-angle-left"></i>
+                    <FaAngleLeft label="Back" />
                     { "Back to Tournaments" }
                 </Link>
 
