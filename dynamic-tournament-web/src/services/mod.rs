@@ -72,7 +72,11 @@ impl WebSocketService {
                                             let res = ws.send(WebSocketMessage::Bytes(msg)).await;
                                             let _ = tx.send(res);
                                         }
-                                        None => return,
+                                        None => {
+                                            log::debug!("WebSocketService task dropped");
+
+                                            return;
+                                        },
                                     }
 
                                 }
@@ -175,7 +179,7 @@ impl EventHandler for Handler {
             }
             WebSocketMessage::Text(_) => (),
             WebSocketMessage::Close => {
-                self.close_waker.notify_all();
+                self.close_waker.notify_one();
 
                 self.dispatcher
                     .send(Message::Close(self.tournament_id, self.bracket_id));

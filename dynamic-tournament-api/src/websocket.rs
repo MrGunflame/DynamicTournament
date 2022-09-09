@@ -250,16 +250,25 @@ mod wasm {
         pub async fn send(&mut self, msg: WebSocketMessage) -> Result<(), WebSocketError> {
             let (tx, rx) = oneshot::channel();
             let _ = self.tx.send((msg, tx)).await;
-            rx.await.unwrap()
+            match rx.await {
+                Ok(res) => res,
+                Err(_) => Err(WebSocketError::Closed),
+            }
         }
     }
 
     #[derive(Debug)]
-    pub struct WebSocketError(reqwasm::websocket::WebSocketError);
+    pub enum WebSocketError {
+        WebSocket(reqwasm::websocket::WebSocketError),
+        Closed,
+    }
 
     impl Display for WebSocketError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            self.0.fmt(f)
+            match self {
+                Self::WebSocket(ws) => ws.fmt(f),
+                Self::Closed => f.write_str("closed"),
+            }
         }
     }
 
@@ -267,7 +276,7 @@ mod wasm {
 
     impl From<reqwasm::websocket::WebSocketError> for WebSocketError {
         fn from(src: reqwasm::websocket::WebSocketError) -> Self {
-            Self(src)
+            Self::WebSocket(src)
         }
     }
 }
