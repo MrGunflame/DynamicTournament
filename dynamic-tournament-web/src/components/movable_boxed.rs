@@ -5,6 +5,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 use yew::prelude::*;
 
+use crate::components::icons::{FaCompress, FaMinus, FaPlus};
 use crate::{
     components::button::Button,
     utils::{document, Rc},
@@ -276,16 +277,13 @@ impl Component for MovableBoxed {
             <div ref={self.element.clone()} class={classes} onwheel={on_wheel} style={cursor}>
                 <div class="movable-boxed-buttons">
                     <Button onclick={on_reposition} title="Reposition">
-                        <i aria-hidden="true" class="fa-solid fa-compress"></i>
-                        <span class="sr-only">{ "Reposition" }</span>
+                        <FaCompress label="Reposition" />
                     </Button>
                     <button class="button" onclick={on_zoom_in} title="Zoom In">
-                        <i aria-hidden="true" class="fa-solid fa-plus"></i>
-                        <span class="sr-only">{ "Zoom In" }</span>
+                        <FaPlus label="Zoom In" />
                     </button>
                     <button class="button" onclick={on_zoom_out} title="Zoom Out">
-                        <i aria-hidden="true" class="fa-solid fa-minus"></i>
-                        <span class="sr-only">{ "Zoom Out" }</span>
+                        <FaMinus label="Zoom Out" />
                     </button>
                     {lock_button}
                 </div>

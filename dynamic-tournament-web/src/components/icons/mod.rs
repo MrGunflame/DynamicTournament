@@ -100,5 +100,7 @@ fa_icon! {
     FaRotateLeft, "fa-rotate-left",
     FaTrash, "fa-trash",
     FaPlus, "fa-plus",
+    FaMinus, "fa-minus",
     FaAngleLeft, "fa-angle-left",
+    FaCompress, "fa-compress",
 }
