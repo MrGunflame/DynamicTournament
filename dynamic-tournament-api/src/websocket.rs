@@ -1,6 +1,16 @@
 use crate::Error;
 
 use std::borrow::Cow;
+use std::fmt::{self, Debug, Display, Formatter};
+
+#[derive(Debug)]
+pub struct WebSocketError(Box<dyn std::error::Error>);
+
+impl Display for WebSocketError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 /// A WebSocket connection.
 ///
@@ -40,15 +50,21 @@ impl WebSocket {
     /// immediately.
     #[allow(unused)]
     #[inline]
-    pub async fn send<T>(&mut self, msg: T)
+    pub async fn send<T>(&mut self, msg: T) -> Result<(), WebSocketError>
     where
         T: Into<WebSocketMessage>,
     {
         let msg = msg.into();
         log::debug!("Sending {:?}", msg);
 
+        #[cfg(not(target_family = "wasm"))]
+        unimplemented!();
+
         #[cfg(target_family = "wasm")]
-        let _ = self.inner.send(msg).await;
+        match self.inner.send(msg).await {
+            Ok(()) => Ok(()),
+            Err(err) => Err(WebSocketError(Box::new(err))),
+        }
     }
 }
 
@@ -131,21 +147,29 @@ mod wasm {
     use super::{EventHandler, WebSocketMessage};
     use crate::Error;
 
-    use futures::channel::mpsc;
+    use std::fmt::{self, Display, Formatter};
+
+    use futures::channel::{mpsc, oneshot};
     use futures::{select, SinkExt, StreamExt};
     use reqwasm::websocket::Message;
     use wasm_bindgen_futures::spawn_local;
 
     #[derive(Clone, Debug)]
     pub struct WebSocket {
-        tx: mpsc::Sender<WebSocketMessage>,
+        tx: mpsc::Sender<(
+            WebSocketMessage,
+            oneshot::Sender<Result<(), WebSocketError>>,
+        )>,
     }
 
     impl WebSocket {
         pub fn new(uri: &str, mut handler: Box<dyn EventHandler>) -> Result<Self, Error> {
             let ws = reqwasm::websocket::futures::WebSocket::open(uri)?;
 
-            let (tx, mut rx) = mpsc::channel(32);
+            let (tx, mut rx) = mpsc::channel::<(
+                WebSocketMessage,
+                oneshot::Sender<Result<(), WebSocketError>>,
+            )>(32);
 
             spawn_local(async move {
                 let mut ws = ws.fuse();
@@ -155,27 +179,34 @@ mod wasm {
                         // Writer
                         msg = rx.next() => {
                             match msg {
-                                Some(WebSocketMessage::Bytes(buf)) => {
+                                Some((WebSocketMessage::Bytes(buf), tx)) => {
                                     log::debug!("Sending bytes to ws peer: {:?}", buf);
 
                                     match ws.send(Message::Bytes(buf)).await {
-                                        Ok(_) => (),
+                                        Ok(_) => {
+                                            let _ = tx.send(Ok(()));
+                                        },
                                         Err(err) => {
                                             log::debug!("Failed to send buffer: {:?}", err);
+                                            let _ = tx.send(Err(err.into()));
                                             break;
                                         }
                                     }
                                 }
-                                Some(WebSocketMessage::Text(string)) => {
+                                Some((WebSocketMessage::Text(string), tx)) => {
                                     match ws.send(Message::Text(string)).await {
-                                        Ok(_) => (),
+                                        Ok(_) => {
+                                            let _ = tx.send(Ok(()));
+                                        },
                                         Err(err) => {
                                             log::debug!("Failed to send buffer: {:?}", err);
+                                            let _ = tx.send(Err(err.into()));
                                             break;
                                         }
                                     }
                                 }
-                                Some(WebSocketMessage::Close) => {
+                                Some((WebSocketMessage::Close, tx)) => {
+                                    let _ = tx.send(Ok(()));
                                     break;
                                 }
                                 None => {
@@ -216,8 +247,27 @@ mod wasm {
             Ok(Self { tx })
         }
 
-        pub async fn send(&mut self, msg: WebSocketMessage) {
-            let _ = self.tx.send(msg).await;
+        pub async fn send(&mut self, msg: WebSocketMessage) -> Result<(), WebSocketError> {
+            let (tx, rx) = oneshot::channel();
+            let _ = self.tx.send((msg, tx)).await;
+            rx.await.unwrap()
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct WebSocketError(reqwasm::websocket::WebSocketError);
+
+    impl Display for WebSocketError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            self.0.fmt(f)
+        }
+    }
+
+    impl std::error::Error for WebSocketError {}
+
+    impl From<reqwasm::websocket::WebSocketError> for WebSocketError {
+        fn from(src: reqwasm::websocket::WebSocketError) -> Self {
+            Self(src)
         }
     }
 }
