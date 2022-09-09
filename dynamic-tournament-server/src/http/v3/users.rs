@@ -1,22 +1,20 @@
 use dynamic_tournament_api::v3::users::User;
-use hyper::Method;
+use dynamic_tournament_macros::{method, path};
 use snowflaked::sync::Generator;
 
 use crate::auth::password_hash;
-use crate::http::{Request, RequestUri, Response, Result, StatusCodeError};
-use crate::method;
+use crate::http::{Request, RequestUri, Response, Result};
 
 pub static USER_ID_GENERATOR: Generator = Generator::new_unchecked(0);
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    match uri.take_str() {
-        None => {
+    path!(uri, {
+        @ => {
             method!(req, {
-                Method::POST => create(req).await,
+                POST => create(req).await,
             })
         }
-        _ => Err(StatusCodeError::not_found().into()),
-    }
+    })
 }
 
 async fn create(mut req: Request) -> Result {

@@ -1,11 +1,10 @@
 use crate::http::{Request, Response, Result};
-use crate::method;
 
-use hyper::Method;
+use dynamic_tournament_macros::method;
 
 pub async fn route(req: Request) -> Result {
     method!(req, {
-        Method::GET => get(req).await,
+        GET => get(req).await,
     })
 }
 

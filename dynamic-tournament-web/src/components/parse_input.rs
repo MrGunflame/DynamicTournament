@@ -88,10 +88,11 @@ where
         let onchange = ctx.link().callback(|val: String| val);
         let value = self.value.clone();
         let classes = ctx.props().classes.clone();
+        let kind = ctx.props().kind;
 
         html! {
             <div>
-                <Input kind="text" {value} {onchange} {classes} />
+                <Input {kind} {value} {onchange} {classes} />
                 { error }
             </div>
         }

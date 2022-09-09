@@ -13,6 +13,7 @@ use dynamic_tournament_api::{
 use yew::{html, Component, Context, Html, Properties};
 
 use self::entrant::UpdateEntrant;
+use crate::components::icons::{FaPenToSquare, FaPlus, FaTrash};
 use crate::services::MessageLog;
 use crate::utils::FetchData;
 use crate::{
@@ -190,14 +191,12 @@ impl Component for Entrants {
                                 <td>{ player.rating.unwrap_or(0) }</td>
                                 <td>
                                     <Button title="Edit" onclick={edit}>
-                                        <i aria-hidden="true" class="fa-solid fa-pen-to-square"></i>
-                                        <span class="sr-only">{ "Edit" }</span>
+                                        <FaPenToSquare label="Edit" />
                                     </Button>
                                 </td>
                                 <td>
                                     <Button title="Delete" onclick={delete}>
-                                        <i aria-hidden="true" class="fa-solid fa-trash"></i>
-                                        <span class="sr-only">{ "Delete" }</span>
+                                        <FaTrash label="Delete" />
                                     </Button>
                                 </td>
                             </tr>
@@ -214,14 +213,12 @@ impl Component for Entrants {
                                         <td>{ team.players.len() }</td>
                                         <td>
                                             <Button title="Edit" onclick={edit}>
-                                                <i aria-hidden="true" class="fa-solid fa-pen-to-square"></i>
-                                                <span class="sr-only">{ "Edit" }</span>
+                                                <FaPenToSquare label="Edit" />
                                             </Button>
                                         </td>
                                         <td>
                                             <Button title="Delete" onclick={delete}>
-                                                <i aria-hidden="true" class="fa-solid fa-trash"></i>
-                                                <span class="sr-only">{ "Delete" }</span>
+                                                <FaTrash label="Delete" />
                                             </Button>
                                         </td>
                                     </tr>
@@ -297,8 +294,7 @@ impl Component for Entrants {
                         </p>
                         <div class="admin-entrants-actions">
                             <Button title="Add" onclick={create}>
-                                <i aria-hidden="true" class="fa-solid fa-plus"></i>
-                                <span class="sr-only">{ "Add" }</span>
+                                <FaPlus label="Add" />
                             </Button>
                         </div>
                         <table class="table-striped">

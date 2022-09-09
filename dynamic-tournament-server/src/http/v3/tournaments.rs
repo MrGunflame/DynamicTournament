@@ -5,23 +5,20 @@ mod roles;
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::Payload;
-use hyper::Method;
+use dynamic_tournament_macros::{method, path};
 
-use crate::method;
 use crate::{
     http::{Request, RequestUri, Response, Result},
     StatusCodeError,
 };
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    match uri.take() {
-        None => method!(req, {
-            Method::GET => list(req).await,
-            Method::POST => create(req).await,
+    path!(uri, {
+        @ => method!(req, {
+            GET => list(req).await,
+            POST => create(req).await,
         }),
-        Some(part) => {
-            let id = part.parse()?;
-
+        id => {
             // Check if the tournament exists before continuing.
             if req.state().store.tournaments().get(id).await?.is_none() {
                 return Err(StatusCodeError::not_found()
@@ -29,19 +26,18 @@ pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
                     .into());
             }
 
-            match uri.take_str() {
-                Some("entrants") => entrants::route(req, uri, id).await,
-                Some("brackets") => brackets::route(req, uri, id).await,
-                Some("roles") => roles::route(req, uri, id).await,
-                None => method!(req, {
-                    Method::GET => get(req, id).await,
-                    Method::PATCH => patch(req, id).await,
-                    Method::DELETE => delete(req, id).await,
+            path!(uri, {
+                "entrants" => entrants::route(req, uri, id).await,
+                "brackets" => brackets::route(req, uri, id).await,
+                "roles" => roles::route(req, uri, id).await,
+                @ => method!(req, {
+                    GET => get(req, id).await,
+                    PATCH => patch(req, id).await,
+                    DELETE => delete(req, id).await,
                 }),
-                Some(_) => Err(StatusCodeError::not_found().into()),
-            }
+            })
         }
-    }
+    })
 }
 
 async fn list(req: Request) -> Result {
