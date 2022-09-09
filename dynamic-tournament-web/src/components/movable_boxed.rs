@@ -5,7 +5,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 use yew::prelude::*;
 
-use crate::components::icons::{FaCompress, FaMinus, FaPlus};
+use crate::components::icons::{FaCompress, FaLock, FaLockOpen, FaMinus, FaPlus};
 use crate::{
     components::button::Button,
     utils::{document, Rc},
@@ -255,15 +255,13 @@ impl Component for MovableBoxed {
         let lock_button = if unsafe { *self.is_locked.get() } {
             html! {
                 <button class="button" onclick={on_lock} title="Unlock">
-                    <i aria-hidden="true" class="fa-solid fa-lock-open"></i>
-                    <span class="sr-only">{ "Unlock" }</span>
+                    <FaLockOpen label="Unlock" />
                 </button>
             }
         } else {
             html! {
                 <button class="button" onclick={on_lock} title="Lock">
-                    <i aria-hidden="true" class="fa-solid fa-lock"></i>
-                    <span class="sr-only">{ "Lock" }</span>
+                    <FaLock label="Lock" />
                 </button>
             }
         };
