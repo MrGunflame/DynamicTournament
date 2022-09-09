@@ -5,7 +5,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 use yew::prelude::*;
 
-use crate::components::icons::{FaCompress, FaMinus, FaPlus};
+use crate::components::icons::{FaCompress, FaLock, FaLockOpen, FaMinus, FaPlus};
 use crate::{
     components::button::Button,
     utils::{document, Rc},
@@ -255,15 +255,13 @@ impl Component for MovableBoxed {
         let lock_button = if unsafe { *self.is_locked.get() } {
             html! {
                 <button class="button" onclick={on_lock} title="Unlock">
-                    <i aria-hidden="true" class="fa-solid fa-lock-open"></i>
-                    <span class="sr-only">{ "Unlock" }</span>
+                    <FaLockOpen label="Unlock" />
                 </button>
             }
         } else {
             html! {
                 <button class="button" onclick={on_lock} title="Lock">
-                    <i aria-hidden="true" class="fa-solid fa-lock"></i>
-                    <span class="sr-only">{ "Lock" }</span>
+                    <FaLock label="Lock" />
                 </button>
             }
         };
@@ -273,19 +271,26 @@ impl Component for MovableBoxed {
             None => "movable-boxed".to_owned(),
         };
 
+        let header = ctx.props().header.clone();
+
         html! {
             <div ref={self.element.clone()} class={classes} onwheel={on_wheel} style={cursor}>
-                <div class="movable-boxed-buttons">
-                    <Button onclick={on_reposition} title="Reposition">
-                        <FaCompress label="Reposition" />
-                    </Button>
-                    <button class="button" onclick={on_zoom_in} title="Zoom In">
-                        <FaPlus label="Zoom In" />
-                    </button>
-                    <button class="button" onclick={on_zoom_out} title="Zoom Out">
-                        <FaMinus label="Zoom Out" />
-                    </button>
-                    {lock_button}
+                <div class="movable-boxed-header">
+                    <div class="movable-boxed-buttons">
+                        <Button onclick={on_reposition} title="Reposition">
+                            <FaCompress label="Reposition" />
+                        </Button>
+                        <button class="button" onclick={on_zoom_in} title="Zoom In">
+                            <FaPlus label="Zoom In" />
+                        </button>
+                        <button class="button" onclick={on_zoom_out} title="Zoom Out">
+                            <FaMinus label="Zoom Out" />
+                        </button>
+                        {lock_button}
+                    </div>
+                    <div>
+                        { header }
+                    </div>
                 </div>
                 <div class="movable-boxed-content" style={style}>
                     { for ctx.props().children.iter() }
@@ -299,6 +304,8 @@ impl Component for MovableBoxed {
 pub struct Properties {
     pub children: Children,
     pub classes: Option<&'static str>,
+    #[prop_or_default]
+    pub header: Html,
 }
 
 #[derive(Clone, Debug)]

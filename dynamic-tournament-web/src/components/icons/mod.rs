@@ -103,4 +103,6 @@ fa_icon! {
     FaMinus, "fa-minus",
     FaAngleLeft, "fa-angle-left",
     FaCompress, "fa-compress",
+    FaLock, "fa-lock",
+    FaLockOpen, "fa-lock-open",
 }

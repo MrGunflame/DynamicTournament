@@ -1,4 +1,6 @@
 mod entrant;
+mod live_bracket;
+mod live_state;
 mod r#match;
 mod renderer;
 
@@ -24,16 +26,17 @@ use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
 use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
-use crate::components::providers::{ClientProvider, Provider};
 use crate::components::update_bracket::BracketUpdate;
 use crate::services::errorlog::ErrorLog;
-use crate::services::{EventBus, MessageLog, WebSocketService};
+use crate::services::Message as WebSocketMessage;
+use crate::services::{EventBus, WebSocketService};
 use crate::utils::Rc;
 
 use renderer::HtmlRenderer;
 
+pub use live_bracket::LiveBracket;
+
 pub struct Bracket {
-    websocket: Option<WebSocketService>,
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
     state: Option<Tournament<String, EntrantScore<u64>>>,
@@ -44,30 +47,8 @@ impl Component for Bracket {
     type Properties = Properties;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let client = ClientProvider::get(ctx);
-
-        let websocket =
-            match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
-            {
-                Ok(websocket) => {
-                    let mut ws = websocket.clone();
-                    ctx.link().send_future_batch(async move {
-                        ws.send(Request::SyncState).await;
-
-                        vec![]
-                    });
-
-                    Some(websocket)
-                }
-                Err(err) => {
-                    MessageLog::error(err.to_string());
-                    None
-                }
-            };
-
         Self {
             state: None,
-            websocket,
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleResponse)),
             popup: None,
         }
@@ -76,30 +57,8 @@ impl Component for Bracket {
     // When the properties change we should close the existing socket and forget the existing
     // state and create a new one using the new properties.
     fn changed(&mut self, ctx: &Context<Self>) -> bool {
-        self.state = None;
+        //self.state = None;
 
-        let client = ClientProvider::get(ctx);
-
-        let websocket =
-            match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
-            {
-                Ok(websocket) => {
-                    let mut ws = websocket.clone();
-                    ctx.link().send_future_batch(async move {
-                        ws.send(Request::SyncState).await;
-
-                        vec![]
-                    });
-
-                    Some(websocket)
-                }
-                Err(err) => {
-                    MessageLog::error(err.to_string());
-                    None
-                }
-            };
-
-        self.websocket = websocket;
         self._producer = EventBus::bridge(ctx.link().callback(Message::HandleResponse));
 
         true
@@ -110,6 +69,13 @@ impl Component for Bracket {
             Message::HandleResponse(resp) => {
                 log::debug!("Received message: {:?}", resp);
 
+                let resp = match resp {
+                    WebSocketMessage::Response(resp) => resp,
+                    // Close frames are not handled by this component.
+                    WebSocketMessage::Close(_, _) => return false,
+                    WebSocketMessage::Connect(_, _) => return false,
+                };
+
                 match resp {
                     Response::Error(err) => {
                         // The connection lagged bebing. Try to synchronize with the
@@ -117,9 +83,9 @@ impl Component for Bracket {
                         if err == ErrorResponse::Lagged {
                             log::debug!("Bracket is lagging");
 
-                            let mut ws = self.websocket.clone().unwrap();
+                            let mut ws = ctx.props().websocket.clone().unwrap();
                             ctx.link().send_future_batch(async move {
-                                ws.send(Request::SyncState).await;
+                                let _ = ws.send(Request::SyncState).await;
                                 vec![]
                             });
                         }
@@ -250,11 +216,11 @@ impl Component for Bracket {
                 true
             }
             Message::UpdateMatch { index, nodes } => {
-                if let Some(websocket) = &self.websocket {
+                if let Some(websocket) = &ctx.props().websocket {
                     let mut websocket = websocket.clone();
 
                     ctx.link().send_future_batch(async move {
-                        websocket
+                        let _ = websocket
                             .send(Request::UpdateMatch {
                                 index: index.try_into().unwrap(),
                                 nodes,
@@ -268,10 +234,10 @@ impl Component for Bracket {
                 false
             }
             Message::ResetMatch(index) => {
-                if let Some(websocket) = &self.websocket {
+                if let Some(websocket) = &ctx.props().websocket {
                     let mut websocket = websocket.clone();
                     ctx.link().send_future_batch(async move {
-                        websocket
+                        let _ = websocket
                             .send(Request::ResetMatch {
                                 index: index.try_into().unwrap(),
                             })
@@ -339,7 +305,7 @@ impl Component for Bracket {
 }
 
 pub enum Message {
-    HandleResponse(Response),
+    HandleResponse(WebSocketMessage),
     Action {
         index: usize,
         action: Action,
@@ -352,19 +318,12 @@ pub enum Message {
     ResetMatch(usize),
 }
 
-#[derive(Clone, Debug, Properties)]
+#[derive(Clone, Debug, PartialEq, Properties)]
 pub struct Properties {
     pub tournament: Rc<ApiTournament>,
     pub bracket: Rc<ApiBracket>,
     pub entrants: Rc<Vec<Entrant>>,
-}
-
-impl PartialEq for Properties {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.tournament, &other.tournament)
-            && Rc::ptr_eq(&self.bracket, &other.bracket)
-            && Rc::ptr_eq(&self.entrants, &other.entrants)
-    }
+    pub websocket: Option<WebSocketService>,
 }
 
 enum PopupState {

@@ -322,7 +322,6 @@ td {
 .movable-boxed-buttons {
   position: relative;
   z-index: 5;
-  margin: 10px;
 }
 
 .movable-boxed-buttons>button {
@@ -491,4 +490,40 @@ td {
   border-right: 3px solid #303540;
   color: var(--color-orange);
   background-color: #131211;
+}
+
+.dt-bracket-live {
+  margin: 10px;
+}
+
+.dt-bracket-live-active {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: red;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.dt-bracket-live-inactive {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: gray;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.dt-bracket-live-label {
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.movable-boxed-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.movable-boxed-header>div {
+  margin: 10px;
 }

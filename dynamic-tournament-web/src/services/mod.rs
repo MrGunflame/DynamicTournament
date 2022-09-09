@@ -2,65 +2,118 @@ pub mod errorlog;
 
 use std::collections::HashSet;
 use std::io::Cursor;
+use std::rc::Rc;
+use std::time::Duration;
 
+use asyncsync::local::Notify;
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::{Decode, Request, Response};
-use dynamic_tournament_api::Error;
+use futures::channel::{mpsc, oneshot};
+use futures::{SinkExt, StreamExt};
+use gloo_timers::future::sleep;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use yew_agent::{Agent, AgentLink, Context, Dispatched, Dispatcher, HandlerId};
 
-use dynamic_tournament_api::websocket::{EventHandler, WebSocket, WebSocketMessage};
+use dynamic_tournament_api::websocket::{EventHandler, WebSocketError, WebSocketMessage};
 use dynamic_tournament_api::Client;
 
 pub use errorlog::MessageLog;
 
 #[derive(Clone, Debug)]
 pub struct WebSocketService {
-    ws: WebSocket,
+    #[allow(clippy::type_complexity)]
+    tx: mpsc::Sender<(Vec<u8>, oneshot::Sender<Result<(), WebSocketError>>)>,
 }
 
 impl WebSocketService {
-    pub fn new(
-        client: &Client,
-        tournament_id: TournamentId,
-        bracket_id: BracketId,
-    ) -> Result<Self, Error> {
-        let builder = client
-            .v3()
-            .tournaments()
-            .brackets(tournament_id)
-            .matches(bracket_id)
-            .handler(Box::new(Handler(EventBus::dispatcher())));
+    pub fn new(client: &Client, tournament_id: TournamentId, bracket_id: BracketId) -> Self {
+        let client = client.clone();
 
-        let auth = client.authorization().auth_token().map(|s| s.to_owned());
+        let (tx, mut rx) =
+            mpsc::channel::<(Vec<u8>, oneshot::Sender<Result<(), WebSocketError>>)>(32);
 
-        let ws = builder.build()?;
+        spawn_local(async move {
+            let close_waker = Rc::new(Notify::new());
 
-        if let Some(auth) = auth {
-            let mut ws = ws.clone();
-            spawn_local(async move {
-                let msg = Request::Authorize(auth.into_token()).to_bytes();
+            loop {
+                let builder = client
+                    .v3()
+                    .tournaments()
+                    .brackets(tournament_id)
+                    .matches(bracket_id)
+                    .handler(Box::new(Handler {
+                        tournament_id,
+                        bracket_id,
+                        dispatcher: EventBus::dispatcher(),
+                        close_waker: close_waker.clone(),
+                    }));
 
-                ws.send(msg).await;
-            });
-        }
+                match builder.build() {
+                    Ok(mut ws) => {
+                        let auth = client.authorization().auth_token().map(|s| s.to_owned());
 
-        Ok(Self { ws })
+                        if let Some(auth) = auth {
+                            let msg = Request::Authorize(auth.into_token()).to_bytes();
+
+                            let _ = ws.send(msg).await;
+                        }
+
+                        EventBus::dispatcher().send(Message::Connect(tournament_id, bracket_id));
+
+                        loop {
+                            futures::select! {
+                                _ = close_waker.notified() => {
+                                    break;
+                                }
+                                msg = rx.next() => {
+                                    match msg {
+                                        Some((msg, tx)) => {
+                                            let res = ws.send(WebSocketMessage::Bytes(msg)).await;
+                                            let _ = tx.send(res);
+                                        }
+                                        None => return,
+                                    }
+
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        log::error!("Failed to connect to websocket: {}", err);
+                    }
+                }
+
+                log::debug!("Retrying connect in 15s");
+                sleep(Duration::new(15, 0)).await;
+            }
+        });
+
+        Self { tx }
     }
 
-    pub async fn send(&mut self, req: Request) {
+    pub async fn send(&mut self, req: Request) -> Result<(), WebSocketError> {
         log::debug!("Sending frame: {:?}", req);
 
         let msg = req.to_bytes();
-        self.ws.send(msg).await;
+
+        let (tx, rx) = oneshot::channel();
+        let _ = self.tx.send((msg, tx)).await;
+        rx.await.unwrap()
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Req {
-    Message(Response),
-    Close,
+impl PartialEq for WebSocketService {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx.same_receiver(&other.tx)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Message {
+    Response(Response),
+    Connect(TournamentId, BracketId),
+    Close(TournamentId, BracketId),
 }
 
 pub struct EventBus {
@@ -71,8 +124,8 @@ pub struct EventBus {
 impl Agent for EventBus {
     type Reach = Context<Self>;
     type Message = ();
-    type Input = Req;
-    type Output = Response;
+    type Input = Message;
+    type Output = Message;
 
     fn create(link: AgentLink<Self>) -> Self {
         Self {
@@ -84,13 +137,8 @@ impl Agent for EventBus {
     fn update(&mut self, _msg: Self::Message) {}
 
     fn handle_input(&mut self, msg: Self::Input, _id: HandlerId) {
-        match msg {
-            Req::Message(msg) => {
-                for sub in self.subscribers.iter() {
-                    self.link.respond(*sub, msg.clone());
-                }
-            }
-            Req::Close => {}
+        for sub in self.subscribers.iter() {
+            self.link.respond(*sub, msg.clone());
         }
     }
 
@@ -103,7 +151,12 @@ impl Agent for EventBus {
     }
 }
 
-struct Handler(Dispatcher<EventBus>);
+struct Handler {
+    tournament_id: TournamentId,
+    bracket_id: BracketId,
+    dispatcher: Dispatcher<EventBus>,
+    close_waker: Rc<Notify>,
+}
 
 impl EventHandler for Handler {
     fn dispatch(&mut self, msg: WebSocketMessage) {
@@ -114,14 +167,19 @@ impl EventHandler for Handler {
                 let mut buf = Cursor::new(buf);
 
                 match Response::decode(&mut buf) {
-                    Ok(resp) => self.0.send(Req::Message(resp)),
+                    Ok(resp) => self.dispatcher.send(Message::Response(resp)),
                     Err(err) => {
                         log::error!("Failed to decode websocket response: {}", err);
                     }
                 }
             }
             WebSocketMessage::Text(_) => (),
-            WebSocketMessage::Close => self.0.send(Req::Close),
+            WebSocketMessage::Close => {
+                self.close_waker.notify_all();
+
+                self.dispatcher
+                    .send(Message::Close(self.tournament_id, self.bracket_id));
+            }
         }
     }
 }
