@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::rc::Rc as RcInner;
 
 /// A reference-counting pointer to `T` with an efficient [`PartialEq`] implementation.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 #[repr(transparent)]
 pub struct Rc<T>(RcInner<T>);
 
@@ -32,6 +32,13 @@ impl<T> Rc<T> {
     #[inline]
     pub fn ptr_eq(this: &Rc<T>, other: &Rc<T>) -> bool {
         RcInner::ptr_eq(&this.0, &other.0)
+    }
+}
+
+impl<T> Clone for Rc<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
     }
 }
 
