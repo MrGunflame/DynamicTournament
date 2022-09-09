@@ -12,14 +12,27 @@ impl Component for LiveState {
     type Message = ();
     type Properties = Props;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let text = if ctx.props().is_live {
+            "Live"
+        } else {
+            "Disconnected"
+        };
+
+        let dot = if ctx.props().is_live {
+            "dt-bracket-live-active"
+        } else {
+            "dt-bracket-live-inactive"
+        };
+
         html! {
-            <div>
-                { ctx.props().is_live.to_string() }
+            <div class="dt-bracket-live">
+                <span class={dot}></span>
+                <span class="dt-bracket-live-label">{text}</span>
             </div>
         }
     }

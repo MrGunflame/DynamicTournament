@@ -271,19 +271,26 @@ impl Component for MovableBoxed {
             None => "movable-boxed".to_owned(),
         };
 
+        let header = ctx.props().header.clone();
+
         html! {
             <div ref={self.element.clone()} class={classes} onwheel={on_wheel} style={cursor}>
-                <div class="movable-boxed-buttons">
-                    <Button onclick={on_reposition} title="Reposition">
-                        <FaCompress label="Reposition" />
-                    </Button>
-                    <button class="button" onclick={on_zoom_in} title="Zoom In">
-                        <FaPlus label="Zoom In" />
-                    </button>
-                    <button class="button" onclick={on_zoom_out} title="Zoom Out">
-                        <FaMinus label="Zoom Out" />
-                    </button>
-                    {lock_button}
+                <div class="movable-boxed-header">
+                    <div class="movable-boxed-buttons">
+                        <Button onclick={on_reposition} title="Reposition">
+                            <FaCompress label="Reposition" />
+                        </Button>
+                        <button class="button" onclick={on_zoom_in} title="Zoom In">
+                            <FaPlus label="Zoom In" />
+                        </button>
+                        <button class="button" onclick={on_zoom_out} title="Zoom Out">
+                            <FaMinus label="Zoom Out" />
+                        </button>
+                        {lock_button}
+                    </div>
+                    <div>
+                        { header }
+                    </div>
                 </div>
                 <div class="movable-boxed-content" style={style}>
                     { for ctx.props().children.iter() }
@@ -297,6 +304,8 @@ impl Component for MovableBoxed {
 pub struct Properties {
     pub children: Children,
     pub classes: Option<&'static str>,
+    #[prop_or_default]
+    pub header: Html,
 }
 
 #[derive(Clone, Debug)]

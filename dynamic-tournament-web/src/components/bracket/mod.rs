@@ -29,13 +29,12 @@ use crate::components::popup::Popup;
 use crate::components::update_bracket::BracketUpdate;
 use crate::services::errorlog::ErrorLog;
 use crate::services::Message as WebSocketMessage;
-use crate::services::{EventBus, MessageLog, WebSocketService};
+use crate::services::{EventBus, WebSocketService};
 use crate::utils::Rc;
 
 use renderer::HtmlRenderer;
 
 pub use live_bracket::LiveBracket;
-use live_bracket::WebSocket;
 
 pub struct Bracket {
     _producer: Box<dyn Bridge<EventBus>>,
@@ -73,7 +72,8 @@ impl Component for Bracket {
                 let resp = match resp {
                     WebSocketMessage::Response(resp) => resp,
                     // Close frames are not handled by this component.
-                    WebSocketMessage::Close => return false,
+                    WebSocketMessage::Close(_, _) => return false,
+                    WebSocketMessage::Connect(_, _) => return false,
                 };
 
                 match resp {
@@ -85,7 +85,7 @@ impl Component for Bracket {
 
                             let mut ws = ctx.props().websocket.clone().unwrap();
                             ctx.link().send_future_batch(async move {
-                                ws.send(Request::SyncState).await;
+                                let _ = ws.send(Request::SyncState).await;
                                 vec![]
                             });
                         }
@@ -220,7 +220,7 @@ impl Component for Bracket {
                     let mut websocket = websocket.clone();
 
                     ctx.link().send_future_batch(async move {
-                        websocket
+                        let _ = websocket
                             .send(Request::UpdateMatch {
                                 index: index.try_into().unwrap(),
                                 nodes,
@@ -237,7 +237,7 @@ impl Component for Bracket {
                 if let Some(websocket) = &ctx.props().websocket {
                     let mut websocket = websocket.clone();
                     ctx.link().send_future_batch(async move {
-                        websocket
+                        let _ = websocket
                             .send(Request::ResetMatch {
                                 index: index.try_into().unwrap(),
                             })
@@ -323,7 +323,7 @@ pub struct Properties {
     pub tournament: Rc<ApiTournament>,
     pub bracket: Rc<ApiBracket>,
     pub entrants: Rc<Vec<Entrant>>,
-    pub websocket: Option<WebSocket>,
+    pub websocket: Option<WebSocketService>,
 }
 
 enum PopupState {

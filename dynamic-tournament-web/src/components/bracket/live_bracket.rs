@@ -1,28 +1,21 @@
-use std::time::Duration;
-
-use dynamic_tournament_api::v3::{
-    id::{BracketId, TournamentId},
-    tournaments::{
-        brackets::{matches::Request, Bracket},
-        entrants::Entrant,
-        Tournament,
-    },
+use dynamic_tournament_api::v3::tournaments::{
+    brackets::{matches::Request, Bracket},
+    entrants::Entrant,
+    Tournament,
 };
-use futures::StreamExt;
-use futures::{channel::mpsc, SinkExt};
 use wasm_bindgen_futures::spawn_local;
 use yew::{html, Component, Context, Html, Properties};
 use yew_agent::{Bridge, Bridged};
 
 use super::live_state::LiveState;
 use super::Bracket as BracketComponent;
-use crate::{api::Client, services::Message as WebSocketMessage};
+use crate::services::Message as WebSocketMessage;
 use crate::{
     components::{
         movable_boxed::MovableBoxed,
         providers::{ClientProvider, Provider},
     },
-    services::{EventBus, MessageLog, WebSocketService},
+    services::{EventBus, WebSocketService},
     utils::Rc,
 };
 
@@ -34,25 +27,21 @@ pub struct Props {
 }
 
 pub struct LiveBracket {
-    websocket: Option<WebSocket>,
+    websocket: Option<WebSocketService>,
     _producer: Box<dyn Bridge<EventBus>>,
 
-    // Ready state of the websocket. A `Some(WebSocket)` value only
-    // means that the websocket exists, but it may not be connected yet.
-    // Once `is_ready` is `true` the websocket is connected and ready for
-    // use.
-    is_ready: bool,
+    is_live: bool,
 }
 
 impl Component for LiveBracket {
-    type Message = Message;
+    type Message = WebSocketMessage;
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = Self {
             websocket: None,
-            _producer: EventBus::bridge(ctx.link().callback(Message::HandleMessage)),
-            is_ready: false,
+            _producer: EventBus::bridge(ctx.link().callback(|msg| msg)),
+            is_live: false,
         };
 
         this.changed(ctx);
@@ -62,55 +51,47 @@ impl Component for LiveBracket {
     // When the properties change we should close the existing socket and forget the existing
     // state and create a new one using the new properties.
     fn changed(&mut self, ctx: &Context<Self>) -> bool {
-        // self.state = None;
-        let onready = ctx.link().callback(|_| Message::Ready);
+        self.is_live = false;
 
         let client = ClientProvider::get(ctx);
 
         let websocket =
-            match WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id)
-            {
-                Ok(mut websocket) => {
-                    let (tx, mut rx) = mpsc::channel(32);
+            WebSocketService::new(&client, ctx.props().tournament.id, ctx.props().bracket.id);
 
-                    spawn_local(async move {
-                        websocket.send(Request::SyncState).await;
-                        onready.emit(());
-
-                        while let Some(req) = rx.next().await {
-                            websocket.send(req).await;
-                        }
-                    });
-
-                    Some(WebSocket { tx })
-                }
-                Err(err) => {
-                    MessageLog::error(err.to_string());
-                    None
-                }
-            };
-
-        self.websocket = websocket;
-        self._producer = EventBus::bridge(ctx.link().callback(Message::HandleMessage));
+        self.websocket = Some(websocket);
 
         true
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::Ready => {
-                self.is_ready = true;
-
-                true
-            }
-            Message::HandleMessage(msg) => match msg {
-                WebSocketMessage::Response(_) => false,
-                WebSocketMessage::Close => {
-                    self.is_ready = false;
-                    // Try to reconnect.
-                    self.changed(ctx)
+            WebSocketMessage::Response(_) => false,
+            WebSocketMessage::Close(tournament_id, bracket_id) => {
+                if ctx.props().tournament.id == tournament_id
+                    && ctx.props().bracket.id == bracket_id
+                {
+                    self.is_live = false;
+                    true
+                } else {
+                    false
                 }
-            },
+            }
+            WebSocketMessage::Connect(tournament_id, bracket_id) => {
+                if ctx.props().tournament.id == tournament_id
+                    && ctx.props().bracket.id == bracket_id
+                {
+                    // Resync once connected
+                    let mut ws = self.websocket.clone().unwrap();
+                    spawn_local(async move {
+                        let _ = ws.send(Request::SyncState).await;
+                    });
+
+                    self.is_live = true;
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -120,61 +101,14 @@ impl Component for LiveBracket {
         let entrants = ctx.props().entrants.clone();
         let websocket = self.websocket.clone();
 
-        let is_live = self.is_ready;
+        let is_live = self.is_live;
+
+        let header = html! { <LiveState {is_live} /> };
 
         html! {
-            <MovableBoxed>
-                <LiveState {is_live} />
+            <MovableBoxed {header}>
                 <BracketComponent {tournament} {bracket} {entrants} {websocket} />
             </MovableBoxed>
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum Message {
-    Ready,
-    HandleMessage(WebSocketMessage),
-}
-
-#[derive(Clone, Debug)]
-pub struct WebSocket {
-    tx: mpsc::Sender<Request>,
-}
-
-impl WebSocket {
-    pub fn new(
-        client: &Client,
-        tournament_id: TournamentId,
-        bracket_id: BracketId,
-    ) -> Option<Self> {
-        let ws = match WebSocketService::new(&client, tournament_id, bracket_id) {
-            Ok(ws) => ws,
-            Err(err) => {
-                log::error!("Failed to connect to server: {}", err);
-                return None;
-            }
-        };
-
-        let (tx, mut rx) = mpsc::channel(32);
-
-        spawn_local(async move {
-            loop {
-                // Reconnect every 15s when disconnected.
-                gloo_timers::future::sleep(Duration::new(15, 0)).await;
-            }
-        });
-
-        Ok(Self { tx })
-    }
-
-    pub async fn send(&mut self, req: Request) {
-        let _ = self.tx.send(req).await;
-    }
-}
-
-impl PartialEq for WebSocket {
-    fn eq(&self, other: &Self) -> bool {
-        self.tx.same_receiver(&other.tx)
     }
 }
