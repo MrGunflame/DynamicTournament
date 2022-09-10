@@ -1,6 +1,4 @@
-use std::io::Read;
-
-use super::{Token, Tokens, AST};
+use super::{Token, Tokens};
 
 pub trait Parse {
     fn parse();
@@ -11,6 +9,7 @@ pub struct Cursor {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidToken { token: char, position: usize },
+    InvalidTag { tag: String, position: usize },
 }
 
 pub fn tokenize(input: &str) -> Result<Tokens, Error> {
@@ -62,19 +61,6 @@ pub fn tokenize(input: &str) -> Result<Tokens, Error> {
     tokens.push(token);
 
     Ok(tokens)
-}
-
-pub fn parse(tokens: Tokens) -> Result<AST, Error> {
-    let mut tree = AST::new();
-
-    for token in tokens.tokens {
-        match token {
-            Token::OpenToken(name) => {}
-            _ => unimplemented!(),
-        }
-    }
-
-    Ok(tree)
 }
 
 #[cfg(test)]

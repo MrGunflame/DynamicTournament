@@ -1,5 +1,16 @@
 mod parser;
 
+use parser::Error;
+
+use self::parser::tokenize;
+
+pub fn parse(input: &str) -> Result<DocumentRoot> {
+    let tokens = tokenize(input)?;
+    DocumentRoot::parse(tokens.as_ref())
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
     OpenToken(String),
@@ -60,14 +71,30 @@ impl Tokens {
             position: 0,
         }
     }
+
+    pub fn as_ref(&self) -> TokensRef<'_> {
+        TokensRef {
+            tokens: &self.tokens,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct TokensRef<'a> {
     tokens: &'a [Token],
 }
 
 impl<'a> TokensRef<'a> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.tokens.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn spans(&self) -> Spans<'_> {
         Spans {
             tokens: self.tokens,
@@ -95,6 +122,8 @@ where
     }
 }
 
+/// An iterator over a token branch.
+#[derive(Debug)]
 pub struct Spans<'a> {
     tokens: &'a [Token],
     position: usize,
@@ -117,7 +146,7 @@ impl<'a> Iterator for Spans<'a> {
                 for (index, token) in self.tokens[start..].iter().enumerate() {
                     if let Token::CloseToken(close) = token {
                         if open == close {
-                            let end = start + index;
+                            let end = start + index + 1;
                             self.position = end;
 
                             return Some(Span {
@@ -133,20 +162,72 @@ impl<'a> Iterator for Spans<'a> {
                 })
             }
             Token::CloseToken(_) => unreachable!(),
-            Token::Text(_) => Some(Span {
-                tokens: TokensRef::from_slice(&self.tokens[start..start + 1]),
-            }),
+            Token::Text(_) => {
+                self.position += 1;
+
+                Some(Span {
+                    tokens: TokensRef::from_slice(&self.tokens[start..start + 1]),
+                })
+            }
         }
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct Span<'a> {
     tokens: TokensRef<'a>,
+}
+
+impl<'a> Span<'a> {
+    pub fn head(&self) -> &Token {
+        &self.tokens.as_ref()[0]
+    }
+
+    pub fn inner(&self) -> TokensRef<'_> {
+        #[cfg(debug_assertions)]
+        assert!(!self.tokens.is_empty());
+
+        match self.head() {
+            Token::Text(_) => TokensRef {
+                tokens: &self.tokens.tokens,
+            },
+            _ => TokensRef {
+                tokens: &self.tokens.tokens[1..self.tokens.len() - 1],
+            },
+        }
+    }
+
+    /// Returns an iterator over the `Span`s in the content of this `Span`.
+    ///
+    /// Note: This method differs from [`TokensRef::spans`], which returns an iterator
+    /// over all tokens including the head/tail. This method is equivalent to
+    /// `self.inner().spans()` and **not** `self.as_ref().spans()`.
+    #[inline]
+    pub fn spans(&self) -> Spans<'_> {
+        Spans {
+            tokens: &self.tokens.tokens[1..self.tokens.len() - 1],
+            position: 0,
+        }
+    }
 }
 
 impl<'a> AsRef<[Token]> for Span<'a> {
     fn as_ref(&self) -> &[Token] {
         self.tokens.as_ref()
+    }
+}
+
+pub struct DocumentRoot(Vec<Block>);
+
+impl DocumentRoot {
+    pub fn parse(tokens: TokensRef<'_>) -> Result<Self> {
+        let mut blocks = Vec::new();
+
+        for span in tokens.spans() {
+            blocks.push(Block::parse(span)?);
+        }
+
+        Ok(Self(blocks))
     }
 }
 
@@ -160,58 +241,224 @@ pub enum Block {
     H6(Inline),
     P(Inline),
     Inline(Inline),
+    Text(String),
 }
 
-pub enum Leaf {
-    Text(Vec<Self>),
-    Strong(Vec<Leaf>),
-    Emphasis(Vec<Leaf>),
-}
+impl Block {
+    pub fn parse(span: Span<'_>) -> Result<Self> {
+        match span.head() {
+            Token::OpenToken(tag) => match tag.as_str() {
+                "h1" => {
+                    let inline = Inline::parse(span.inner())?;
 
-pub struct Node {}
-
-#[derive(Clone, Debug)]
-pub struct AST {
-    root: Vec<Block>,
-}
-
-impl AST {
-    pub fn new() -> Self {
-        Self { root: Vec::new() }
-    }
-
-    pub fn push(&mut self, block: Block) {
-        self.root.push(block);
+                    Ok(Self::H1(inline))
+                }
+                tag => Err(Error::InvalidTag {
+                    tag: tag.to_owned(),
+                    position: 0,
+                }),
+            },
+            Token::CloseToken(_) => unreachable!(),
+            Token::Text(text) => Ok(Self::Text(text.to_owned())),
+        }
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum Inline {
-    Text(Vec<Self>),
-    Strong(Vec<Self>),
-    Emphasis(Vec<Self>),
-}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Inline(Vec<InlineBlock>);
 
 impl Inline {
-    pub fn parse(tokens: TokensRef<'_>) -> Self {
-        let mut this = Vec::new();
+    pub fn parse(tokens: TokensRef<'_>) -> Result<Self> {
+        let mut elements = Vec::new();
 
         for span in tokens.spans() {
-            match &span.as_ref()[0] {
-                Token::OpenToken(ident) => match ident {
-                    "strong" => token = Self::Strong(Vec::new()),
-                },
-            }
+            elements.push(InlineBlock::parse(span)?);
         }
 
-        Self::Text(Default::default())
+        Ok(Self(elements))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InlineBlock {
+    Strong(Inline),
+    Emphasis(Inline),
+    Text(String),
+}
+
+impl InlineBlock {
+    pub fn parse(span: Span<'_>) -> Result<Self> {
+        match span.head() {
+            Token::OpenToken(tag) => match tag.as_str() {
+                "strong" => {
+                    let inline = Inline::parse(span.inner())?;
+
+                    Ok(Self::Strong(inline))
+                }
+                "em" => {
+                    let inline = Inline::parse(span.inner())?;
+
+                    Ok(Self::Emphasis(inline))
+                }
+                tag => Err(Error::InvalidTag {
+                    tag: tag.to_string(),
+                    position: 0,
+                }),
+            },
+            Token::CloseToken(_) => unreachable!(),
+            Token::Text(text) => Ok(Self::Text(text.to_owned())),
+        }
+    }
+}
+
+impl Inline {}
+
+#[cfg(test)]
+mod tests {
+    use crate::html::InlineBlock;
+
+    use super::{Inline, Token, Tokens};
+
+    #[test]
+    fn test_spans() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::Text(String::from("Hello World")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(*span.head(), Token::OpenToken(String::from("h1")));
+        assert_eq!(
+            span.inner().as_ref(),
+            [Token::Text(String::from("Hello World"))]
+        );
+
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Strong text")));
+        tokens.push(Token::CloseToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Normal text")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(*span.head(), Token::OpenToken(String::from("h1")));
+        assert_eq!(
+            span.inner().as_ref(),
+            [
+                Token::OpenToken(String::from("strong")),
+                Token::Text(String::from("Strong text")),
+                Token::CloseToken(String::from("strong")),
+                Token::Text(String::from("Normal text")),
+            ]
+        );
+
+        {
+            let mut spans = span.spans();
+
+            let span = spans.next().unwrap();
+            assert_eq!(*span.head(), Token::OpenToken(String::from("strong")));
+            assert_eq!(
+                span.inner().as_ref(),
+                [Token::Text(String::from("Strong text"))]
+            );
+
+            let span = spans.next().unwrap();
+            assert_eq!(*span.head(), Token::Text(String::from("Normal text")));
+            assert_eq!(
+                span.inner().as_ref(),
+                [Token::Text(String::from("Normal text"))]
+            );
+
+            assert!(spans.next().is_none());
+        }
+
+        assert!(spans.next().is_none());
     }
 
-    pub fn push(&mut self, item: Self) {
-        match self {
-            Self::Text(vec) => vec.push(item),
-            Self::Strong(vec) => vec.push(item),
-            Self::Emphasis(vec) => vec.push(item),
+    #[test]
+    fn test_spans_iter() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::Text(String::from("Hello World")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(
+            span.as_ref(),
+            [
+                Token::OpenToken(String::from("h1")),
+                Token::Text(String::from("Hello World")),
+                Token::CloseToken(String::from("h1")),
+            ]
+        );
+
+        assert!(spans.next().is_none());
+
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Strong text")));
+        tokens.push(Token::CloseToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Normal text")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(
+            span.as_ref(),
+            [
+                Token::OpenToken(String::from("h1")),
+                Token::OpenToken(String::from("strong")),
+                Token::Text(String::from("Strong text")),
+                Token::CloseToken(String::from("strong")),
+                Token::Text(String::from("Normal text")),
+                Token::CloseToken(String::from("h1")),
+            ]
+        );
+
+        {
+            let mut spans = span.spans();
+
+            let span = spans.next().unwrap();
+            assert_eq!(
+                span.as_ref(),
+                [
+                    Token::OpenToken(String::from("strong")),
+                    Token::Text(String::from("Strong text")),
+                    Token::CloseToken(String::from("strong")),
+                ]
+            );
+
+            let span = spans.next().unwrap();
+            assert_eq!(span.as_ref(), [Token::Text(String::from("Normal text"))]);
+
+            assert!(spans.next().is_none());
         }
+
+        assert!(spans.next().is_none());
+    }
+
+    #[test]
+    fn test_inline_parse() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("a")));
+        tokens.push(Token::CloseToken(String::from("strong")));
+
+        let inline = Inline::parse(tokens.as_ref()).unwrap();
+        assert_eq!(
+            inline.0,
+            [InlineBlock::Strong(Inline(vec![InlineBlock::Text(
+                String::from("a")
+            )]))]
+        );
     }
 }

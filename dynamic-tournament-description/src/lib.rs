@@ -1,1 +1,1 @@
-mod html;
+pub mod html;
