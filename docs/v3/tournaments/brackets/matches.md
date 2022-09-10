@@ -182,6 +182,11 @@ Using the string `"HELLO WORLD"` as the `token` field:
 The `SyncState` command requests the server to return a complete, up-to-date state of the bracket. The 
 server responds with a `SyncState` response. This command has no body.
 
+#### Example
+
+Request a sync state:  
+![request-sync-state](request-sync-state.svg)
+
 #### UpdateMatch
 
 The `UpdateMatch` command updates the match at the specified index. The body contains the index and the 
@@ -203,6 +208,11 @@ An `EntrantScore` contains:
 | score  | u64  | The score of the node.        |
 | winner | bool | Whether the node is a winner. |
 
+#### Example
+
+Update the match at index `1` to the score `2:1` and set the first entrant as the winner.  
+![request-update-match](request-update-match.svg)
+
 #### ResetMatch
 
 The `ResetMatch` command reset the match at the specified index. The body contains the index of
@@ -213,6 +223,11 @@ a `ResetMatch` response with the same data.
 | Name  | Type | Description                      |
 | ----- | ---- | -------------------------------- |
 | index | u64  | The index of the match to reset. |
+
+#### Example
+
+Reset the match at index `1`.  
+![request-reset-match](request-reset-match.svg)
 
 ### Response
 
@@ -279,6 +294,11 @@ The data field of a `Node` contains a `EntrantScore`. A `EntrantScore` contains 
 | score  | u64  | The score of the node.        |
 | winner | bool | Whether the node is a winner. |
 
+#### Example
+
+Get the state of a single elimination bracket with three rounds. The scores in the first round are defined as `2:1` and `0:2`. The scores in the second round are defined as `1:1` and no winner has been set yet.  
+![response-sync-state](response-sync-state.svg)
+
 #### UpdateMatch
 
 The `UpdateMatch` event notifies about an updated match in the bracket. The body contains the index
@@ -298,6 +318,11 @@ An `EntrantScore` contains:
 | score  | u64  | The score of the node.        |
 | winner | bool | Whether the node is a winner. |
 
+#### Example
+
+Update the match at index `1` to the score `2:1` and set the first entrant as the winner.  
+![request-update-match](request-update-match.svg)
+
 #### ResetMatch
 
 The `ResetMatch` event notifies about a resetted match in the bracket. The body contains the index
@@ -308,3 +333,8 @@ Note: The body has the same format as the `ResetMatch` request.
 | Name  | Type | Description                      |
 | ----- | ---- | -------------------------------- |
 | index | u64  | The index of the match to reset. |
+
+#### Example
+
+Reset the match at index `1`.  
+![request-reset-match](request-reset-match.svg)
