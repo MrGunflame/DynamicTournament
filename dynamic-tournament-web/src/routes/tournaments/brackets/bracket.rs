@@ -138,9 +138,11 @@ impl Component for Bracket {
 
             let onclick = ctx.link().callback(move |(_, id)| Message::OnClick(id));
 
+            let active_bracket = ctx.props().bracket_id;
+
             html! {
                 <>
-                    <BracketList {brackets} {onclick} />
+                    <BracketList {brackets} {onclick} {active_bracket} />
                     <LiveBracket {tournament} {bracket} {entrants} />
                 </>
             }
