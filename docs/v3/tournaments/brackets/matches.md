@@ -172,6 +172,11 @@ valid there is no response.
 | ----- | ---- | ----------------------------------------------------------------------------- |
 | token | str  | The token string as returned by the `/v3/auth` endpoint. **No Bearer prefix** |
 
+#### Example
+
+Using the string `"HELLO WORLD"` as the `token` field:  
+![request-authorize-example](request-authorize-example.svg)
+
 #### SyncState
 
 The `SyncState` command requests the server to return a complete, up-to-date state of the bracket. The 
