@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::cell::Cell;
 
 use gloo_events::{EventListener, EventListenerOptions};
 use wasm_bindgen::JsCast;
@@ -28,8 +28,8 @@ pub struct MovableBoxed {
     scale: u32,
 
     /// Whether the box is currently allowed to be moved.
-    is_moving: Rc<UnsafeCell<bool>>,
-    is_locked: Rc<UnsafeCell<bool>>,
+    is_moving: Rc<Cell<bool>>,
+    is_locked: Rc<Cell<bool>>,
 }
 
 impl Component for MovableBoxed {
@@ -48,8 +48,8 @@ impl Component for MovableBoxed {
             last_move: Coordinates::default(),
             scale: 100,
 
-            is_moving: Rc::new(UnsafeCell::new(false)),
-            is_locked: Rc::new(UnsafeCell::new(false)),
+            is_moving: Rc::new(Cell::new(false)),
+            is_locked: Rc::new(Cell::new(false)),
         }
     }
 
@@ -76,27 +76,12 @@ impl Component for MovableBoxed {
             Message::MouseDown(coords) => {
                 self.last_move = coords;
 
-                // SAFETY: Since events are executed synchronously on the main thread
-                // no other references exist.
-                unsafe {
-                    let is_moving = &mut *self.is_moving.get();
-                    *is_moving = true;
-                }
+                self.is_moving.set(true);
             }
-            Message::MouseUp => {
-                // SAFETY: Since events are executed synchronously on the main thread
-                // no other references exist.
-                unsafe {
-                    let is_moving = &mut *self.is_moving.get();
-                    *is_moving = false;
-                }
-            }
+            Message::MouseUp => self.is_moving.set(false),
             Message::ZoomIn(amount) => self.scale = self.scale.saturating_add(amount),
             Message::ZoomOut(amount) => self.scale = self.scale.saturating_sub(amount),
-            Message::ToggleLock => unsafe {
-                let is_locked = &mut *self.is_locked.get();
-                *is_locked = !*is_locked;
-            },
+            Message::ToggleLock => self.is_locked.set(!self.is_locked.get()),
         }
 
         true
@@ -113,7 +98,7 @@ impl Component for MovableBoxed {
         let is_locked = self.is_locked.clone();
 
         let onmousedown = ctx.link().batch_callback(move |event: MouseEvent| {
-            if unsafe { *is_locked.get() } {
+            if is_locked.get() {
                 return None;
             }
 
@@ -126,7 +111,7 @@ impl Component for MovableBoxed {
         });
 
         let onmousemove = ctx.link().batch_callback(move |event: MouseEvent| {
-            let is_moving = unsafe { *is_moving.get() };
+            let is_moving = is_moving.get();
 
             if is_moving {
                 event.prevent_default();
@@ -162,7 +147,7 @@ impl Component for MovableBoxed {
         if let Some(element) = self.element.cast::<HtmlElement>() {
             let is_locked = self.is_locked.clone();
             let ontouchstart = ctx.link().batch_callback(move |event: TouchEvent| {
-                if unsafe { *is_locked.get() } {
+                if is_locked.get() {
                     return None;
                 }
 
@@ -176,7 +161,7 @@ impl Component for MovableBoxed {
 
             let is_locked = self.is_locked.clone();
             let ontouchmove = ctx.link().batch_callback(move |event: TouchEvent| {
-                if unsafe { *is_locked.get() } {
+                if is_locked.get() {
                     return None;
                 }
 
@@ -219,7 +204,7 @@ impl Component for MovableBoxed {
         let is_locked = self.is_locked.clone();
 
         let on_wheel = ctx.link().batch_callback(move |e: WheelEvent| {
-            if unsafe { *is_locked.get() } {
+            if is_locked.get() {
                 return None;
             }
 
@@ -239,9 +224,9 @@ impl Component for MovableBoxed {
 
         let on_lock = ctx.link().callback(|_| Message::ToggleLock);
 
-        let cursor = if unsafe { *self.is_locked.get() } {
+        let cursor = if self.is_locked.get() {
             "cursor: unset;"
-        } else if unsafe { *self.is_moving.get() } {
+        } else if self.is_moving.get() {
             "cursor: grabbing;"
         } else {
             "cursor: grab;"
@@ -252,7 +237,7 @@ impl Component for MovableBoxed {
             self.translate.x, self.translate.y, self.scale
         );
 
-        let lock_button = if unsafe { *self.is_locked.get() } {
+        let lock_button = if self.is_locked.get() {
             html! {
                 <button class="button" onclick={on_lock} title="Unlock">
                     <FaLockOpen label="Unlock" />
