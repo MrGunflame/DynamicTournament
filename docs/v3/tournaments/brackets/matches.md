@@ -83,16 +83,16 @@ For example see the definition for the `Entrant Score` struct:
 | score  | u64  |
 | winner | bool |
 
-The encoded version will look like this in memory:
-**TODO: INSERT IMG**
+The encoded version will look like this in memory:  
+![Entrant Score](struct-entrant-score.svg)
 
 Many structs will have other structs in their fields. For example take a look at the `Match` struct:
 | Name     | Type   |
 | -------- | ------ |
 | entrants | []Node |
 
-The encoded version will look like this in memory:
-**TODO: INSERT IMG**
+The encoded version will look like this in memory:  
+![Match](struct-match.svg)
 
 ##### Entrant Score
 
