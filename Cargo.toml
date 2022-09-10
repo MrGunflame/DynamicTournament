@@ -4,6 +4,7 @@ members = [
     "dynamic-tournament-cli",
     "dynamic-tournament-core",
     "dynamic-tournament-description",
+    "dynamic-tournament-macros",
     "dynamic-tournament-server",
     "dynamic-tournament-test",
     "dynamic-tournament-web",

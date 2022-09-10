@@ -11,10 +11,10 @@ use crate::{Error, State, StatusCodeError};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use dynamic_tournament_macros::path;
 use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
@@ -224,14 +224,13 @@ async fn service_root(
 
     let origin = req.headers().get("Origin").cloned();
 
-    let res = match uri.take_str() {
-        Some("v1") => v1::route().await,
-        Some("v2") => v2::route(req, uri).await,
-        Some("v3") => v3::route(req, uri).await,
+    let res = path!(uri, {
+        "v1" => v1::route().await,
+        "v2" => v2::route(req, uri).await,
+        "v3" => v3::route(req, uri).await,
         #[cfg(feature = "metrics")]
-        Some("metrics") => metrics::route(req).await,
-        _ => Err(Error::NotFound),
-    };
+        "metrics" => metrics::route(req).await,
+    });
 
     match res {
         Ok(mut resp) => {
@@ -450,14 +449,6 @@ impl<'a> RequestUri<'a> {
         Self { path }
     }
 
-    pub fn take(&mut self) -> Option<UriPart> {
-        let part = self.take_str()?;
-
-        let part = UriPart { part };
-
-        Some(part)
-    }
-
     pub fn take_str(&mut self) -> Option<&str> {
         if self.path.is_empty() {
             None
@@ -474,43 +465,6 @@ impl<'a> RequestUri<'a> {
                 }
             })
         }
-    }
-
-    pub fn take_all(self) -> Option<&'a str> {
-        if self.path.is_empty() {
-            None
-        } else {
-            Some(self.path)
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct UriPart<'a> {
-    part: &'a str,
-}
-
-impl<'a> UriPart<'a> {
-    pub fn parse<T>(&self) -> std::result::Result<T, Error>
-    where
-        T: FromStr,
-    {
-        match self.part.parse() {
-            Ok(v) => Ok(v),
-            Err(_) => Err(StatusCodeError::not_found().into()),
-        }
-    }
-}
-
-impl<'a> AsRef<str> for UriPart<'a> {
-    fn as_ref(&self) -> &str {
-        self.part
-    }
-}
-
-impl<'a> PartialEq<str> for UriPart<'a> {
-    fn eq(&self, other: &str) -> bool {
-        self.part == other
     }
 }
 
@@ -599,29 +553,4 @@ impl Response {
         *resp.headers_mut() = self.headers;
         resp
     }
-}
-
-/// Checks the request method and runs the specified path. If no matching method is found
-/// an method_not_allowed error is returned.
-#[macro_export]
-macro_rules! method {
-    ($req:expr, {$($method:expr => $branch:expr),* $(,)?}) => {
-        match $req.method() {
-            $(
-                method if method == $method => $branch,
-            )*
-            method if method == hyper::Method::OPTIONS => {
-                use $crate::http::Response;
-                use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
-
-                let allow = vec![$($method.as_str()),*];
-                let allow = HeaderValue::from_bytes(allow.join(",").as_bytes()).unwrap();
-
-                Ok(Response::no_content()
-                    .header(ALLOW, allow.clone())
-                    .header(ACCESS_CONTROL_ALLOW_METHODS,allow))
-            }
-            _ => Err($crate::StatusCodeError::method_not_allowed().into()),
-        }
-    };
 }

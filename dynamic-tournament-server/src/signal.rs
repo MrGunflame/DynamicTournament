@@ -10,17 +10,28 @@ static WG_STATE: AtomicU8 = AtomicU8::new(0);
 static WG_NOTIFY: Notify = Notify::const_new();
 static WG_COUNTER: ShutdownSemaphore = ShutdownSemaphore::new();
 
-/// Terminates the main process. This will send a shutdown signal to all listening task
-/// and wait for them to terminate gracefully.
-pub async fn terminate() {
+pub fn init() {
+    #[cfg(target_family = "unix")]
+    unix::init();
+}
+
+/// Initiates a server shutdown.
+pub fn terminate() {
     WG_STATE.store(1, Ordering::Relaxed);
     WG_NOTIFY.notify_waiters();
 
     log::debug!("Awaiting {} shutdown listeners", WG_COUNTER.permits());
+}
 
+pub async fn await_shutdown() {
+    WG_NOTIFY.notified().await;
     WG_COUNTER.empty().await;
 }
 
+/// A [`Future`] that resolves once a shutdown signal has been received.
+///
+/// The `ShutdownListener` will asynchronously block the main thread and prevent it from exiting
+/// before the instace was dropped.
 #[derive(Debug)]
 pub struct ShutdownListener<'a> {
     future: Notified<'a>,
@@ -107,5 +118,31 @@ impl ShutdownSemaphore {
         if self.permits() != 0 {
             self.notify.notified().await
         }
+    }
+}
+
+#[cfg(target_family = "unix")]
+mod unix {
+    use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
+
+    use super::terminate;
+
+    pub(super) fn init() {
+        let action = SigAction::new(
+            SigHandler::Handler(handle_terminate),
+            SaFlags::empty(),
+            SigSet::empty(),
+        );
+
+        // SAFETY: The signal handler does not reference any local data and is always
+        // safe to call in the lifetime of the program.
+        unsafe {
+            let _ = sigaction(Signal::SIGTERM, &action);
+            let _ = sigaction(Signal::SIGINT, &action);
+        }
+    }
+
+    extern "C" fn handle_terminate(_: i32) {
+        terminate();
     }
 }

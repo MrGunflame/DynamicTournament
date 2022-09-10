@@ -4,6 +4,7 @@ pub mod button;
 pub mod confirmation;
 pub mod error;
 pub mod errorlog;
+pub mod icons;
 pub mod input;
 pub mod loader;
 pub mod movable_boxed;

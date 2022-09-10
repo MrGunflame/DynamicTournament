@@ -7,6 +7,8 @@ use crate::utils::Rc;
 pub struct Props {
     pub brackets: Rc<Vec<BracketOverview>>,
     pub onclick: Callback<(usize, BracketId)>,
+    #[prop_or_default]
+    pub active_bracket: BracketId,
 }
 
 #[derive(Debug)]
@@ -18,7 +20,15 @@ impl Component for BracketList {
     type Message = (usize, BracketId);
     type Properties = Props;
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        if ctx.props().active_bracket != 0 {
+            for (index, bracket) in ctx.props().brackets.iter().enumerate() {
+                if bracket.id == ctx.props().active_bracket {
+                    return Self { active: index };
+                }
+            }
+        }
+
         Self { active: 0 }
     }
 

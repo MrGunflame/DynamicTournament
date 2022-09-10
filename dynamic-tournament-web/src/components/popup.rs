@@ -4,6 +4,7 @@ use web_sys::{Element, KeyboardEvent};
 use yew::create_portal;
 use yew::prelude::*;
 
+use crate::components::icons::{FaSize, FaXmark};
 use crate::utils::document;
 
 pub struct Popup {
@@ -63,7 +64,7 @@ impl Component for Popup {
                     <div class="popup">
                         <div class="popup-close-wrapper">
                             <button class="popup-close" onclick={on_close} title="Close" disabled=false>
-                                <i class="fa-xmark fa-solid fa-2xl"></i>
+                                <FaXmark label="Close" size={FaSize::ExtraLarge2} />
                             </button>
                         </div>
                         <div class="popup-content">

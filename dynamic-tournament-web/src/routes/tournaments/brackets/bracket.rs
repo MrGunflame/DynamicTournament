@@ -4,8 +4,7 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::BracketId, tournaments::brackets::Bracket as ApiBracket};
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::components::bracket::Bracket as BracketComponent;
-use crate::components::movable_boxed::MovableBoxed;
+use crate::components::bracket::LiveBracket;
 use crate::components::providers::{ClientProvider, Provider};
 use crate::components::BracketList;
 use crate::utils::router::RouterContextExt;
@@ -139,12 +138,12 @@ impl Component for Bracket {
 
             let onclick = ctx.link().callback(move |(_, id)| Message::OnClick(id));
 
+            let active_bracket = ctx.props().bracket_id;
+
             html! {
                 <>
-                    <BracketList {brackets} {onclick} />
-                    <MovableBoxed>
-                        <BracketComponent {tournament} {bracket} {entrants} />
-                    </MovableBoxed>
+                    <BracketList {brackets} {onclick} {active_bracket} />
+                    <LiveBracket {tournament} {bracket} {entrants} />
                 </>
             }
         } else {

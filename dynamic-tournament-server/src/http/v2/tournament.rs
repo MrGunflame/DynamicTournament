@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::http::{Request, RequestUri, Response, Result};
-use crate::{method, StatusCodeError};
+use crate::StatusCodeError;
 
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
@@ -14,22 +14,18 @@ use dynamic_tournament_api::v3::tournaments::roles::Role as Role2;
 use dynamic_tournament_api::v3::tournaments::{EntrantKind, Tournament as Tournament2};
 use dynamic_tournament_core::options::TournamentOptionValues;
 use dynamic_tournament_core::{EntrantScore, SingleElimination};
-use hyper::Method;
+use dynamic_tournament_macros::{method, path};
 
 pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    match uri.take() {
-        None => method!(req, {
-            Method::GET => list(req).await,
-            Method::POST => create(req).await,
+    path!(uri, {
+        @ => method!(req, {
+            GET => list(req).await,
+            POST => create(req).await,
         }),
-        Some(id) => {
-            let id: u64 = id.parse()?;
-
-            method!(req, {
-                Method::GET => get(req, id).await,
-            })
-        }
-    }
+        id => method!(req, {
+            GET => get(req, id).await,
+        })
+    })
 }
 
 async fn list(req: Request) -> Result {
