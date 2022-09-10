@@ -136,9 +136,15 @@ Arrays and strings are encoded using the same format. An array first encodes the
 the array, or in other words, the number of elements following. The length is a `u64` using 
 the varint encoding described above. After that every element is encoded.
 
+![Array Def](array-def.svg)
+
 Strings are encoded as a array of bytes (`u8`). Note that the length is **not the number of 
 characters**, but the number of bytes. In the case of ASCII this is the same, but any UTF-8 
 code point is valid.
+
+For example the string "Hello" has the length 5 and encoded as follows:
+
+![Array Example](array-example.svg)
 
 ### Request
 
