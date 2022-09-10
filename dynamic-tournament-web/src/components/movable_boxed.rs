@@ -22,6 +22,7 @@ pub struct MovableBoxed {
 
     mouse_listeners: Option<[EventListener; 3]>,
     touch_listeners: Option<[EventListener; 3]>,
+    wheel_listener: Option<EventListener>,
 
     translate: Coordinates,
     last_move: Coordinates,
@@ -43,6 +44,7 @@ impl Component for MovableBoxed {
 
             mouse_listeners: None,
             touch_listeners: None,
+            wheel_listener: None,
 
             translate: Coordinates::default(),
             last_move: Coordinates::default(),
@@ -193,6 +195,30 @@ impl Component for MovableBoxed {
 
             self.touch_listeners = Some([touchstart, touchmove, touchend]);
         }
+
+        let is_locked = self.is_locked.clone();
+        let onwheel = ctx.link().batch_callback(move |event: WheelEvent| {
+            if is_locked.get() {
+                return None;
+            }
+
+            event.prevent_default();
+            if event.delta_y().is_sign_positive() {
+                Some(Message::ZoomOut(
+                    (event.delta_y() as f32 * ZOOM_FACTOR) as u32,
+                ))
+            } else {
+                Some(Message::ZoomIn(
+                    (-event.delta_y() as f32 * ZOOM_FACTOR) as u32,
+                ))
+            }
+        });
+
+        let wheel = EventListener::new_with_options(&element, "wheel", options, move |event| {
+            onwheel.emit(event.dyn_ref::<WheelEvent>().unwrap().clone());
+        });
+
+        self.wheel_listener = Some(wheel);
     }
 
     // Reposition when props change.
@@ -201,21 +227,6 @@ impl Component for MovableBoxed {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let is_locked = self.is_locked.clone();
-
-        let on_wheel = ctx.link().batch_callback(move |e: WheelEvent| {
-            if is_locked.get() {
-                return None;
-            }
-
-            e.prevent_default();
-            if e.delta_y().is_sign_positive() {
-                Some(Message::ZoomOut((e.delta_y() as f32 * ZOOM_FACTOR) as u32))
-            } else {
-                Some(Message::ZoomIn((-e.delta_y() as f32 * ZOOM_FACTOR) as u32))
-            }
-        });
-
         let on_reposition = ctx.link().callback(|_| Message::Reposition);
 
         let on_zoom_in = ctx.link().callback(|_| Message::ZoomIn(5));
@@ -259,7 +270,7 @@ impl Component for MovableBoxed {
         let header = ctx.props().header.clone();
 
         html! {
-            <div ref={self.element.clone()} class={classes} onwheel={on_wheel} style={cursor}>
+            <div ref={self.element.clone()} class={classes} style={cursor}>
                 <div class="movable-boxed-header">
                     <div class="movable-boxed-buttons">
                         <Button onclick={on_reposition} title="Reposition">
