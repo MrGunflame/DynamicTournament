@@ -74,6 +74,26 @@ An signed integer `n` with `k` bits can be encoded using `(n << 1) ^ (n >> k - 1
 
 #### General structure
 
+The structure of the protocol is defined as tables in the following sections. The fields of the table are ordered in the order they are shown.
+
+For example see the definition for the `Entrant Score` struct:
+
+| Name   | Type |
+| ------ | ---- |
+| score  | u64  |
+| winner | bool |
+
+The encoded version will look like this in memory:
+**TODO: INSERT IMG**
+
+Many structs will have other structs in their fields. For example take a look at the `Match` struct:
+| Name     | Type   |
+| -------- | ------ |
+| entrants | []Node |
+
+The encoded version will look like this in memory:
+**TODO: INSERT IMG**
+
 ##### Entrant Score
 
 This struct contains the score for a single team in a match (heat). It also contains a byte
