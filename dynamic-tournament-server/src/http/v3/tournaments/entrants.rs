@@ -3,31 +3,31 @@ use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant}
 use dynamic_tournament_api::Payload;
 use dynamic_tournament_macros::{method, path};
 
-use crate::http::{Request, RequestUri, Response, Result};
+use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: TournamentId) -> Result {
-    path!(uri, {
-        @ => method!(req, {
-            GET => list(req, tournament_id).await,
-            POST => create(req, tournament_id).await,
+pub async fn route(mut ctx: Context, tournament_id: TournamentId) -> Result {
+    path!(ctx, {
+        @ => method!(ctx, {
+            GET => list(ctx, tournament_id).await,
+            POST => create(ctx, tournament_id).await,
         }),
-        id => method!(req, {
-            GET => get(req, tournament_id, id).await,
-            PATCH => patch(req, tournament_id, id).await,
-            DELETE => delete(req, tournament_id, id).await,
+        id => method!(ctx, {
+            GET => get(ctx, tournament_id, id).await,
+            PATCH => patch(ctx, tournament_id, id).await,
+            DELETE => delete(ctx, tournament_id, id).await,
         })
     })
 }
 
-async fn list(req: Request, id: TournamentId) -> Result {
-    let entrants = req.state().store.get_entrants(id).await?;
+async fn list(ctx: Context, id: TournamentId) -> Result {
+    let entrants = ctx.state.store.get_entrants(id).await?;
 
     Ok(Response::ok().json(&entrants))
 }
 
-async fn get(req: Request, tournament_id: TournamentId, id: EntrantId) -> Result {
-    let entrant = req.state().store.get_entrant(tournament_id, id).await?;
+async fn get(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
+    let entrant = ctx.state.store.get_entrant(tournament_id, id).await?;
 
     match entrant {
         Some(entrant) => Ok(Response::ok().json(&entrant)),
@@ -35,20 +35,20 @@ async fn get(req: Request, tournament_id: TournamentId, id: EntrantId) -> Result
     }
 }
 
-async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
-    req.require_authentication()?;
+async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
+    ctx.require_authentication()?;
 
-    let tournament = req
-        .state()
+    let tournament = ctx
+        .state
         .store
         .get_tournament(tournament_id)
         .await?
         .unwrap();
 
-    let mut entrants: Payload<Entrant> = req.json().await?;
+    let mut entrants: Payload<Entrant> = ctx.req.json().await?;
 
     // Fetch roles for all entrants.
-    let roles = req.state().store.roles(tournament_id).list().await?;
+    let roles = ctx.state.store.roles(tournament_id).list().await?;
 
     for entrant in entrants.iter_mut() {
         // Check that the entrant matches the tournament kind.
@@ -82,8 +82,8 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
         }
 
         // Insert the entrant.
-        entrant.id = req
-            .state()
+        entrant.id = ctx
+            .state
             .store
             .entrants(tournament_id)
             .insert(entrant)
@@ -93,19 +93,19 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
     Ok(Response::created().json(&entrants))
 }
 
-async fn delete(req: Request, tournament_id: TournamentId, id: EntrantId) -> Result {
-    req.require_authentication()?;
+async fn delete(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
+    ctx.require_authentication()?;
 
-    req.state().store.entrants(tournament_id).delete(id).await?;
+    ctx.state.store.entrants(tournament_id).delete(id).await?;
 
     Ok(Response::ok())
 }
 
-async fn patch(mut req: Request, tournament_id: TournamentId, id: EntrantId) -> Result {
-    req.require_authentication()?;
+async fn patch(mut ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
+    ctx.require_authentication()?;
 
-    let mut entrant = req.json().await?;
-    req.state()
+    let mut entrant = ctx.req.json().await?;
+    ctx.state
         .store
         .entrants(tournament_id)
         .update(id, &entrant)

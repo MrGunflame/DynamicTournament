@@ -16,7 +16,7 @@ pub fn method(input: TokenStream) -> TokenStream {
 }
 
 struct MethodRoot {
-    req: Expr,
+    ctx: Expr,
     branches: HashMap<Method, Expr>,
 }
 
@@ -66,7 +66,7 @@ impl MethodRoot {
         let head = self.expand_head();
         let options = self.expand_options();
 
-        let req = self.req;
+        let ctx = self.ctx;
 
         let branches: TokenStream2 = self
             .branches
@@ -81,7 +81,7 @@ impl MethodRoot {
             .collect();
 
         quote! {
-            match #req.method() {
+            match #ctx.req.method() {
                 #branches
                 #head
                 #options
@@ -93,7 +93,7 @@ impl MethodRoot {
 
 impl Parse for MethodRoot {
     fn parse(input: ParseStream) -> Result<Self> {
-        let req = input.parse()?;
+        let ctx = input.parse()?;
         input.parse::<Token![,]>()?;
 
         let content;
@@ -113,7 +113,7 @@ impl Parse for MethodRoot {
             }
         }
 
-        Ok(Self { req, branches })
+        Ok(Self { ctx, branches })
     }
 }
 

@@ -8,75 +8,75 @@ use dynamic_tournament_api::Payload;
 use dynamic_tournament_macros::{method, path};
 
 use crate::{
-    http::{Request, RequestUri, Response, Result},
+    http::{Context, Response, Result},
     StatusCodeError,
 };
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    path!(uri, {
-        @ => method!(req, {
-            GET => list(req).await,
-            POST => create(req).await,
+pub async fn route(mut ctx: Context) -> Result {
+    path!(ctx, {
+        @ => method!(ctx, {
+            GET => list(ctx).await,
+            POST => create(ctx).await,
         }),
         id => {
             // Check if the tournament exists before continuing.
-            if req.state().store.tournaments().get(id).await?.is_none() {
+            if ctx.state.store.tournaments().get(id).await?.is_none() {
                 return Err(StatusCodeError::not_found()
                     .message("Invalid tournament id")
                     .into());
             }
 
-            path!(uri, {
-                "entrants" => entrants::route(req, uri, id).await,
-                "brackets" => brackets::route(req, uri, id).await,
-                "roles" => roles::route(req, uri, id).await,
-                @ => method!(req, {
-                    GET => get(req, id).await,
-                    PATCH => patch(req, id).await,
-                    DELETE => delete(req, id).await,
+            path!(ctx, {
+                "entrants" => entrants::route(ctx, id).await,
+                "brackets" => brackets::route(ctx, id).await,
+                "roles" => roles::route(ctx, id).await,
+                @ => method!(ctx, {
+                    GET => get(ctx, id).await,
+                    PATCH => patch(ctx, id).await,
+                    DELETE => delete(ctx, id).await,
                 }),
             })
         }
     })
 }
 
-async fn list(req: Request) -> Result {
-    let tournaments = req.state().store.tournaments().list().await?;
+async fn list(ctx: Context) -> Result {
+    let tournaments = ctx.state.store.tournaments().list().await?;
 
     Ok(Response::ok().json(&tournaments))
 }
 
-async fn get(req: Request, id: TournamentId) -> Result {
-    let tournament = req.state().store.tournaments().get(id).await?;
+async fn get(ctx: Context, id: TournamentId) -> Result {
+    let tournament = ctx.state.store.tournaments().get(id).await?;
 
     let tournament = tournament.ok_or_else(StatusCodeError::not_found)?;
 
     Ok(Response::ok().json(&tournament))
 }
 
-async fn create(mut req: Request) -> Result {
-    req.require_authentication()?;
+async fn create(mut ctx: Context) -> Result {
+    ctx.require_authentication()?;
 
-    let mut tournaments: Payload<Tournament> = req.json().await?;
+    let mut tournaments: Payload<Tournament> = ctx.req.json().await?;
 
     for tournament in tournaments.iter_mut() {
-        tournament.id = req.state().store.tournaments().insert(tournament).await?;
+        tournament.id = ctx.state.store.tournaments().insert(tournament).await?;
     }
 
     Ok(Response::created().json(&tournaments))
 }
 
-async fn patch(mut req: Request, id: TournamentId) -> Result {
-    req.require_authentication()?;
+async fn patch(mut ctx: Context, id: TournamentId) -> Result {
+    ctx.require_authentication()?;
 
     // Check if the tournament exists.
-    let mut tournament = match req.state().store.tournaments().get(id).await? {
+    let mut tournament = match ctx.state.store.tournaments().get(id).await? {
         Some(tournament) => tournament,
         None => return Err(StatusCodeError::not_found().into()),
     };
 
-    let partial = req.json().await?;
-    req.state().store.tournaments().update(id, &partial).await?;
+    let partial = ctx.req.json().await?;
+    ctx.state.store.tournaments().update(id, &partial).await?;
 
     // Merge the patch.
     tournament.update(partial);
@@ -84,10 +84,10 @@ async fn patch(mut req: Request, id: TournamentId) -> Result {
     Ok(Response::ok().json(&tournament))
 }
 
-async fn delete(req: Request, id: TournamentId) -> Result {
-    req.require_authentication()?;
+async fn delete(ctx: Context, id: TournamentId) -> Result {
+    ctx.require_authentication()?;
 
-    req.state().store.tournaments().delete(id).await?;
+    ctx.state.store.tournaments().delete(id).await?;
 
     Ok(Response::ok())
 }

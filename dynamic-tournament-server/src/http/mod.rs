@@ -1,3 +1,4 @@
+pub mod path;
 mod v1;
 pub mod v2;
 pub mod v3;
@@ -9,9 +10,10 @@ use crate::config::BindAddr;
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
+use std::mem;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{self, Poll};
 use std::time::Duration;
 
 use dynamic_tournament_macros::path;
@@ -171,7 +173,10 @@ impl Service<hyper::Request<Body>> for RootService {
     type Error = crate::Error;
     type Future = RootServiceFuture;
 
-    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<std::result::Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _cx: &mut task::Context,
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -196,7 +201,7 @@ impl RootServiceFuture {
 impl Future for RootServiceFuture {
     type Output = std::result::Result<hyper::Response<Body>, crate::Error>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
         let future = unsafe { self.map_unchecked_mut(|this| &mut this.0) };
         future.poll(cx)
     }
@@ -214,22 +219,16 @@ async fn service_root(
     #[cfg(feature = "metrics")]
     state.metrics.http_requests_total.inc();
 
-    let req = Request::new(req, state);
+    let mut ctx = Context::new(req, state);
 
-    let uri = String::from(req.uri().path());
+    let origin = ctx.req.headers().get("Origin").cloned();
 
-    let mut uri = RequestUri::new(&uri);
-
-    log::debug!("{:?}", uri);
-
-    let origin = req.headers().get("Origin").cloned();
-
-    let res = path!(uri, {
+    let res = path!(ctx, {
         "v1" => v1::route().await,
-        "v2" => v2::route(req, uri).await,
-        "v3" => v3::route(req, uri).await,
+        "v2" => v2::route(ctx).await,
+        "v3" => v3::route(ctx).await,
         #[cfg(feature = "metrics")]
-        "metrics" => metrics::route(req).await,
+        "metrics" => metrics::route(ctx).await,
     });
 
     match res {
@@ -283,30 +282,90 @@ async fn service_root(
     }
 }
 
+/// A context carried with a HTTP request.
+pub struct Context {
+    pub req: Request,
+    pub state: State,
+    /// This field is the owner of `self.path`. It is only ever accessed through that
+    /// reference and therefore not dead code.
+    _path_buf: Box<str>,
+    /// A self-referential field borrowing `self._path_buf`. We need to make sure it is never
+    /// made avaliable to the outside using the internal 'static lifetime. The field is only
+    /// valid for as long as self is.
+    path: path::Path<'static>,
+}
+
+impl Context {
+    fn new(req: hyper::Request<Body>, state: State) -> Self {
+        let req = Request::new(req);
+
+        // We make sure to copy the request path into a private field to make it impossible
+        // to accidently swap the strings, which would cause `Path` to have an invalid reference.
+        let path_buf: Box<str> = req.uri().path().into();
+
+        // Convert this lifetime into a 'static lifetime. This allows to field to reference
+        // a value in self.
+
+        // SAFETY: We guarantee to drop this 'static reference before the owner is dropped.
+        // We also never give access to this field to prevent copies from the outside.
+        let path = unsafe {
+            let path = path::Path::new(&path_buf);
+
+            mem::transmute::<_, path::Path<'static>>(path)
+        };
+
+        Self {
+            req,
+            state,
+            _path_buf: path_buf,
+            path,
+        }
+    }
+
+    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
+    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
+        let header = self.req.authorization()?;
+
+        let mut parts = header.split(' ');
+
+        match parts.next() {
+            Some("Bearer") => (),
+            _ => return Err(StatusCodeError::bad_request().into()),
+        }
+
+        let token = match parts.next() {
+            Some(token) => token,
+            None => return Err(StatusCodeError::bad_request().into()),
+        };
+
+        match self.state.auth.validate_auth_token(token) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(StatusCodeError::unauthorized().into()),
+        }
+    }
+
+    pub fn path(&mut self) -> &mut path::Path<'static> {
+        &mut self.path
+    }
+}
+
 #[derive(Debug)]
 pub struct Request {
     pub parts: Parts,
     pub body: Option<Body>,
-    state: State,
 }
 
 impl Request {
     const BODY_MAX_SIZE: usize = 16384;
 
     #[inline]
-    fn new(req: hyper::Request<Body>, state: State) -> Self {
+    fn new(req: hyper::Request<Body>) -> Self {
         let (parts, body) = req.into_parts();
 
         Self {
             parts,
             body: Some(body),
-            state,
         }
-    }
-
-    #[inline]
-    pub fn state(&self) -> &State {
-        &self.state
     }
 
     #[inline]
@@ -409,61 +468,6 @@ impl Request {
                 Err(_) => Err(StatusCodeError::bad_request().into()),
             },
             None => Err(StatusCodeError::unauthorized().into()),
-        }
-    }
-
-    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
-    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
-        let header = self.authorization()?;
-
-        let mut parts = header.split(' ');
-
-        match parts.next() {
-            Some("Bearer") => (),
-            _ => return Err(StatusCodeError::bad_request().into()),
-        }
-
-        let token = match parts.next() {
-            Some(token) => token,
-            None => return Err(StatusCodeError::bad_request().into()),
-        };
-
-        match self.state().auth.validate_auth_token(token) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(StatusCodeError::unauthorized().into()),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct RequestUri<'a> {
-    path: &'a str,
-}
-
-impl<'a> RequestUri<'a> {
-    pub fn new(mut path: &'a str) -> Self {
-        if path.starts_with('/') {
-            path = &path[1..];
-        }
-
-        Self { path }
-    }
-
-    pub fn take_str(&mut self) -> Option<&str> {
-        if self.path.is_empty() {
-            None
-        } else {
-            Some(match self.path.split_once('/') {
-                Some((part, rem)) => {
-                    self.path = rem;
-                    part
-                }
-                None => {
-                    let path = self.path;
-                    self.path = "";
-                    path
-                }
-            })
         }
     }
 }

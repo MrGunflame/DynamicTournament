@@ -11,33 +11,33 @@ use dynamic_tournament_core::{options::TournamentOptions, EntrantScore, SingleEl
 use dynamic_tournament_macros::{method, path};
 
 use crate::{
-    http::{Request, RequestUri, Response, Result},
+    http::{Context, Response, Result},
     StatusCodeError,
 };
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>, tournament_id: TournamentId) -> Result {
-    path!(uri, {
-        @ => method!(req, {
-            GET => list(req, tournament_id).await,
-            POST => create(req, tournament_id).await,
+pub async fn route(mut ctx: Context, tournament_id: TournamentId) -> Result {
+    path!(ctx, {
+        @ => method!(ctx, {
+            GET => list(ctx, tournament_id).await,
+            POST => create(ctx, tournament_id).await,
         }),
-        id => path!(uri, {
-            @ => method!(req, {
-                GET => get(req, tournament_id, id).await,
+        id => path!(ctx, {
+            @ => method!(ctx, {
+                GET => get(ctx, tournament_id, id).await,
             }),
-            "matches" => matches::route(req, uri, tournament_id, id).await,
+            "matches" => matches::route(ctx, tournament_id, id).await,
         })
     })
 }
 
-async fn list(req: Request, id: TournamentId) -> Result {
-    let brackets = req.state().store.list_brackets(id).await?;
+async fn list(ctx: Context, id: TournamentId) -> Result {
+    let brackets = ctx.state.store.list_brackets(id).await?;
 
     Ok(Response::ok().json(&brackets))
 }
 
-async fn get(req: Request, tournament_id: TournamentId, id: BracketId) -> Result {
-    let bracket = req.state().store.get_bracket(tournament_id, id).await?;
+async fn get(ctx: Context, tournament_id: TournamentId, id: BracketId) -> Result {
+    let bracket = ctx.state.store.get_bracket(tournament_id, id).await?;
 
     match bracket {
         Some(bracket) => Ok(Response::ok().json(&bracket)),
@@ -45,14 +45,14 @@ async fn get(req: Request, tournament_id: TournamentId, id: BracketId) -> Result
     }
 }
 
-async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
-    req.require_authentication()?;
+async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
+    ctx.require_authentication()?;
 
-    let mut brackets: Payload<Bracket> = req.json().await?;
+    let mut brackets: Payload<Bracket> = ctx.req.json().await?;
 
     for bracket in brackets.iter_mut() {
         // Make sure all entrants in the bracket actually exist.
-        let entrants = req.state().store.get_entrants(tournament_id).await?;
+        let entrants = ctx.state.store.get_entrants(tournament_id).await?;
 
         // Keep track of consumed ids to deny duplicates.
         let mut consumed = Vec::with_capacity(bracket.entrants.len());
@@ -89,8 +89,8 @@ async fn create(mut req: Request, tournament_id: TournamentId) -> Result {
             }
         };
 
-        bracket.id = req
-            .state()
+        bracket.id = ctx
+            .state
             .store
             .insert_bracket(tournament_id, bracket)
             .await?;

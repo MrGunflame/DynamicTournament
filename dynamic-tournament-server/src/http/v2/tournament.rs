@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::http::{Request, RequestUri, Response, Result};
+use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
 use dynamic_tournament_api::tournament::{
@@ -16,28 +16,28 @@ use dynamic_tournament_core::options::TournamentOptionValues;
 use dynamic_tournament_core::{EntrantScore, SingleElimination};
 use dynamic_tournament_macros::{method, path};
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    path!(uri, {
-        @ => method!(req, {
-            GET => list(req).await,
-            POST => create(req).await,
+pub async fn route(mut ctx: Context) -> Result {
+    path!(ctx, {
+        @ => method!(ctx, {
+            GET => list(ctx).await,
+            POST => create(ctx).await,
         }),
-        id => method!(req, {
-            GET => get(req, id).await,
+        id => method!(ctx, {
+            GET => get(ctx, id).await,
         })
     })
 }
 
-async fn list(req: Request) -> Result {
-    let tournaments = req.state().store.list_tournaments().await?;
+async fn list(ctx: Context) -> Result {
+    let tournaments = ctx.state.store.list_tournaments().await?;
     let mut entrants = Vec::with_capacity(tournaments.len());
     let mut brackets = Vec::with_capacity(tournaments.len());
 
     for tournament in tournaments.iter() {
-        let e = req.state().store.get_entrants(tournament.id).await?;
+        let e = ctx.state.store.get_entrants(tournament.id).await?;
         entrants.push(e.len() as u64);
 
-        let b = req.state().store.list_brackets(tournament.id).await?;
+        let b = ctx.state.store.list_brackets(tournament.id).await?;
         brackets.push(if b.is_empty() {
             // Placeholder
             BracketType::SingleElimination
@@ -66,10 +66,10 @@ async fn list(req: Request) -> Result {
     Ok(Response::ok().json(&body))
 }
 
-async fn create(mut req: Request) -> Result {
-    req.require_authentication()?;
+async fn create(mut ctx: Context) -> Result {
+    ctx.require_authentication()?;
 
-    let body: Tournament = req.json().await?;
+    let body: Tournament = ctx.req.json().await?;
 
     let kind = match body.entrants {
         Entrants::Players(_) => EntrantKind::Player,
@@ -84,7 +84,7 @@ async fn create(mut req: Request) -> Result {
         kind,
     };
 
-    let id = req.state().store.insert_tournament(&tournament).await?;
+    let id = ctx.state.store.insert_tournament(&tournament).await?;
 
     let mut roles = HashMap::new();
     for role in [
@@ -93,8 +93,8 @@ async fn create(mut req: Request) -> Result {
         Role::Duelist,
         Role::Support,
     ] {
-        let id = req
-            .state()
+        let id = ctx
+            .state
             .store
             .roles(id)
             .insert(&Role2 {
@@ -139,7 +139,7 @@ async fn create(mut req: Request) -> Result {
 
     let mut entrant_ids = Vec::new();
     for entrant in entrants {
-        let id = req.state().store.insert_entrant(id, entrant).await?;
+        let id = ctx.state.store.insert_entrant(id, entrant).await?;
         entrant_ids.push(id);
     }
 
@@ -159,18 +159,18 @@ async fn create(mut req: Request) -> Result {
         entrants: entrant_ids,
     };
 
-    req.state().store.insert_bracket(id, &bracket).await?;
+    ctx.state.store.insert_bracket(id, &bracket).await?;
 
     Ok(Response::created().body(id.to_string()))
 }
 
-async fn get(req: Request, id: u64) -> Result {
-    let tournament = match req.state().store.get_tournament(id.into()).await? {
+async fn get(ctx: Context, id: u64) -> Result {
+    let tournament = match ctx.state.store.get_tournament(id.into()).await? {
         Some(t) => t,
         None => return Err(StatusCodeError::not_found().into()),
     };
 
-    let entrants = req.state().store.get_entrants(id.into()).await?;
+    let entrants = ctx.state.store.get_entrants(id.into()).await?;
 
     let entrants = match entrants.get(0).cloned() {
         Some(e) => match e.inner {
