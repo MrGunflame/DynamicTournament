@@ -1,5 +1,6 @@
 use std::fmt::{self, Display, Formatter};
 
+use dynamic_tournament_macros::load_asset;
 use yew::{html, Component, Context, Html, Properties};
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
@@ -46,12 +47,12 @@ pub enum FaSize {
 impl FaSize {
     fn as_str(&self) -> &'static str {
         match self {
-            Self::ExtraSmall => "fa-xs",
-            Self::Small => "fa-sm",
-            Self::Normal => "",
-            Self::Large => "fa-lg",
-            Self::ExtraLarge => "fa-xl",
-            Self::ExtraLarge2 => "fa-2xl",
+            Self::ExtraSmall => "dt-icon-size-xs",
+            Self::Small => "dt-icon-size-sm",
+            Self::Normal => "dt-icon-size-nl",
+            Self::Large => "dt-icon-size-lg",
+            Self::ExtraLarge => "dt-icon-size-xl",
+            Self::ExtraLarge2 => "dt-icon-size-xl2",
         }
     }
 }
@@ -63,7 +64,7 @@ impl Display for FaSize {
 }
 
 macro_rules! fa_icon {
-    ($($id:ident, $name:expr),*$(,)?) => {
+    ($($id:ident, $src:expr),*$(,)?) => {
         $(
             #[derive(Debug)]
             pub struct $id;
@@ -77,14 +78,13 @@ macro_rules! fa_icon {
                 }
 
                 fn view(&self, ctx: &Context<Self>) -> Html {
-                    let classes = format!("{} {} {}", $name, ctx.props().style, ctx.props().size);
+                    let classes = format!("dt-icon {} {}", ctx.props().style, ctx.props().size);
 
                     let label = ctx.props().label;
 
                     html! {
                         <>
-                            <i aria-hidden="true" class={classes}></i>
-                            <span class="sr-only">{ label }</span>
+                            <img src={$src} alt={label} class={classes} />
                         </>
                     }
                 }
@@ -94,15 +94,15 @@ macro_rules! fa_icon {
 }
 
 fa_icon! {
-    FaXmark, "fa-xmark",
-    FaPen, "fa-pen",
-    FaPenToSquare, "fa-pen-to-square",
-    FaRotateLeft, "fa-rotate-left",
-    FaTrash, "fa-trash",
-    FaPlus, "fa-plus",
-    FaMinus, "fa-minus",
-    FaAngleLeft, "fa-angle-left",
-    FaCompress, "fa-compress",
-    FaLock, "fa-lock",
-    FaLockOpen, "fa-lock-open",
+    FaXmark, load_asset!("/icons/fontawesome/xmark.svg"),
+    FaPen, load_asset!("/icons/fontawesome/pen.svg"),
+    FaPenToSquare, load_asset!("/icons/fontawesome/pen-to-square.svg"),
+    FaRotateLeft, load_asset!("/icons/fontawesome/rotate-left.svg"),
+    FaTrash, load_asset!("/icons/fontawesome/trash.svg"),
+    FaPlus, load_asset!("/icons/fontawesome/plus.svg"),
+    FaMinus, load_asset!("/icons/fontawesome/minus.svg"),
+    FaAngleLeft, load_asset!("/icons/fontawesome/angle-left.svg"),
+    FaCompress, load_asset!("/icons/fontawesome/compress.svg"),
+    FaLock, load_asset!("/icons/fontawesome/lock.svg"),
+    FaLockOpen, load_asset!("/icons/fontawesome/lock-open.svg"),
 }

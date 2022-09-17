@@ -1,6 +1,9 @@
 #[cfg(feature = "server")]
 mod server;
 
+#[cfg(feature = "web")]
+mod web;
+
 use proc_macro::TokenStream;
 
 /// Match the HTTP request method of a request.
@@ -75,4 +78,23 @@ pub fn method(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn path(input: TokenStream) -> TokenStream {
     server::path(input)
+}
+
+/// Load the path of an asset from the `/assets` directory, returning an error at compile time if
+/// the file doesn't exist. The input path is relative to the `/assets` directory.
+///
+/// # Examples
+///
+/// ```ignore
+/// # use dynamic_tournament_macros::load_asset;
+/// #
+/// // Won't compile if assets/test.txt doesn't exist.
+/// let path = load_asset!("/test.txt");
+///
+/// assert_eq!(path, "/assets/test.txt");
+/// ```
+#[cfg(feature = "web")]
+#[proc_macro]
+pub fn load_asset(input: TokenStream) -> TokenStream {
+    web::load_asset(input)
 }
