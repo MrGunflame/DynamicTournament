@@ -41,6 +41,7 @@ pub struct Config {
     pub log: Log,
     pub database: Database,
     pub bind: BindAddr,
+    pub wp_upstream: SocketAddr,
 
     pub authorization: Authorization,
 }
@@ -63,6 +64,7 @@ impl Config {
         let mut this = Self::default();
 
         from_environment_error!(this, "DT_BIND", bind);
+        from_environment_error!(this, "DT_WP_UPSTREAM", wp_upstream);
 
         this.log = Log::from_environment()?;
         this.database = Database::from_environment()?;
@@ -73,6 +75,7 @@ impl Config {
 
     pub fn with_environment(mut self) -> Self {
         from_environment!(self, "DT_BIND", bind);
+        from_environment!(self, "DT_WP_UPSTREAM", wp_upstream);
 
         self.log = self.log.with_environment();
         self.database = self.database.with_environment();
@@ -88,6 +91,7 @@ impl Default for Config {
             log: Log::default(),
             database: Database::default(),
             bind: BindAddr::Tcp(SocketAddr::new([0, 0, 0, 0].into(), 3000)),
+            wp_upstream: SocketAddr::new([127, 0, 0, 1].into(), 80),
             authorization: Authorization::default(),
         }
     }

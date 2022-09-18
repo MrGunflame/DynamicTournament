@@ -1,11 +1,10 @@
-use crate::auth::password_hash;
 use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::v3::auth::RefreshToken;
-use dynamic_tournament_api::v3::users::User;
 use dynamic_tournament_macros::{method, path};
+use hyper::header::HeaderValue;
 
 pub async fn route(mut ctx: Context) -> Result {
     path!(ctx, {
@@ -18,26 +17,10 @@ pub async fn route(mut ctx: Context) -> Result {
     })
 }
 
-async fn login(mut ctx: Context) -> Result {
-    let input: User = ctx.req.json().await?;
+async fn login(ctx: Context) -> Result {
+    wp_validate(&ctx).await?;
 
-    // Find a user with matching username in the database. Return 401 when the
-    // username doesn't exist.
-    let user = match ctx.state.store.users().get(&input.username).await? {
-        Some(user) => user,
-        None => return Err(StatusCodeError::unauthorized().into()),
-    };
-
-    // Get the salted password hash by first hashing the password, then the user id.
-    // Note that the id is passed as bytes. The id is not converted to a string.
-    let hash = password_hash(input.password, user.id.0.to_le_bytes());
-
-    // Match password hashes
-    if hash != user.password {
-        return Err(StatusCodeError::unauthorized().into());
-    }
-
-    let tokens = ctx.state.auth.create_tokens(Claims::new(user.id.0))?;
+    let tokens = ctx.state.auth.create_tokens(Claims::new(0))?;
     Ok(Response::ok().json(&tokens))
 }
 
@@ -51,4 +34,41 @@ async fn refresh(mut ctx: Context) -> Result {
         }
         Err(_) => Err(StatusCodeError::unauthorized().into()),
     }
+}
+
+async fn wp_validate(ctx: &Context) -> Result {
+    let cookies = match ctx.req.headers().get("cookie") {
+        Some(val) => val.clone(),
+        None => return Err(StatusCodeError::unauthorized().into()),
+    };
+
+    let uri = format!("http://{}/api/wp/v2/users", ctx.state.config.wp_upstream);
+    log::debug!("Validating using upstream {}", uri);
+
+    let client = reqwest::Client::new();
+
+    let mut req = reqwest::Request::new(reqwest::Method::GET, reqwest::Url::parse(&uri).unwrap());
+    req.headers_mut().append("cookie", cookies);
+    req.headers_mut()
+        .append("Host", HeaderValue::from_static("beta.hardstuck.local"));
+
+    let resp = match client.execute(req).await {
+        Ok(resp) => resp,
+        Err(err) => {
+            log::error!("Failed to fetch wordpress upstream: {}", err);
+            return Err(StatusCodeError::internal_server_error().into());
+        }
+    };
+
+    // Validate that the server returned an success status code.
+    if resp.status() != 200 {
+        log::debug!(
+            "Request is not valid: Wordpress upstream returned {}",
+            resp.status()
+        );
+
+        return Err(StatusCodeError::unauthorized().into());
+    }
+
+    Ok(Response::ok())
 }
