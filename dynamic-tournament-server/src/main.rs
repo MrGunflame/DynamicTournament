@@ -243,6 +243,11 @@ impl StatusCodeError {
         Self::new(StatusCode::UPGRADE_REQUIRED, "Upgrade Required")
     }
 
+    /// 500 Internal Server Error
+    pub fn internal_server_error() -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+    }
+
     /// Sets the message of the error.
     pub fn message<T>(mut self, msg: T) -> Self
     where
