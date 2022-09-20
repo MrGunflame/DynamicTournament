@@ -108,16 +108,21 @@ where
             Position::Bottom(value) => format!("position:absolute;bottom:{}%;", value),
         };
 
+        let x = ctx.props().x.to_string();
+        let y = ctx.props().y.to_string();
+
+        let transform = format!("translate({},{})", x, y);
+
         html! {
-            <div class="match" {style}>
-                <span>{ number }</span>
+            <g x={x.clone()} y={y.clone()} {transform} class="match" {style}>
+                <text y="50%" fill="white">{ number }</text>
                 <div>
                     <div class="match-teams">
                         {entrants}
                     </div>
                     {action_button}
                 </div>
-            </div>
+            </g>
         }
     }
 }
@@ -129,6 +134,8 @@ pub struct Props<T> {
     pub on_action: Callback<Action>,
     pub number: usize,
     pub position: Option<Position>,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl<T> PartialEq for Props<T> {

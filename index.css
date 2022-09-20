@@ -406,6 +406,8 @@ td {
 .dt-bracket {
   display: flex;
   flex-direction: row;
+  width: 100%;
+  height: 100%;
 }
 
 .dt-bracket-bracket-row {
@@ -526,4 +528,10 @@ td {
 
 .movable-boxed-header>div {
   margin: 10px;
+}
+
+.movable-boxed-content {
+  position: relative;
+  height: 100%;
+  width: 100%;
 }

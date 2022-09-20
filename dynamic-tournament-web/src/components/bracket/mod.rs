@@ -24,6 +24,7 @@ use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket as ApiBracket;
 use dynamic_tournament_api::v3::tournaments::Tournament as ApiTournament;
 
+use crate::components::bracket::renderer::SvgRenderer;
 use crate::components::confirmation::Confirmation;
 use crate::components::popup::Popup;
 use crate::components::update_bracket::BracketUpdate;
@@ -287,7 +288,7 @@ impl Component for Bracket {
                 None => html! {},
             };
 
-            let bracket = HtmlRenderer::new(bracket, ctx).into_output();
+            let bracket = SvgRenderer::new(bracket, ctx).into_output();
 
             html! {
                 <>
