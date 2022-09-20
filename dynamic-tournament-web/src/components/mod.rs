@@ -11,6 +11,7 @@ pub mod movable_boxed;
 pub mod navbar;
 pub mod parse_input;
 pub mod popup;
+pub mod protected;
 pub mod providers;
 pub mod update_bracket;
 
@@ -19,3 +20,4 @@ pub use button::Button;
 pub use input::Input;
 pub use navbar::Navbar;
 pub use parse_input::ParseInput;
+pub use protected::Protected;
