@@ -46,7 +46,7 @@ impl Component for TournamentList {
                 true
             }
             Message::ClickTournament { id } => {
-                ctx.router().push(format!("/tournaments/{}", id));
+                ctx.router().push(format!("/{}", id));
 
                 false
             }

@@ -65,11 +65,7 @@ impl Component for Navbar {
                     ""
                 };
 
-                let to = format!(
-                    "/tournaments/{}{}",
-                    ctx.props().tournament_id,
-                    route.to_path()
-                );
+                let to = format!("/{}{}", ctx.props().tournament_id, route.to_path());
 
                 html! {
                     <li><Link {classes} {to}>{ name }</Link></li>

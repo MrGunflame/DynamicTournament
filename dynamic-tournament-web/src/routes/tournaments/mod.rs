@@ -17,7 +17,7 @@ use crate::utils::router::{PathBuf, Routable, Switch};
 
 use dynamic_tournament_api::v3::id::TournamentId;
 
-use self::tournament::Tournament;
+pub use self::tournament::Tournament;
 use overview::Overview;
 
 pub struct Tournaments;
