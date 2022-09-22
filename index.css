@@ -493,7 +493,9 @@ td {
 }
 
 .dt-bracket-live {
+  position: relative;
   margin: 10px;
+  z-index: 100;
 }
 
 .dt-bracket-live-active {
