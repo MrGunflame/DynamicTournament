@@ -39,6 +39,7 @@ clap = { version = "3.1.18", features = ["derive"] }
 sha2 = "0.10.2"
 hex = "0.4.3"
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
+reqwest = { version = "0.11.11", default-features = false, features = ["rustls-tls"] }
 
 [build-dependencies]
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
@@ -48,4 +49,4 @@ debug-assertions = false
 opt-level = 3
 lto = "fat"
 strip = true
-
+codegen-units = 1

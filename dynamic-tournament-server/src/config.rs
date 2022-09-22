@@ -41,7 +41,7 @@ pub struct Config {
     pub log: Log,
     pub database: Database,
     pub bind: BindAddr,
-    pub wp_upstream: SocketAddr,
+    pub wp_upstream: String,
 
     pub authorization: Authorization,
 }
@@ -91,7 +91,7 @@ impl Default for Config {
             log: Log::default(),
             database: Database::default(),
             bind: BindAddr::Tcp(SocketAddr::new([0, 0, 0, 0].into(), 3000)),
-            wp_upstream: SocketAddr::new([127, 0, 0, 1].into(), 80),
+            wp_upstream: String::new(),
             authorization: Authorization::default(),
         }
     }
