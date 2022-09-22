@@ -249,17 +249,6 @@ async fn service_root(
             let mut resp = Response::ok();
 
             match err {
-                Error::NotFound => {
-                    resp = resp.status(StatusCode::NOT_FOUND).body("Not Found");
-                }
-                Error::BadRequest => {
-                    resp = resp.status(StatusCode::BAD_REQUEST).body("Bad Request");
-                }
-                Error::MethodNotAllowed => {
-                    resp = resp
-                        .status(StatusCode::METHOD_NOT_ALLOWED)
-                        .body("Method Not Allowed");
-                }
                 Error::StatusCodeError(err) => {
                     log::debug!("Responding with error: {:?}", err);
 

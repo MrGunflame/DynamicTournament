@@ -155,12 +155,6 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Hyper(#[from] hyper::Error),
-    #[error("not found")]
-    NotFound,
-    #[error("method not allowed")]
-    MethodNotAllowed,
-    #[error("bad request")]
-    BadRequest,
     #[error("status code error")]
     StatusCodeError(#[from] StatusCodeError),
     #[error("{0}")]

@@ -108,7 +108,7 @@ fn switch(tournament: Rc<ApiTournament>) -> impl Fn(&Route) -> Html {
 
         html! {
             <>
-                <Link classes="link-inline link-back" to={"/tournaments"}>
+                <Link classes="link-inline link-back" to={"/"}>
                     <FaAngleLeft label="Back" />
                     { "Back to Tournaments" }
                 </Link>

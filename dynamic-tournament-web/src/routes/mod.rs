@@ -10,14 +10,14 @@ use crate::components::providers::ClientProvider;
 use crate::components::Navbar;
 use crate::utils::router::{self, PathBuf, Routable, Switch};
 
+use dynamic_tournament_api::v3::id::TournamentId;
 use yew::prelude::*;
 
 use login::Login;
 use logout::Logout;
 
+use self::tournaments::Tournament;
 use not_found::NotFound;
-
-use self::tournaments::Tournaments;
 
 pub struct App;
 
@@ -68,7 +68,7 @@ pub enum Route {
     Index,
     Login,
     Logout,
-    Tournaments,
+    Tournament { id: TournamentId },
     Systems,
     NotFound,
 }
@@ -79,9 +79,11 @@ impl Routable for Route {
             None => Some(Self::Index),
             Some("login") => Some(Self::Login),
             Some("logout") => Some(Self::Logout),
-            Some("tournaments") => Some(Self::Tournaments),
             Some("systems") => Some(Self::Systems),
-            Some(_) => None,
+            Some(s) => {
+                let id = s.parse().ok()?;
+                Some(Self::Tournament { id })
+            }
         }
     }
 
@@ -90,9 +92,9 @@ impl Routable for Route {
             Self::Index => String::from("/"),
             Self::Login => String::from("/login"),
             Self::Logout => String::from("/logout"),
-            Self::Tournaments => String::from("/tournaments"),
             Self::Systems => String::from("/systems"),
             Self::NotFound => String::from("/404"),
+            Self::Tournament { id } => format!("/{}", id),
         }
     }
 
@@ -103,11 +105,13 @@ impl Routable for Route {
 
 pub fn switch(route: &Route) -> Html {
     match route {
-        Route::Index => html! { "this is index" },
+        Route::Index => html! {
+            <tournamentlist::TournamentList />
+        },
         Route::Login => html! { <Login /> },
         Route::Logout => html! { <Logout /> },
-        Route::Tournaments => html! {
-            <Tournaments />
+        Route::Tournament { id } => html! {
+            <Tournament id={*id} />
         },
         Route::Systems => html! {
             <systems::Systems />
