@@ -17,6 +17,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
+use gloo_events::EventListener;
 use wasm_bindgen::JsValue;
 use web_sys::MouseEvent;
 use yew::html::Classes;
@@ -62,6 +63,9 @@ pub struct State {
     path: RefCell<PathBuf>,
     /// A list of active switches waiting for an url change.
     switches: RefCell<SwitchList>,
+    /// Listener for the popstate event. This event will be fired when the browser changes
+    /// the url path directly (e.g. using Forward/Back actions).
+    _listener: EventListener,
 }
 
 fn strip_root(path: &mut String) {
@@ -88,10 +92,21 @@ impl State {
         let mut path = super::document().location().unwrap().pathname().unwrap();
         strip_root(&mut path);
 
+        let listener = EventListener::new(&super::window(), "popstate", |_| {
+            let mut path = super::document().location().unwrap().pathname().unwrap();
+            strip_root(&mut path);
+
+            let state = state();
+            *state.path.borrow_mut() = PathBuf::from(path);
+
+            state.notify();
+        });
+
         Self {
             history: super::history(),
             path: RefCell::new(PathBuf::from(path)),
             switches: RefCell::new(SwitchList::new()),
+            _listener: listener,
         }
     }
 
@@ -115,7 +130,7 @@ impl State {
             .expect("Failed to push history state");
 
         // TODO: Don't wake when the url doesn't change.
-        state.switches.borrow().wake();
+        self.notify();
     }
 
     /// Update the current url, pushing a new one if it changes.
@@ -131,6 +146,12 @@ impl State {
         f(&mut path);
 
         self.push(path.to_string());
+    }
+
+    /// Notify all switches that the path changed.
+    pub fn notify(&self) {
+        let state = state();
+        state.switches.borrow().wake();
     }
 }
 
