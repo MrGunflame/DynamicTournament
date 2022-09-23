@@ -150,8 +150,7 @@ impl State {
 
     /// Notify all switches that the path changed.
     pub fn notify(&self) {
-        let state = state();
-        state.switches.borrow().wake();
+        SwitchList::wake();
     }
 }
 
@@ -562,10 +561,16 @@ impl SwitchList {
 
     /// Wakes all switches in the list, causing them to rerender. They will be woken in the order
     /// they were registered.
-    pub fn wake(&self) {
-        log::debug!("Waking {} waiting switches", self.list.len());
+    pub fn wake() {
+        // Clone all active callbacks into a separate collection. Doing this is necessary if the
+        // callback destroys a switch, causing `state.switches` to be borrowed mutably.
+        let switches = state().switches.borrow();
+        let list: Vec<_> = switches.list.iter().map(|(_, cb)| cb.clone()).collect();
+        drop(switches);
 
-        for cb in self.list.values() {
+        log::debug!("Waking {} waiting switches", list.len());
+
+        for cb in list {
             cb.emit(());
         }
     }
