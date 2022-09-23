@@ -16,12 +16,15 @@
 </head>
 
 <body>
+    <div class="main">
+    </div>
     <script type=" module">
     import init, { run } from './dynamic_tournament_web.js';
 
     const config = {
         api_base: "http://localhost:3030",
         root: "/",
+        mountpoint: "main",
     };
 
     async function start() {
