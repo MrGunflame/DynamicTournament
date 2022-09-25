@@ -52,7 +52,6 @@ impl Component for Navbar {
             <div class="navbar">
                 <ul>
                     <li><Link to={"/"}>{ "Home" }</Link></li>
-                    <li><Link to={"/tournaments"}>{ "Tournaments" }</Link></li>
                     <li><Link to={"/systems"}>{ "Systems" }</Link></li>
                     <li>{ login }</li>
                 </ul>

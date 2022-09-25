@@ -190,6 +190,21 @@ where
             Some((m, position))
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.end - self.start, Some(self.end - self.start))
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Round<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        self.end - self.start
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -210,6 +225,21 @@ where
         let index = self.iter.start;
 
         self.iter.next().map(|(m, pos)| (index, m, pos))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Indexed<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
     }
 }
 

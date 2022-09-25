@@ -98,3 +98,10 @@ pub fn path(input: TokenStream) -> TokenStream {
 pub fn load_asset(input: TokenStream) -> TokenStream {
     web::load_asset(input)
 }
+
+/// Includes an file from the `/assets` directory as a string.
+#[cfg(feature = "web")]
+#[proc_macro]
+pub fn include_asset_str(input: TokenStream) -> TokenStream {
+    web::include_asset(input)
+}

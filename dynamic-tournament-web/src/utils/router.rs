@@ -17,6 +17,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 
+use gloo_events::EventListener;
 use wasm_bindgen::JsValue;
 use web_sys::MouseEvent;
 use yew::html::Classes;
@@ -62,6 +63,9 @@ pub struct State {
     path: RefCell<PathBuf>,
     /// A list of active switches waiting for an url change.
     switches: RefCell<SwitchList>,
+    /// Listener for the popstate event. This event will be fired when the browser changes
+    /// the url path directly (e.g. using Forward/Back actions).
+    _listener: EventListener,
 }
 
 fn strip_root(path: &mut String) {
@@ -88,10 +92,21 @@ impl State {
         let mut path = super::document().location().unwrap().pathname().unwrap();
         strip_root(&mut path);
 
+        let listener = EventListener::new(&super::window(), "popstate", |_| {
+            let mut path = super::document().location().unwrap().pathname().unwrap();
+            strip_root(&mut path);
+
+            let state = state();
+            *state.path.borrow_mut() = PathBuf::from(path);
+
+            state.notify();
+        });
+
         Self {
             history: super::history(),
             path: RefCell::new(PathBuf::from(path)),
             switches: RefCell::new(SwitchList::new()),
+            _listener: listener,
         }
     }
 
@@ -115,7 +130,28 @@ impl State {
             .expect("Failed to push history state");
 
         // TODO: Don't wake when the url doesn't change.
-        state.switches.borrow().wake();
+        self.notify();
+    }
+
+    pub fn replace(&self, url: String) {
+        let state = state();
+
+        let path = PathBuf::from(url);
+        *state.path.borrow_mut() = path.clone();
+
+        let root = config().root();
+
+        let url = format!("{}/{}", root, path);
+        let path = PathBuf::from(url);
+
+        log::debug!("State::replace({:?})", path);
+
+        state
+            .history
+            .replace_state_with_url(&JsValue::NULL, "", Some(&path.to_string()))
+            .expect("Failed to replace history state");
+
+        self.notify();
     }
 
     /// Update the current url, pushing a new one if it changes.
@@ -131,6 +167,11 @@ impl State {
         f(&mut path);
 
         self.push(path.to_string());
+    }
+
+    /// Notify all switches that the path changed.
+    pub fn notify(&self) {
+        SwitchList::wake();
     }
 }
 
@@ -306,7 +347,7 @@ impl Component for Redirect {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        state().push(ctx.props().to.clone());
+        state().replace(ctx.props().to.clone());
 
         html! {}
     }
@@ -541,10 +582,16 @@ impl SwitchList {
 
     /// Wakes all switches in the list, causing them to rerender. They will be woken in the order
     /// they were registered.
-    pub fn wake(&self) {
-        log::debug!("Waking {} waiting switches", self.list.len());
+    pub fn wake() {
+        // Clone all active callbacks into a separate collection. Doing this is necessary if the
+        // callback destroys a switch, causing `state.switches` to be borrowed mutably.
+        let switches = state().switches.borrow();
+        let list: Vec<_> = switches.list.iter().map(|(_, cb)| cb.clone()).collect();
+        drop(switches);
 
-        for cb in self.list.values() {
+        log::debug!("Waking {} waiting switches", list.len());
+
+        for cb in list {
             cb.emit(());
         }
     }
