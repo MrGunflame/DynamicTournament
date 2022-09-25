@@ -59,3 +59,15 @@ prefix = ""
 # Default value: HS256
 alg = "HS256"
 
+[wordpress]
+# The upstream (host) of the wordpress backend. This should include scheme, address
+# and port, **but no path or query**. Also note that using the HTTPS scheme requires
+# a valid certificate with a trusted chain (.i.e self-signed certificates are invalid).
+# Possible values: <SCHEME>://<ADDR:[PORT]>
+# Default value: http://hs_gateway:8080
+upstream = "http://127.0.0.1:3030"
+# The value of the HTTP host header. This header is literally provided in any requests made
+# to the wordpress backend. The value may only contain visible ascii characters.
+# Possible values: <STRING>
+# Default value: beta.hardstuck.local
+host = "beta.hardstuck.local"

@@ -41,9 +41,9 @@ pub struct Config {
     pub log: Log,
     pub database: Database,
     pub bind: BindAddr,
-    pub wp_upstream: String,
 
     pub authorization: Authorization,
+    pub wordpress: Wordpress,
 }
 
 impl Config {
@@ -63,23 +63,21 @@ impl Config {
     pub fn from_environment() -> Result<Self, ConfigError> {
         let mut this = Self::default();
 
-        from_environment_error!(this, "DT_BIND", bind);
-        from_environment_error!(this, "DT_WP_UPSTREAM", wp_upstream);
-
         this.log = Log::from_environment()?;
         this.database = Database::from_environment()?;
         this.authorization = Authorization::from_environment()?;
+        this.wordpress = Wordpress::from_environment()?;
 
         Ok(this)
     }
 
     pub fn with_environment(mut self) -> Self {
         from_environment!(self, "DT_BIND", bind);
-        from_environment!(self, "DT_WP_UPSTREAM", wp_upstream);
 
         self.log = self.log.with_environment();
         self.database = self.database.with_environment();
         self.authorization = self.authorization.with_environment();
+        self.wordpress = self.wordpress.with_environment();
 
         self
     }
@@ -91,8 +89,8 @@ impl Default for Config {
             log: Log::default(),
             database: Database::default(),
             bind: BindAddr::Tcp(SocketAddr::new([0, 0, 0, 0].into(), 3000)),
-            wp_upstream: String::new(),
             authorization: Authorization::default(),
+            wordpress: Wordpress::default(),
         }
     }
 }
@@ -281,6 +279,46 @@ impl Authorization {
         from_environment!(self, "DT_AUTH_ALG", alg);
 
         self
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Wordpress {
+    pub upstream: String,
+    pub host: String,
+}
+
+impl Wordpress {
+    pub fn from_environment() -> Result<Self, ConfigError> {
+        let mut this = Self::default();
+
+        from_environment_error!(this, "DT_WP_UPSTREAM", upstream, "DT_WP_HOST", host);
+
+        this.validate();
+        Ok(this)
+    }
+
+    pub fn with_environment(mut self) -> Self {
+        from_environment!(self, "DT_WP_UPSTREAM", upstream, "DT_WP_HOST", host);
+
+        self.validate();
+        self
+    }
+
+    fn validate(&self) {
+        // TODO: validate self.upstream
+
+        if self.host.is_ascii() {
+            for c in self.host.chars() {
+                match c as u32 {
+                    32..=127 => (),
+                    _ => panic!(
+                        "wordpress::host value {:?} is an invalid ascii sequence",
+                        self.host
+                    ),
+                }
+            }
+        }
     }
 }
 
