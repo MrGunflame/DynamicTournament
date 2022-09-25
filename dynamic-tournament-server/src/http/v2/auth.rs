@@ -36,13 +36,23 @@ async fn refresh(mut ctx: Context) -> Result {
     }
 }
 
+/// We validate whether a request is as follows:
+/// 1. Get the authorization and cookie headers from the incoming request. If both are missing
+/// return 401.
+/// 2. Make a request to the wordpress backend with the authorization and cookie headers attached.
+/// 3. If the request fails for any reason we reject with 500.
+/// 4. If the returned status of the request to the wordpress API is 200 and only 200, we return
+/// accept the request. If the status code is not 200, it should be a 401 if correctly configured,
+/// we also return 401.
 async fn wp_validate(ctx: &Context) -> Result {
-    let uri = format!("{}/api/wp/v2/users", ctx.state.config.wp_upstream);
+    let uri = format!("{}/api/wp/v2/users", ctx.state.config.wordpress.upstream);
     log::debug!("Validating using upstream {}", uri);
 
     let mut req = reqwest::Request::new(reqwest::Method::GET, reqwest::Url::parse(&uri).unwrap());
-    req.headers_mut()
-        .append("Host", HeaderValue::from_static("beta.hardstuck.local"));
+    req.headers_mut().append(
+        "Host",
+        HeaderValue::from_str(&ctx.state.config.wordpress.host).unwrap(),
+    );
 
     if let Some(val) = ctx.req.headers().get(AUTHORIZATION) {
         req.headers_mut().append(AUTHORIZATION, val.clone());
