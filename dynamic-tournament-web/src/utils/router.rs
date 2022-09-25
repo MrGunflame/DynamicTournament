@@ -133,6 +133,27 @@ impl State {
         self.notify();
     }
 
+    pub fn replace(&self, url: String) {
+        let state = state();
+
+        let path = PathBuf::from(url);
+        *state.path.borrow_mut() = path.clone();
+
+        let root = config().root();
+
+        let url = format!("{}/{}", root, path);
+        let path = PathBuf::from(url);
+
+        log::debug!("State::replace({:?})", path);
+
+        state
+            .history
+            .replace_state_with_url(&JsValue::NULL, "", Some(&path.to_string()))
+            .expect("Failed to replace history state");
+
+        self.notify();
+    }
+
     /// Update the current url, pushing a new one if it changes.
     pub fn update<F>(&self, f: F)
     where
@@ -326,7 +347,7 @@ impl Component for Redirect {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        state().push(ctx.props().to.clone());
+        state().replace(ctx.props().to.clone());
 
         html! {}
     }
