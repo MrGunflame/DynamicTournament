@@ -63,6 +63,8 @@ impl Config {
     pub fn from_environment() -> Result<Self, ConfigError> {
         let mut this = Self::default();
 
+        from_environment_error!(this, "DT_BIND", bind);
+
         this.log = Log::from_environment()?;
         this.database = Database::from_environment()?;
         this.authorization = Authorization::from_environment()?;
