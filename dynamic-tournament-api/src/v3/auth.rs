@@ -15,19 +15,8 @@ impl<'a> AuthClient<'a> {
         Self { client }
     }
 
-    pub async fn login(&self, username: &str, password: &str) -> Result<()> {
-        let body = LoginData {
-            username: username.to_owned(),
-            password: password.to_owned(),
-        };
-
-        let req = self
-            .client
-            .request()
-            .post()
-            .uri("/v3/auth/login")
-            .body(&body)
-            .build();
+    pub async fn login(&self) -> Result<()> {
+        let req = self.client.request().post().uri("/v3/auth/login").build();
 
         let resp = self.client.send(req).await?;
 
