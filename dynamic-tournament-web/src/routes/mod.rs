@@ -1,5 +1,3 @@
-pub mod login;
-pub mod logout;
 pub mod not_found;
 pub mod systems;
 pub mod tournamentlist;
@@ -7,14 +5,10 @@ pub mod tournaments;
 
 use crate::components::errorlog::ErrorLog;
 use crate::components::providers::ClientProvider;
-use crate::components::Navbar;
 use crate::utils::router::{self, PathBuf, Routable, Switch};
 
 use dynamic_tournament_api::v3::id::TournamentId;
 use yew::prelude::*;
-
-use login::Login;
-use logout::Logout;
 
 use self::tournaments::Tournament;
 use not_found::NotFound;
@@ -42,20 +36,11 @@ impl Component for App {
             <ClientProvider>
                 <div class="main-wrapper">
                     <div>
-                        <Navbar />
                         <div class="main">
                             <Switch<Route> render={Switch::render(switch)} />
                         </div>
                         <div id="popup-host"></div>
                         <ErrorLog />
-                    </div>
-                    <div class="footer">
-                        <p>
-                            { "This viewer is still in an early stage, please report issues on " }
-                            <a href="https://github.com/MrGunflame/DynamicTournament/issues">{ "Github" }</a>
-                            { " or to MagiiTech#0534 on Discord." }
-                        </p>
-                        <a href="/privacy.html">{ "Privacy Policy" }</a>
                     </div>
                 </div>
             </ClientProvider>
@@ -66,8 +51,6 @@ impl Component for App {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
     Index,
-    Login,
-    Logout,
     Tournament { id: TournamentId },
     Systems,
     NotFound,
@@ -77,8 +60,6 @@ impl Routable for Route {
     fn from_path(path: &mut PathBuf) -> Option<Self> {
         match path.take().as_deref() {
             None => Some(Self::Index),
-            Some("login") => Some(Self::Login),
-            Some("logout") => Some(Self::Logout),
             Some("systems") => Some(Self::Systems),
             Some(s) => {
                 let id = s.parse().ok()?;
@@ -90,8 +71,6 @@ impl Routable for Route {
     fn to_path(&self) -> String {
         match self {
             Self::Index => String::from("/"),
-            Self::Login => String::from("/login"),
-            Self::Logout => String::from("/logout"),
             Self::Systems => String::from("/systems"),
             Self::NotFound => String::from("/404"),
             Self::Tournament { id } => format!("/{}", id),
@@ -108,8 +87,6 @@ pub fn switch(route: &Route) -> Html {
         Route::Index => html! {
             <tournamentlist::TournamentList />
         },
-        Route::Login => html! { <Login /> },
-        Route::Logout => html! { <Logout /> },
         Route::Tournament { id } => html! {
             <Tournament id={*id} />
         },

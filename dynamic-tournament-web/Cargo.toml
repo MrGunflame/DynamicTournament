@@ -12,7 +12,7 @@ publish = false
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api", features = ["local-storage"] }
+dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api", features = [] }
 dynamic-tournament-core = { version = "0.5.1", path = "../dynamic-tournament-core", features = ["serde"] }
 dynamic-tournament-macros = { version = "0.1.0", path = "../dynamic-tournament-macros", features = ["web"] }
 

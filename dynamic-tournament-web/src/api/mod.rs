@@ -37,18 +37,19 @@ impl Client {
             on_logout: Rc::new(Notify::new()),
         };
 
-        if let Some(token) = this.authorization().refresh_token() {
-            if token_lifetime(token) >= 30 {
-                this.spawn_refresh();
+        let client = this.clone();
+        spawn_local(async move {
+            if let Err(err) = client.login().await {
+                log::error!("Failed to login: {}", err);
             }
-        }
+        });
 
         this
     }
 
     /// Tries to log in using the provided `username` and `password`.
-    pub async fn login(&self, username: &str, password: &str) -> Result<()> {
-        self.inner.v3().auth().login(username, password).await?;
+    pub async fn login(&self) -> Result<()> {
+        self.inner.v3().auth().login().await?;
 
         self.on_login.notify_all();
         self.spawn_refresh();
