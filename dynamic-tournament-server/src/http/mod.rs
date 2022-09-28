@@ -99,10 +99,27 @@ async fn bind_unix<P>(path: P, state: State) -> std::result::Result<(), crate::E
 where
     P: AsRef<Path>,
 {
+    use std::io::ErrorKind;
+
     let mut shutdown = state.shutdown.listen();
     let path = path.as_ref();
 
-    let listener = UnixListener::bind(path)?;
+    // Bind to the socket. If the socket file already exists and bind() returns
+    // EADDRINUSE remove it and try to bind again.
+    let listener = match UnixListener::bind(path) {
+        Ok(socket) => socket,
+        Err(err) => {
+            if err.kind() == ErrorKind::AddrInUse {
+                log::warn!("The socket already exists, did the server crash?");
+                tokio::fs::remove_file(path).await?;
+
+                UnixListener::bind(path)?
+            } else {
+                return Err(err.into());
+            }
+        }
+    };
+
     log::debug!("Server running on {}", path.display());
     loop {
         tokio::select! {

@@ -195,14 +195,11 @@ where
                                     }
                                 };
 
-                                match self.handle_request(req) {
-                                    Some(resp) => {
-                                        let buf = resp.to_bytes();
+                                if let Some(resp) = self.handle_request(req) {
+                                    let buf = resp.to_bytes();
 
-                                        self.init_write(Message::Binary(buf));
-                                        return self.poll_write(cx);
-                                    }
-                                    None => (),
+                                    self.init_write(Message::Binary(buf));
+                                    return self.poll_write(cx);
                                 }
                             }
                             Ok(Message::Ping(buf)) => {
