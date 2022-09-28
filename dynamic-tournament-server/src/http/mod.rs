@@ -7,6 +7,7 @@ pub mod v3;
 mod metrics;
 
 use crate::config::BindAddr;
+use crate::limits::File;
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
@@ -49,8 +50,6 @@ pub async fn bind(addr: BindAddr, state: State) -> std::result::Result<(), crate
 }
 
 async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
-    let mut shutdown = state.shutdown.listen();
-
     let socket = TcpSocket::new_v4()?;
     if let Err(err) = socket.set_reuseaddr(true) {
         log::warn!("Failed to set SO_REUSEADDR flag: {}", err);
@@ -66,27 +65,10 @@ async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), cra
     let listener = socket.listen(1024)?;
     log::info!("Server running on {}", addr);
     loop {
-        tokio::select! {
-            res = listener.accept() => {
-                let (stream, addr) = match res {
-                    Ok((stream, addr)) => (stream, addr),
-                    Err(err) => {
-                        log::warn!("Failed to accept connection: {:?}", err);
-                        continue;
-                    }
-                };
-                log::info!("Accepting new connection from {:?}", addr);
+        let fut = listener.accept();
 
-                let state = state.clone();
-                tokio::task::spawn(async move {
-                    serve_connection(stream, state).await;
-                });
-            }
-            // Shut down the server.
-            _ = &mut shutdown => {
-                log::debug!("Shutting down http server");
-                return Ok(());
-            }
+        if accept_connection(fut, &state).await.is_err() {
+            return Ok(());
         }
     }
 }
@@ -101,7 +83,6 @@ where
 {
     use std::io::ErrorKind;
 
-    let mut shutdown = state.shutdown.listen();
     let path = path.as_ref();
 
     // Bind to the socket. If the socket file already exists and bind() returns
@@ -122,36 +103,59 @@ where
 
     log::debug!("Server running on {}", path.display());
     loop {
-        tokio::select! {
-            res = listener.accept() => {
-                let (stream, addr) = match res {
-                    Ok((stream, addr)) => (stream, addr),
-                    Err(err) => {
-                        log::warn!("Failed to accept connection: {:?}", err);
-                        continue;
-                    }
-                };
+        let fut = listener.accept();
 
-                log::info!("Accepting new connection from {:?}", addr);
-
-                let state = state.clone();
-                tokio::task::spawn(async move {
-                    serve_connection(stream, state).await;
-                });
-            }
-            _ = &mut shutdown => {
-                log::debug!("Shutting down http server");
-
-                // Remove the unix socket.
-                tokio::fs::remove_file(path).await?;
-
-                return Ok(());
-            }
+        if accept_connection(fut, &state).await.is_err() {
+            return Ok(());
         }
     }
 }
 
-async fn serve_connection<S>(stream: S, state: State)
+/// Accepts a new connection from `F`. This function returns `Ok(())` if operation should continue
+/// normally or `Err(())` if the server should abort.
+async fn accept_connection<F, S, A>(fut: F, state: &State) -> std::result::Result<(), ()>
+where
+    F: Future<Output = std::io::Result<(S, A)>>,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    A: std::fmt::Debug,
+{
+    let mut shutdown = state.shutdown.listen();
+
+    tokio::select! {
+        file = state.limits.acquire_file() => {
+            tokio::select! {
+                res = fut => {
+                    let (stream, addr) = match res {
+                        Ok(val) => val,
+                        Err(err) => {
+                            log::warn!("Failed to accept connection: {:?}", err);
+                            return Ok(());
+                        }
+                    };
+
+                    log::debug!("Accepting new connection from {:?}", addr);
+
+                    // SAFETY: State always outlives `accept_connection`.
+                    let file = unsafe { std::mem::transmute(file) };
+                    let state = state.clone();
+                    tokio::task::spawn(async move {
+                        serve_connection(stream, state, file).await;
+                    });
+                }
+                _ = &mut shutdown => {
+                    return Err(());
+                }
+            }
+        }
+        _ = &mut shutdown => {
+            return Err(());
+        }
+    }
+
+    Ok(())
+}
+
+async fn serve_connection<S>(stream: S, state: State, file: File<'static>)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -174,10 +178,18 @@ where
             Pin::new(&mut conn).graceful_shutdown();
 
             if let Err(err) = conn.await {
-                log::warn!("Error serving HTTP conn: {}", err);
+                if err.is_user() {
+                    log::warn!("Error serving HTTP conn: {}", err);
+                } else {
+                    log::debug!("Error serving HTTP conn: {}", err);
+                }
+
             }
         }
     }
+
+    // Release the file descriptor.
+    drop(file);
 }
 
 #[derive(Clone, Debug)]
