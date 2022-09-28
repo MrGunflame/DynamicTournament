@@ -10,6 +10,8 @@ mod websocket;
 #[cfg(feature = "metrics")]
 mod metrics;
 
+use std::time::Duration;
+
 use config::Config;
 
 use crate::{signal::ShutdownListener, state::State};
@@ -140,6 +142,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+
+            tokio::time::sleep(Duration::new(10, 0)).await;
         }
     });
 
