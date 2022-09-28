@@ -1,6 +1,17 @@
+//! The DynamicTournament server implementation
+//!
+//! # Features
+//!
+//! `metrics`: Enables the `/metrics` endpoint. This endpoint exposes some internal runtime
+//! statistics.
+//! `limits`: Enables checks to not exceed os resources, such as file descriptors. If this feature
+//! is not enabled an the server is under high load or has low resource limits you will see an
+//! increase in connection errors. If this feature is disabled all checks are disabled and special
+//! features to avoid hitting limits are removed.
 mod auth;
 mod config;
 mod http;
+mod limits;
 mod logger;
 mod signal;
 mod state;
