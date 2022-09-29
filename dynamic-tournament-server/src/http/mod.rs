@@ -1,3 +1,4 @@
+pub mod etag;
 pub mod path;
 mod v1;
 pub mod v2;
@@ -22,7 +23,7 @@ use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
     HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE,
+    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH,
 };
 use hyper::http::request::Parts;
 use hyper::server::conn::Http;
@@ -33,6 +34,8 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpSocket;
 use tokio::time::Instant;
+
+use self::etag::Etag;
 
 #[cfg(target_family = "unix")]
 use {std::path::Path, tokio::net::UnixListener};
@@ -365,6 +368,64 @@ impl Context {
     pub fn path(&mut self) -> &mut path::Path<'static> {
         &mut self.path
     }
+
+    pub fn compare_etag(&self, etag: Etag) -> Option<Result> {
+        // Comparing ETag and `If-Match`/`If-None-Match` headers can have two different
+        // meanings. If the request method is "safe" i.e. GET or HEAD we return 304 if the
+        // content DID NOT change. On all other methods we return 412 if the content DID
+        // change.
+
+        let if_match = self.req.if_match();
+        let if_none_match = self.req.if_none_match();
+
+        // We don't need to check anything if the client did not make any conditional
+        // requests.
+        if if_match.is_none() && if_none_match.is_none() {
+            return None;
+        }
+
+        match *self.req.method() {
+            // Safe methods
+            Method::GET | Method::HEAD => {
+                if let Some(val) = self.req.if_none_match() {
+                    // TODO: This should happen the other way around, i.e. try to convert
+                    // val into an Etag to avoid the allocation of `to_string`.
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Ok(Response::not_modified()));
+                    }
+                }
+
+                if let Some(val) = self.req.if_match() {
+                    if etag.to_string().as_bytes() != val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+            }
+            // Non-safe methods
+            _ => {
+                if let Some(val) = self.req.if_none_match() {
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+
+                if let Some(val) = self.req.if_match() {
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+impl AsRef<Request> for Context {
+    #[inline]
+    fn as_ref(&self) -> &Request {
+        &self.req
+    }
 }
 
 #[derive(Debug)]
@@ -488,6 +549,14 @@ impl Request {
             None => Err(StatusCodeError::unauthorized().into()),
         }
     }
+
+    pub fn if_match(&self) -> Option<&[u8]> {
+        self.headers().get(IF_MATCH).map(|val| val.as_bytes())
+    }
+
+    pub fn if_none_match(&self) -> Option<&[u8]> {
+        self.headers().get(IF_NONE_MATCH).map(|val| val.as_bytes())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -540,6 +609,15 @@ impl Response {
         }
     }
 
+    /// 304 Not Modified
+    pub fn not_modified() -> Self {
+        Self {
+            status: StatusCode::NOT_MODIFIED,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
     pub fn status(mut self, status: StatusCode) -> Self {
         self.status = status;
         self
@@ -569,10 +647,25 @@ impl Response {
         self
     }
 
+    pub fn etag(self, etag: Etag) -> Self {
+        self.header(ETAG, etag.into())
+    }
+
     fn build(self) -> hyper::Response<Body> {
         let mut resp = hyper::Response::new(self.body);
         *resp.status_mut() = self.status;
         *resp.headers_mut() = self.headers;
         resp
     }
+}
+
+/// Compares the etag requested in the `If-Match` and `If-None-Match` headers with the current
+/// etag and returns the response if the headers matched/didn't match the current etag.
+#[macro_export]
+macro_rules! compare_etag {
+    ($ctx:expr, $etag:expr) => {
+        if let Some(res) = $ctx.compare_etag($etag) {
+            return res;
+        }
+    };
 }

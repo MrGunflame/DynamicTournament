@@ -2,13 +2,17 @@ mod brackets;
 mod entrants;
 mod roles;
 
-use dynamic_tournament_api::v3::id::TournamentId;
+use std::hash::{Hash, Hasher};
+
 use dynamic_tournament_api::v3::tournaments::Tournament;
+use dynamic_tournament_api::v3::{id::TournamentId, tournaments::TournamentOverview};
 use dynamic_tournament_api::Payload;
 use dynamic_tournament_macros::{method, path};
 
+use crate::http::etag::HashEtag;
 use crate::{
-    http::{Context, Response, Result},
+    compare_etag,
+    http::{etag::Etag, Context, Response, Result},
     StatusCodeError,
 };
 
@@ -43,7 +47,10 @@ pub async fn route(mut ctx: Context) -> Result {
 async fn list(ctx: Context) -> Result {
     let tournaments = ctx.state.store.tournaments().list().await?;
 
-    Ok(Response::ok().json(&tournaments))
+    let etag = Etag::new(tournaments.as_slice());
+    compare_etag!(ctx, etag);
+
+    Ok(Response::ok().etag(etag).json(&tournaments))
 }
 
 async fn get(ctx: Context, id: TournamentId) -> Result {
@@ -51,7 +58,10 @@ async fn get(ctx: Context, id: TournamentId) -> Result {
 
     let tournament = tournament.ok_or_else(StatusCodeError::not_found)?;
 
-    Ok(Response::ok().json(&tournament))
+    let etag = Etag::new(&tournament);
+    compare_etag!(ctx, etag);
+
+    Ok(Response::ok().etag(etag).json(&tournament))
 }
 
 async fn create(mut ctx: Context) -> Result {
@@ -90,4 +100,30 @@ async fn delete(ctx: Context, id: TournamentId) -> Result {
     ctx.state.store.tournaments().delete(id).await?;
 
     Ok(Response::ok())
+}
+
+impl HashEtag for [TournamentOverview] {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        for elem in self {
+            elem.id.hash(state);
+            elem.name.hash(state);
+            elem.date.hash(state);
+            elem.kind.hash(state);
+        }
+    }
+}
+
+impl HashEtag for Tournament {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.name.hash(state);
+        self.description.hash(state);
+        self.date.hash(state);
+        self.kind.hash(state);
+    }
 }

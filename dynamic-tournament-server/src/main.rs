@@ -242,6 +242,11 @@ impl StatusCodeError {
         Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
     }
 
+    /// 412 Precondition Failed
+    pub fn precondition_failed() -> Self {
+        Self::new(StatusCode::PRECONDITION_FAILED, "Precondition Failed")
+    }
+
     /// 413 Payload Too Large
     pub fn payload_too_large() -> Self {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
