@@ -4,7 +4,7 @@ use crate::StatusCodeError;
 use dynamic_tournament_api::auth::Claims;
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_macros::{method, path};
-use hyper::header::{HeaderValue, AUTHORIZATION, COOKIE};
+use hyper::header::{AUTHORIZATION, COOKIE, HOST};
 
 pub async fn route(mut ctx: Context) -> Result {
     path!(ctx, {
@@ -49,10 +49,11 @@ async fn wp_validate(ctx: &Context) -> Result {
     log::debug!("Validating using upstream {}", uri);
 
     let mut req = reqwest::Request::new(reqwest::Method::GET, reqwest::Url::parse(&uri).unwrap());
-    req.headers_mut().append(
-        "Host",
-        HeaderValue::from_str(&ctx.state.config.wordpress.host).unwrap(),
-    );
+
+    // Append the host header as received.
+    if let Some(val) = ctx.req.headers().get(HOST) {
+        req.headers_mut().append(HOST, val.clone());
+    }
 
     if let Some(val) = ctx.req.headers().get(AUTHORIZATION) {
         req.headers_mut().append(AUTHORIZATION, val.clone());

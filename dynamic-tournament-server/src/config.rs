@@ -287,40 +287,21 @@ impl Authorization {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Wordpress {
     pub upstream: String,
-    pub host: String,
 }
 
 impl Wordpress {
     pub fn from_environment() -> Result<Self, ConfigError> {
         let mut this = Self::default();
 
-        from_environment_error!(this, "DT_WP_UPSTREAM", upstream, "DT_WP_HOST", host);
+        from_environment_error!(this, "DT_WP_UPSTREAM", upstream);
 
-        this.validate();
         Ok(this)
     }
 
     pub fn with_environment(mut self) -> Self {
-        from_environment!(self, "DT_WP_UPSTREAM", upstream, "DT_WP_HOST", host);
+        from_environment!(self, "DT_WP_UPSTREAM", upstream);
 
-        self.validate();
         self
-    }
-
-    fn validate(&self) {
-        // TODO: validate self.upstream
-
-        if self.host.is_ascii() {
-            for c in self.host.chars() {
-                match c as u32 {
-                    32..=127 => (),
-                    _ => panic!(
-                        "wordpress::host value {:?} is an invalid ascii sequence",
-                        self.host
-                    ),
-                }
-            }
-        }
     }
 }
 

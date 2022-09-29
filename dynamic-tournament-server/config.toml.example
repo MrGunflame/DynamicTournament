@@ -66,8 +66,3 @@ alg = "HS256"
 # Possible values: <SCHEME>://<ADDR:[PORT]>
 # Default value: http://hs_gateway:8080
 upstream = "http://127.0.0.1:3030"
-# The value of the HTTP host header. This header is literally provided in any requests made
-# to the wordpress backend. The value may only contain visible ascii characters.
-# Possible values: <STRING>
-# Default value: beta.hardstuck.local
-host = "beta.hardstuck.local"
