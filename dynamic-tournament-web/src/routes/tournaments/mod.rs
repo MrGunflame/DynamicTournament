@@ -37,7 +37,7 @@ impl Component for Tournaments {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Props {
     pub id: TournamentId,
 }
