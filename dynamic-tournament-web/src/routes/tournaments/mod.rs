@@ -3,7 +3,6 @@ mod brackets;
 mod entrants;
 mod navbar;
 mod overview;
-mod teamdetails;
 mod tournament;
 
 use entrants::Entrants;
