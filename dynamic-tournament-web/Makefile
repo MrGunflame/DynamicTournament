@@ -48,7 +48,7 @@ assets:
 		rm $$file; \
 	done
 
-	mv $(PATH_DIST)/_make_css.out $(PATH_DIST)/index.css;
+	mv $(PATH_DIST)/_make_css.out $(PATH_DIST)/dynamic_tournament.css;
 
 prepare-hash:
 	@for path in find sed awk; \
