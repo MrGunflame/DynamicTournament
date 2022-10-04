@@ -113,7 +113,7 @@ fn switch(tournament: Rc<ApiTournament>) -> impl Fn(&Route) -> Html {
                     { "Back to Tournaments" }
                 </Link>
 
-                <h2 class="tournament-name">{ tournament.name.clone() }</h2>
+                <h2>{ tournament.name.clone() }</h2>
                 <Navbar tournament_id={tournament.id} route={*route} />
                 { content }
             </>

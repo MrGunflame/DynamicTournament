@@ -250,45 +250,45 @@ impl Component for MovableBoxed {
 
         let lock_button = if self.is_locked.get() {
             html! {
-                <button class="button" onclick={on_lock} title="Unlock">
+                <Button onclick={on_lock} title="Unlock">
                     <FaLockOpen label="Unlock" />
-                </button>
+                </Button>
             }
         } else {
             html! {
-                <button class="button" onclick={on_lock} title="Lock">
+                <Button onclick={on_lock} title="Lock">
                     <FaLock label="Lock" />
-                </button>
+                </Button>
             }
         };
 
         let classes = match ctx.props().classes {
-            Some(classes) => format!("movable-boxed {}", classes),
-            None => "movable-boxed".to_owned(),
+            Some(classes) => format!("dt-bracket-frame {}", classes),
+            None => "dt-bracket-frame".to_owned(),
         };
 
         let header = ctx.props().header.clone();
 
         html! {
             <div ref={self.element.clone()} class={classes} style={cursor}>
-                <div class="movable-boxed-header">
-                    <div class="movable-boxed-buttons">
+                <div class="dt-bracket-frame-header">
+                    <div class="dt-bracket-frame-actions">
                         <Button onclick={on_reposition} title="Reposition">
                             <FaCompress label="Reposition" />
                         </Button>
-                        <button class="button" onclick={on_zoom_in} title="Zoom In">
+                        <Button onclick={on_zoom_in} title="Zoom In">
                             <FaPlus label="Zoom In" />
-                        </button>
-                        <button class="button" onclick={on_zoom_out} title="Zoom Out">
+                        </Button>
+                        <Button onclick={on_zoom_out} title="Zoom Out">
                             <FaMinus label="Zoom Out" />
-                        </button>
+                        </Button>
                         {lock_button}
                     </div>
                     <div>
                         { header }
                     </div>
                 </div>
-                <div class="movable-boxed-content" style={style}>
+                <div class="dt-bracket-frame-content" style={style}>
                     { for ctx.props().children.iter() }
                 </div>
             </div>

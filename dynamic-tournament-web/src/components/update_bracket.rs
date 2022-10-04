@@ -65,7 +65,7 @@ impl Component for BracketUpdate {
             };
 
             *entrant = html! {
-                <tr class="popup-team">
+                <tr class="dt-popup-team">
                     <td>{ team.clone() }</td>
                     <td><ParseInput<u64> classes="input-u64" kind="number" value={score} {onchange} /></td>
                 </tr>
@@ -88,7 +88,7 @@ impl Component for BracketUpdate {
 
         html! {
             <div class="flex-col2">
-                <table class="table-striped">
+                <table class="dt-table-striped">
                     <tr>
                         <th>{ "Team" }</th>
                         <th>{ "Score" }</th>

@@ -19,7 +19,7 @@ impl Component for Popup {
     fn create(_ctx: &Context<Self>) -> Self {
         let document = web_sys::window().unwrap().document().unwrap();
 
-        let host = document.get_element_by_id("popup-host").unwrap();
+        let host = document.get_element_by_id("dt-popup-host").unwrap();
 
         Self {
             host,
@@ -60,14 +60,14 @@ impl Component for Popup {
 
         create_portal(
             html! {
-                <div tabindex="-1" class="popup-wrapper">
-                    <div class="popup">
-                        <div class="popup-close-wrapper">
-                            <button class="popup-close" onclick={on_close} title="Close" disabled=false>
+                <div tabindex="-1" class="dt-popup-wrapper">
+                    <div class="dt-popup">
+                        <div class="dt-popup-close-wrapper">
+                            <button class="dt-popup-close" onclick={on_close} title="Close" disabled=false>
                                 <FaXmark label="Close" size={FaSize::ExtraLarge2} />
                             </button>
                         </div>
-                        <div class="popup-content">
+                        <div class="dt-popup-content">
                             { for ctx.props().children.iter() }
                         </div>
                     </div>

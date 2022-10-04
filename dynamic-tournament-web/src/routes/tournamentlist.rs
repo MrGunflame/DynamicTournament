@@ -71,7 +71,7 @@ impl Component for TournamentList {
                         .callback(move |_| Message::ClickTournament { id });
 
                     html! {
-                        <tr class="tr-link" onclick={on_click}>
+                        <tr class="dt-link" onclick={on_click}>
                             <td>{ name }</td>
                             <td>{ bracket_type }</td>
                             <td>{ date }</td>
@@ -83,8 +83,8 @@ impl Component for TournamentList {
             html! {
                 <div>
                     <h1>{ "Tournaments" }</h1>
-                    <table class="tr-link-table tr-table">
-                        <tr class="table-head">
+                    <table class="dt-table dt-table-center">
+                        <tr>
                             <th>{ "Name" }</th>
                             <th>{ "Type" }</th>
                             <th>{ "Date" }</th>

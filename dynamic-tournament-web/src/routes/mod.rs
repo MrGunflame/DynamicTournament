@@ -43,10 +43,10 @@ impl Component for App {
                 <div class="main-wrapper">
                     <div>
                         <Navbar />
-                        <div class="main">
+                        <div class="dt-main">
                             <Switch<Route> render={Switch::render(switch)} />
                         </div>
-                        <div id="popup-host"></div>
+                        <div id="dt-popup-host"></div>
                         <ErrorLog />
                     </div>
                     <div class="footer">

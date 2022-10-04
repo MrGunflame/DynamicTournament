@@ -60,7 +60,7 @@ impl Component for Navbar {
             .into_iter()
             .map(|(route, name)| {
                 let classes = if route == ctx.props().route {
-                    "active"
+                    "dt-active"
                 } else {
                     ""
                 };
@@ -75,7 +75,7 @@ impl Component for Navbar {
 
         html! {
             <>
-                <div class="navbar">
+                <div class="dt-navbar">
                     <ul>
                         { links }
                     </ul>

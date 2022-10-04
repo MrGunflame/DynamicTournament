@@ -64,13 +64,13 @@ impl Component for Entrants {
 
                     match &entrant.inner {
                         EntrantVariant::Player(player) => html! {
-                            <tr {onclick} class="tr-link">
+                            <tr {onclick} class="dt-link">
                                 <td>{player.name.clone()}</td>
                                 <td>{1}</td>
                             </tr>
                         },
                         EntrantVariant::Team(team) => html! {
-                            <tr {onclick} class="tr-link">
+                            <tr {onclick} class="dt-link">
                                 <td>{ team.name.clone() }</td>
                                 <td>{ team.players.len() }</td>
                             </tr>
@@ -80,7 +80,7 @@ impl Component for Entrants {
                 .collect();
 
             html! {
-                <table class="table-center">
+                <table class="dt-table dt-table-center">
                     <thead>
                         <tr>
                             <th>{ "Name" }</th>
