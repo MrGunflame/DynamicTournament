@@ -1,88 +1,207 @@
-use super::{Token, Tokens};
+use super::lexer::tokenize;
+use super::{Error, Result, Span, Token, TokensRef};
 
-pub trait Parse {
-    fn parse();
+pub fn parse(input: &str) -> Result<DocumentRoot> {
+    let tokens = tokenize(input)?;
+    DocumentRoot::parse(tokens.as_ref())
 }
 
-pub struct Cursor {}
+#[derive(Clone, Debug)]
+pub struct DocumentRoot(pub Vec<Block>);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Error {
-    InvalidToken { token: char, position: usize },
-    InvalidTag { tag: String, position: usize },
+impl DocumentRoot {
+    pub fn parse(tokens: TokensRef<'_>) -> Result<Self> {
+        let mut blocks = Vec::new();
+
+        for span in tokens.spans() {
+            blocks.push(Block::parse(span)?);
+        }
+
+        Ok(Self(blocks))
+    }
 }
 
-pub fn tokenize(input: &str) -> Result<Tokens, Error> {
-    let mut tokens = Tokens::new();
+#[derive(Clone, Debug)]
+pub enum Block {
+    H1(Inline),
+    H2(Inline),
+    H3(Inline),
+    H4(Inline),
+    H5(Inline),
+    H6(Inline),
+    P(Inline),
+    Inline(Inline),
+    Text(String),
+}
 
-    let mut token = Token::Text(String::new());
-    for (index, c) in input.chars().enumerate() {
-        match c {
-            // Start of open token.
-            '<' => {
-                tokens.push(token);
-                token = Token::new_open_token();
-            }
-            '/' => match &mut token {
-                // '/' followed immediately after opening '<' tag. This means this token
-                // is actually a closing token.
-                Token::OpenToken(string) => {
-                    if string.is_empty() {
-                        token = Token::new_close_token();
-                    } else {
-                        return Err(Error::InvalidToken {
-                            token: c,
-                            position: index,
-                        });
-                    }
+impl Block {
+    pub fn parse(span: Span<'_>) -> Result<Self> {
+        match span.head() {
+            Token::OpenToken(tag) => match tag.as_str() {
+                "h1" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H1(inline))
                 }
-                Token::CloseToken(string) => {
-                    return Err(Error::InvalidToken {
-                        token: c,
-                        position: index,
-                    });
+                "h2" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H2(inline))
                 }
-                Token::Text(string) => string.push(c),
+                "h3" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H3(inline))
+                }
+                "h4" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H4(inline))
+                }
+                "h5" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H5(inline))
+                }
+                "h6" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::H6(inline))
+                }
+                "p" => {
+                    let inline = Inline::parse(span.inner())?;
+                    Ok(Self::P(inline))
+                }
+                // Give this tag to inline for parsing.
+                _ => Ok(Self::Inline(Inline::parse(span.as_tokens_ref())?)),
             },
-            '>' => {
-                tokens.push(token);
-                token = Token::new_text();
-            }
-
-            _ => match &mut token {
-                Token::Text(string) => string.push(c),
-                Token::OpenToken(string) => string.push(c),
-                Token::CloseToken(string) => string.push(c),
-            },
+            Token::CloseToken(_) => unreachable!(),
+            Token::Text(text) => Ok(Self::Text(text.to_owned())),
         }
     }
-
-    // Push trailing token.
-    tokens.push(token);
-
-    Ok(tokens)
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Inline(pub Vec<InlineBlock>);
+
+impl Inline {
+    pub fn parse(tokens: TokensRef<'_>) -> Result<Self> {
+        let mut elements = Vec::new();
+
+        for span in tokens.spans() {
+            elements.push(InlineBlock::parse(span)?);
+        }
+
+        Ok(Self(elements))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InlineBlock {
+    Strong(Inline),
+    Emphasis(Inline),
+    Text(String),
+}
+
+impl InlineBlock {
+    pub fn parse(span: Span<'_>) -> Result<Self> {
+        match span.head() {
+            Token::OpenToken(tag) => match tag.as_str() {
+                "strong" => {
+                    let inline = Inline::parse(span.inner())?;
+
+                    Ok(Self::Strong(inline))
+                }
+                "em" => {
+                    let inline = Inline::parse(span.inner())?;
+
+                    Ok(Self::Emphasis(inline))
+                }
+                tag => Err(Error::InvalidTag {
+                    tag: tag.to_string(),
+                    position: 0,
+                }),
+            },
+            Token::CloseToken(_) => unreachable!(),
+            Token::Text(text) => Ok(Self::Text(text.to_owned())),
+        }
+    }
+}
+
+impl Inline {}
 
 #[cfg(test)]
 mod tests {
-    use crate::html::Token;
-
-    use super::{tokenize, Error};
+    use super::{Inline, InlineBlock, Token};
+    use crate::html::Tokens;
 
     #[test]
-    fn test_tokenize() {
-        let input = "<h1></h1>";
+    fn test_spans() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::Text(String::from("Hello World")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(*span.head(), Token::OpenToken(String::from("h1")));
         assert_eq!(
-            tokenize(input).unwrap(),
+            span.inner().as_ref(),
+            [Token::Text(String::from("Hello World"))]
+        );
+
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Strong text")));
+        tokens.push(Token::CloseToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Normal text")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
+        assert_eq!(*span.head(), Token::OpenToken(String::from("h1")));
+        assert_eq!(
+            span.inner().as_ref(),
             [
-                Token::OpenToken(String::from("h1")),
-                Token::CloseToken(String::from("h1")),
+                Token::OpenToken(String::from("strong")),
+                Token::Text(String::from("Strong text")),
+                Token::CloseToken(String::from("strong")),
+                Token::Text(String::from("Normal text")),
             ]
         );
 
-        let input = "<h1>Hello World</h1>";
+        {
+            let mut spans = span.spans();
+
+            let span = spans.next().unwrap();
+            assert_eq!(*span.head(), Token::OpenToken(String::from("strong")));
+            assert_eq!(
+                span.inner().as_ref(),
+                [Token::Text(String::from("Strong text"))]
+            );
+
+            let span = spans.next().unwrap();
+            assert_eq!(*span.head(), Token::Text(String::from("Normal text")));
+            assert_eq!(
+                span.inner().as_ref(),
+                [Token::Text(String::from("Normal text"))]
+            );
+
+            assert!(spans.next().is_none());
+        }
+
+        assert!(spans.next().is_none());
+    }
+
+    #[test]
+    fn test_spans_iter() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::Text(String::from("Hello World")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
         assert_eq!(
-            tokenize(input).unwrap(),
+            span.as_ref(),
             [
                 Token::OpenToken(String::from("h1")),
                 Token::Text(String::from("Hello World")),
@@ -90,57 +209,66 @@ mod tests {
             ]
         );
 
-        let input = "<h1><strong>test</strong></h1>";
+        assert!(spans.next().is_none());
+
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("h1")));
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Strong text")));
+        tokens.push(Token::CloseToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("Normal text")));
+        tokens.push(Token::CloseToken(String::from("h1")));
+
+        let mut spans = tokens.spans();
+
+        let span = spans.next().unwrap();
         assert_eq!(
-            tokenize(input).unwrap(),
+            span.as_ref(),
             [
                 Token::OpenToken(String::from("h1")),
                 Token::OpenToken(String::from("strong")),
-                Token::Text(String::from("test")),
+                Token::Text(String::from("Strong text")),
                 Token::CloseToken(String::from("strong")),
+                Token::Text(String::from("Normal text")),
                 Token::CloseToken(String::from("h1")),
             ]
         );
 
-        let input = "<strong>123<em>456</strong>789</em>";
-        assert_eq!(
-            tokenize(input).unwrap(),
-            [
-                Token::OpenToken(String::from("strong")),
-                Token::Text(String::from("123")),
-                Token::OpenToken(String::from("em")),
-                Token::Text(String::from("456")),
-                Token::CloseToken(String::from("strong")),
-                Token::Text(String::from("789")),
-                Token::CloseToken(String::from("em")),
-            ]
-        );
+        {
+            let mut spans = span.spans();
 
-        let input = "just text";
-        assert_eq!(
-            tokenize(input).unwrap(),
-            [Token::Text(String::from("just text")),]
-        );
+            let span = spans.next().unwrap();
+            assert_eq!(
+                span.as_ref(),
+                [
+                    Token::OpenToken(String::from("strong")),
+                    Token::Text(String::from("Strong text")),
+                    Token::CloseToken(String::from("strong")),
+                ]
+            );
+
+            let span = spans.next().unwrap();
+            assert_eq!(span.as_ref(), [Token::Text(String::from("Normal text"))]);
+
+            assert!(spans.next().is_none());
+        }
+
+        assert!(spans.next().is_none());
     }
 
     #[test]
-    fn test_tokenize_error() {
-        let input = "<h1><//h1>";
-        assert_eq!(
-            tokenize(input).unwrap_err(),
-            Error::InvalidToken {
-                token: '/',
-                position: 6,
-            },
-        );
+    fn test_inline_parse() {
+        let mut tokens = Tokens::new();
+        tokens.push(Token::OpenToken(String::from("strong")));
+        tokens.push(Token::Text(String::from("a")));
+        tokens.push(Token::CloseToken(String::from("strong")));
 
-        let input = "<h1/>";
+        let inline = Inline::parse(tokens.as_ref()).unwrap();
         assert_eq!(
-            tokenize(input).unwrap_err(),
-            Error::InvalidToken {
-                token: '/',
-                position: 3,
-            },
+            inline.0,
+            [InlineBlock::Strong(Inline(vec![InlineBlock::Text(
+                String::from("a")
+            )]))]
         );
     }
 }
