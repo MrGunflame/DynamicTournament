@@ -49,9 +49,9 @@ impl Component for BracketList {
                 let onclick = ctx.link().callback(move |_| (index, id));
 
                 let classes = if self.active == index {
-                    "dt-r-bracket active"
+                    "dt-brlist-bracket dt-active"
                 } else {
-                    "dt-r-bracket"
+                    "dt-brlist-bracket"
                 };
 
                 html! {

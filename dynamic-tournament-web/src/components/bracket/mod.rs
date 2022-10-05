@@ -54,12 +54,9 @@ impl Component for Bracket {
         }
     }
 
-    // When the properties change we should close the existing socket and forget the existing
-    // state and create a new one using the new properties.
-    fn changed(&mut self, ctx: &Context<Self>) -> bool {
-        //self.state = None;
-
-        self._producer = EventBus::bridge(ctx.link().callback(Message::HandleResponse));
+    // Drop the existing state when changing to a new bracket.
+    fn changed(&mut self, _ctx: &Context<Self>) -> bool {
+        self.state = None;
 
         true
     }

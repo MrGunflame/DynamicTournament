@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::cell::Cell;
 
 use gloo_events::{EventListener, EventListenerOptions};
 use wasm_bindgen::JsCast;
@@ -22,14 +22,15 @@ pub struct MovableBoxed {
 
     mouse_listeners: Option<[EventListener; 3]>,
     touch_listeners: Option<[EventListener; 3]>,
+    wheel_listener: Option<EventListener>,
 
     translate: Coordinates,
     last_move: Coordinates,
     scale: u32,
 
     /// Whether the box is currently allowed to be moved.
-    is_moving: Rc<UnsafeCell<bool>>,
-    is_locked: Rc<UnsafeCell<bool>>,
+    is_moving: Rc<Cell<bool>>,
+    is_locked: Rc<Cell<bool>>,
 }
 
 impl Component for MovableBoxed {
@@ -43,13 +44,14 @@ impl Component for MovableBoxed {
 
             mouse_listeners: None,
             touch_listeners: None,
+            wheel_listener: None,
 
             translate: Coordinates::default(),
             last_move: Coordinates::default(),
             scale: 100,
 
-            is_moving: Rc::new(UnsafeCell::new(false)),
-            is_locked: Rc::new(UnsafeCell::new(false)),
+            is_moving: Rc::new(Cell::new(false)),
+            is_locked: Rc::new(Cell::new(false)),
         }
     }
 
@@ -76,27 +78,12 @@ impl Component for MovableBoxed {
             Message::MouseDown(coords) => {
                 self.last_move = coords;
 
-                // SAFETY: Since events are executed synchronously on the main thread
-                // no other references exist.
-                unsafe {
-                    let is_moving = &mut *self.is_moving.get();
-                    *is_moving = true;
-                }
+                self.is_moving.set(true);
             }
-            Message::MouseUp => {
-                // SAFETY: Since events are executed synchronously on the main thread
-                // no other references exist.
-                unsafe {
-                    let is_moving = &mut *self.is_moving.get();
-                    *is_moving = false;
-                }
-            }
+            Message::MouseUp => self.is_moving.set(false),
             Message::ZoomIn(amount) => self.scale = self.scale.saturating_add(amount),
             Message::ZoomOut(amount) => self.scale = self.scale.saturating_sub(amount),
-            Message::ToggleLock => unsafe {
-                let is_locked = &mut *self.is_locked.get();
-                *is_locked = !*is_locked;
-            },
+            Message::ToggleLock => self.is_locked.set(!self.is_locked.get()),
         }
 
         true
@@ -113,7 +100,7 @@ impl Component for MovableBoxed {
         let is_locked = self.is_locked.clone();
 
         let onmousedown = ctx.link().batch_callback(move |event: MouseEvent| {
-            if unsafe { *is_locked.get() } {
+            if is_locked.get() {
                 return None;
             }
 
@@ -126,7 +113,7 @@ impl Component for MovableBoxed {
         });
 
         let onmousemove = ctx.link().batch_callback(move |event: MouseEvent| {
-            let is_moving = unsafe { *is_moving.get() };
+            let is_moving = is_moving.get();
 
             if is_moving {
                 event.prevent_default();
@@ -162,7 +149,7 @@ impl Component for MovableBoxed {
         if let Some(element) = self.element.cast::<HtmlElement>() {
             let is_locked = self.is_locked.clone();
             let ontouchstart = ctx.link().batch_callback(move |event: TouchEvent| {
-                if unsafe { *is_locked.get() } {
+                if is_locked.get() {
                     return None;
                 }
 
@@ -176,7 +163,7 @@ impl Component for MovableBoxed {
 
             let is_locked = self.is_locked.clone();
             let ontouchmove = ctx.link().batch_callback(move |event: TouchEvent| {
-                if unsafe { *is_locked.get() } {
+                if is_locked.get() {
                     return None;
                 }
 
@@ -208,6 +195,30 @@ impl Component for MovableBoxed {
 
             self.touch_listeners = Some([touchstart, touchmove, touchend]);
         }
+
+        let is_locked = self.is_locked.clone();
+        let onwheel = ctx.link().batch_callback(move |event: WheelEvent| {
+            if is_locked.get() {
+                return None;
+            }
+
+            event.prevent_default();
+            if event.delta_y().is_sign_positive() {
+                Some(Message::ZoomOut(
+                    (event.delta_y() as f32 * ZOOM_FACTOR) as u32,
+                ))
+            } else {
+                Some(Message::ZoomIn(
+                    (-event.delta_y() as f32 * ZOOM_FACTOR) as u32,
+                ))
+            }
+        });
+
+        let wheel = EventListener::new_with_options(&element, "wheel", options, move |event| {
+            onwheel.emit(event.dyn_ref::<WheelEvent>().unwrap().clone());
+        });
+
+        self.wheel_listener = Some(wheel);
     }
 
     // Reposition when props change.
@@ -216,21 +227,6 @@ impl Component for MovableBoxed {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let is_locked = self.is_locked.clone();
-
-        let on_wheel = ctx.link().batch_callback(move |e: WheelEvent| {
-            if unsafe { *is_locked.get() } {
-                return None;
-            }
-
-            e.prevent_default();
-            if e.delta_y().is_sign_positive() {
-                Some(Message::ZoomOut((e.delta_y() as f32 * ZOOM_FACTOR) as u32))
-            } else {
-                Some(Message::ZoomIn((-e.delta_y() as f32 * ZOOM_FACTOR) as u32))
-            }
-        });
-
         let on_reposition = ctx.link().callback(|_| Message::Reposition);
 
         let on_zoom_in = ctx.link().callback(|_| Message::ZoomIn(5));
@@ -239,9 +235,9 @@ impl Component for MovableBoxed {
 
         let on_lock = ctx.link().callback(|_| Message::ToggleLock);
 
-        let cursor = if unsafe { *self.is_locked.get() } {
+        let cursor = if self.is_locked.get() {
             "cursor: unset;"
-        } else if unsafe { *self.is_moving.get() } {
+        } else if self.is_moving.get() {
             "cursor: grabbing;"
         } else {
             "cursor: grab;"
@@ -252,47 +248,47 @@ impl Component for MovableBoxed {
             self.translate.x, self.translate.y, self.scale
         );
 
-        let lock_button = if unsafe { *self.is_locked.get() } {
+        let lock_button = if self.is_locked.get() {
             html! {
-                <button class="button" onclick={on_lock} title="Unlock">
+                <Button onclick={on_lock} title="Unlock">
                     <FaLockOpen label="Unlock" />
-                </button>
+                </Button>
             }
         } else {
             html! {
-                <button class="button" onclick={on_lock} title="Lock">
+                <Button onclick={on_lock} title="Lock">
                     <FaLock label="Lock" />
-                </button>
+                </Button>
             }
         };
 
         let classes = match ctx.props().classes {
-            Some(classes) => format!("movable-boxed {}", classes),
-            None => "movable-boxed".to_owned(),
+            Some(classes) => format!("dt-bracket-frame {}", classes),
+            None => "dt-bracket-frame".to_owned(),
         };
 
         let header = ctx.props().header.clone();
 
         html! {
-            <div ref={self.element.clone()} class={classes} onwheel={on_wheel} style={cursor}>
-                <div class="movable-boxed-header">
-                    <div class="movable-boxed-buttons">
+            <div ref={self.element.clone()} class={classes} style={cursor}>
+                <div class="dt-bracket-frame-header">
+                    <div class="dt-bracket-frame-actions">
                         <Button onclick={on_reposition} title="Reposition">
                             <FaCompress label="Reposition" />
                         </Button>
-                        <button class="button" onclick={on_zoom_in} title="Zoom In">
+                        <Button onclick={on_zoom_in} title="Zoom In">
                             <FaPlus label="Zoom In" />
-                        </button>
-                        <button class="button" onclick={on_zoom_out} title="Zoom Out">
+                        </Button>
+                        <Button onclick={on_zoom_out} title="Zoom Out">
                             <FaMinus label="Zoom Out" />
-                        </button>
+                        </Button>
                         {lock_button}
                     </div>
                     <div>
                         { header }
                     </div>
                 </div>
-                <div class="movable-boxed-content" style={style}>
+                <div class="dt-bracket-frame-content" style={style}>
                     { for ctx.props().children.iter() }
                 </div>
             </div>

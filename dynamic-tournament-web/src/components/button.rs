@@ -57,6 +57,6 @@ pub struct Properties {
     #[prop_or_default]
     pub disabled: bool,
     pub title: &'static str,
-    #[prop_or("button")]
+    #[prop_or("dt-button")]
     pub classes: &'static str,
 }

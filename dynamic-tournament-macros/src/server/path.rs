@@ -10,7 +10,7 @@ pub fn path(input: TokenStream) -> TokenStream {
 }
 
 struct PathInput {
-    uri: Expr,
+    ctx: Expr,
     branches: Vec<(Path, Expr)>,
 }
 
@@ -109,11 +109,11 @@ impl PathInput {
             })
             .collect();
 
-        let uri = self.uri;
+        let ctx = self.ctx;
 
         quote! {
             {
-                let path = #uri.take_str();
+                let path = #ctx.path().take();
                 let mut ret;
 
                 // Use an always-false if statement, so we don't need special treatment for the
@@ -134,7 +134,7 @@ impl PathInput {
 
 impl Parse for PathInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let uri = input.parse()?;
+        let ctx = input.parse()?;
         input.parse::<Token![,]>()?;
 
         let content;
@@ -153,7 +153,7 @@ impl Parse for PathInput {
             }
         }
 
-        Ok(Self { uri, branches })
+        Ok(Self { ctx, branches })
     }
 }
 

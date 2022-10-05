@@ -3,29 +3,29 @@ use dynamic_tournament_macros::{method, path};
 use snowflaked::sync::Generator;
 
 use crate::auth::password_hash;
-use crate::http::{Request, RequestUri, Response, Result};
+use crate::http::{Context, Response, Result};
 
 pub static USER_ID_GENERATOR: Generator = Generator::new_unchecked(0);
 
-pub async fn route(req: Request, mut uri: RequestUri<'_>) -> Result {
-    path!(uri, {
+pub async fn route(mut ctx: Context) -> Result {
+    path!(ctx, {
         @ => {
-            method!(req, {
-                POST => create(req).await,
+            method!(ctx, {
+                POST => create(ctx).await,
             })
         }
     })
 }
 
-async fn create(mut req: Request) -> Result {
-    req.require_authentication()?;
+async fn create(mut ctx: Context) -> Result {
+    ctx.require_authentication()?;
 
-    let mut user: User = req.json().await?;
+    let mut user: User = ctx.req.json().await?;
 
     user.id.0 = USER_ID_GENERATOR.generate();
     apply_hash(&mut user);
 
-    req.state().store.users().insert(&user).await?;
+    ctx.state.store.users().insert(&user).await?;
 
     Ok(Response::ok())
 }

@@ -1,6 +1,17 @@
+//! The DynamicTournament server implementation
+//!
+//! # Features
+//!
+//! `metrics`: Enables the `/metrics` endpoint. This endpoint exposes some internal runtime
+//! statistics.
+//! `limits`: Enables checks to not exceed os resources, such as file descriptors. If this feature
+//! is not enabled an the server is under high load or has low resource limits you will see an
+//! increase in connection errors. If this feature is disabled all checks are disabled and special
+//! features to avoid hitting limits are removed.
 mod auth;
 mod config;
 mod http;
+mod limits;
 mod logger;
 mod signal;
 mod state;
@@ -9,6 +20,8 @@ mod websocket;
 
 #[cfg(feature = "metrics")]
 mod metrics;
+
+use std::time::Duration;
 
 use config::Config;
 
@@ -140,6 +153,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+
+            tokio::time::sleep(Duration::new(10, 0)).await;
         }
     });
 
@@ -155,12 +170,6 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Hyper(#[from] hyper::Error),
-    #[error("not found")]
-    NotFound,
-    #[error("method not allowed")]
-    MethodNotAllowed,
-    #[error("bad request")]
-    BadRequest,
     #[error("status code error")]
     StatusCodeError(#[from] StatusCodeError),
     #[error("{0}")]
@@ -233,6 +242,11 @@ impl StatusCodeError {
         Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
     }
 
+    /// 412 Precondition Failed
+    pub fn precondition_failed() -> Self {
+        Self::new(StatusCode::PRECONDITION_FAILED, "Precondition Failed")
+    }
+
     /// 413 Payload Too Large
     pub fn payload_too_large() -> Self {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
@@ -241,6 +255,11 @@ impl StatusCodeError {
     /// 426 Upgrade Required
     pub fn upgrade_required() -> Self {
         Self::new(StatusCode::UPGRADE_REQUIRED, "Upgrade Required")
+    }
+
+    /// 500 Internal Server Error
+    pub fn internal_server_error() -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
     }
 
     /// Sets the message of the error.

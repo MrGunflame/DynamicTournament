@@ -9,8 +9,9 @@ license = "Apache-2.0"
 publish = false
 
 [features]
-default = ["metrics"]
+default = ["metrics", "limits"]
 metrics = []
+limits = []
 
 [dependencies]
 dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api", features = ["server"] }
@@ -29,7 +30,8 @@ log = { version = "0.4.16", features = ["serde"] }
 parking_lot = "0.12.0"
 snowflaked = { version = "0.1.2", features = ["sync"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
-nix = { version = "0.25.0", features = ["signal"] }
+nix = { version = "0.25.0", features = ["resource", "signal"] }
+crc32fast = "1.3.2"
 
 chrono = "0.4.19, < 0.4.20"
 base64 = "0.13.0"

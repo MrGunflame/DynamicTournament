@@ -49,10 +49,9 @@ impl Component for Navbar {
         };
 
         html! {
-            <div class="navbar">
+            <div class="dt-navbar">
                 <ul>
                     <li><Link to={"/"}>{ "Home" }</Link></li>
-                    <li><Link to={"/tournaments"}>{ "Tournaments" }</Link></li>
                     <li><Link to={"/systems"}>{ "Systems" }</Link></li>
                     <li>{ login }</li>
                 </ul>

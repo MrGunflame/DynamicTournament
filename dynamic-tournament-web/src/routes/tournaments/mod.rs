@@ -3,7 +3,6 @@ mod brackets;
 mod entrants;
 mod navbar;
 mod overview;
-mod teamdetails;
 mod tournament;
 
 use entrants::Entrants;
@@ -17,7 +16,7 @@ use crate::utils::router::{PathBuf, Routable, Switch};
 
 use dynamic_tournament_api::v3::id::TournamentId;
 
-use self::tournament::Tournament;
+pub use self::tournament::Tournament;
 use overview::Overview;
 
 pub struct Tournaments;
@@ -37,7 +36,7 @@ impl Component for Tournaments {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Props {
     pub id: TournamentId,
 }

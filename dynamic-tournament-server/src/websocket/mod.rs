@@ -14,7 +14,7 @@ use futures::{SinkExt, Stream, StreamExt};
 use hyper::upgrade::Upgraded;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::select;
-use tokio::time::{Interval, MissedTickBehavior};
+use tokio::time::{Interval, MissedTickBehavior, Sleep};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
@@ -94,6 +94,9 @@ where
     state: ConnectionState<'static, WebSocketStream<S>>,
     ping_interval: Interval,
 
+    // Has the server initialized a close event.
+    close_state: Option<CloseState>,
+
     is_authenticated: bool,
     global_state: State,
     bracket: LiveBracket,
@@ -119,6 +122,7 @@ where
             stream,
             state: ConnectionState::Init,
             ping_interval,
+            close_state: None,
             is_authenticated: false,
             global_state: state,
             bracket,
@@ -150,6 +154,14 @@ where
 
         #[cfg(debug_assertions)]
         assert!(matches!(self.state, ConnectionState::Read(_)));
+
+        // If we initialized a close handshake and the client didn't respond
+        // in time we forcefully close the connection.
+        if let Some(close_state) = &mut self.close_state {
+            if close_state.poll_deadline(cx).is_ready() {
+                return Poll::Ready(());
+            }
+        }
 
         loop {
             let fut = match &mut self.state {
@@ -183,14 +195,11 @@ where
                                     }
                                 };
 
-                                match self.handle_request(req) {
-                                    Some(resp) => {
-                                        let buf = resp.to_bytes();
+                                if let Some(resp) = self.handle_request(req) {
+                                    let buf = resp.to_bytes();
 
-                                        self.init_write(Message::Binary(buf));
-                                        return self.poll_write(cx);
-                                    }
-                                    None => (),
+                                    self.init_write(Message::Binary(buf));
+                                    return self.poll_write(cx);
                                 }
                             }
                             Ok(Message::Ping(buf)) => {
@@ -202,8 +211,16 @@ where
                                 log::debug!("Received pong with payload: {:?}", buf);
                                 continue;
                             }
-                            // Client initiated close.
                             Ok(Message::Close(frame)) => {
+                                // Server-side close.
+                                if let Some(close_state) = &self.close_state {
+                                    // Client confirmed server close frame.
+                                    if close_state.frame.as_ref() == frame.as_ref() {
+                                        return Poll::Ready(());
+                                    }
+                                }
+
+                                // Client-side close. We respond with the same close frame.
                                 self.init_write_close(frame);
                                 return self.poll_write_close(cx);
                             }
@@ -267,7 +284,8 @@ where
                     log::debug!("Failed to write close message: {}", err);
                 }
 
-                Poll::Ready(())
+                self.init_read();
+                self.poll_read(cx)
             }
             Poll::Pending => Poll::Pending,
         }
@@ -346,6 +364,8 @@ where
 
     fn init_write_close(&mut self, frame: Option<CloseFrame<'static>>) {
         let prev = self.state_str();
+
+        self.close_state = Some(CloseState::new(frame.clone()));
 
         let fut = self.stream.send(Message::Close(frame));
 
@@ -486,5 +506,27 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let conn = unsafe { self.map_unchecked_mut(|this| this.conn) };
         conn.poll_close(cx)
+    }
+}
+
+/// The progress in the closing handshake. This is only necessary when the server closes
+/// the connection.
+#[derive(Debug)]
+struct CloseState {
+    frame: Option<CloseFrame<'static>>,
+    /// The client must have responded to the close within this deadline.
+    deadline: Pin<Box<Sleep>>,
+}
+
+impl CloseState {
+    fn new(frame: Option<CloseFrame<'static>>) -> Self {
+        Self {
+            frame,
+            deadline: Box::pin(tokio::time::sleep(Duration::new(5, 0))),
+        }
+    }
+
+    fn poll_deadline(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        self.deadline.as_mut().poll(cx)
     }
 }

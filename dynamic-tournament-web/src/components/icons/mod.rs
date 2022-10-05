@@ -1,6 +1,10 @@
 use std::fmt::{self, Display, Formatter};
 
-use yew::{html, Component, Context, Html, Properties};
+use dynamic_tournament_macros::include_asset_str;
+use web_sys::{Element, Node};
+use yew::{Component, Context, Html, Properties};
+
+use crate::utils::document;
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
@@ -46,12 +50,12 @@ pub enum FaSize {
 impl FaSize {
     fn as_str(&self) -> &'static str {
         match self {
-            Self::ExtraSmall => "fa-xs",
-            Self::Small => "fa-sm",
-            Self::Normal => "",
-            Self::Large => "fa-lg",
-            Self::ExtraLarge => "fa-xl",
-            Self::ExtraLarge2 => "fa-2xl",
+            Self::ExtraSmall => "dt-icon-size-xs",
+            Self::Small => "dt-icon-size-sm",
+            Self::Normal => "dt-icon-size-nl",
+            Self::Large => "dt-icon-size-lg",
+            Self::ExtraLarge => "dt-icon-size-xl",
+            Self::ExtraLarge2 => "dt-icon-size-xl2",
         }
     }
 }
@@ -63,7 +67,7 @@ impl Display for FaSize {
 }
 
 macro_rules! fa_icon {
-    ($($id:ident, $name:expr),*$(,)?) => {
+    ($($id:ident, $src:expr),*$(,)?) => {
         $(
             #[derive(Debug)]
             pub struct $id;
@@ -77,16 +81,16 @@ macro_rules! fa_icon {
                 }
 
                 fn view(&self, ctx: &Context<Self>) -> Html {
-                    let classes = format!("{} {} {}", $name, ctx.props().style, ctx.props().size);
+                    let classes = format!("dt-icon {} {}", ctx.props().style, ctx.props().size);
 
-                    let label = ctx.props().label;
+                    // TODO: Display label text.
+                    // let label = ctx.props().label;
 
-                    html! {
-                        <>
-                            <i aria-hidden="true" class={classes}></i>
-                            <span class="sr-only">{ label }</span>
-                        </>
-                    }
+                    let elem: Element = document().create_element("div").unwrap();
+                    elem.set_class_name(&classes);
+                    elem.set_inner_html(include_asset_str!($src));
+
+                    Html::VRef(Node::from(elem))
                 }
             }
         )*
@@ -94,15 +98,15 @@ macro_rules! fa_icon {
 }
 
 fa_icon! {
-    FaXmark, "fa-xmark",
-    FaPen, "fa-pen",
-    FaPenToSquare, "fa-pen-to-square",
-    FaRotateLeft, "fa-rotate-left",
-    FaTrash, "fa-trash",
-    FaPlus, "fa-plus",
-    FaMinus, "fa-minus",
-    FaAngleLeft, "fa-angle-left",
-    FaCompress, "fa-compress",
-    FaLock, "fa-lock",
-    FaLockOpen, "fa-lock-open",
+    FaXmark, "/icons/fontawesome/xmark.svg",
+    FaPen, "/icons/fontawesome/pen.svg",
+    FaPenToSquare, "/icons/fontawesome/pen-to-square.svg",
+    FaRotateLeft, "/icons/fontawesome/rotate-left.svg",
+    FaTrash, "/icons/fontawesome/trash.svg",
+    FaPlus, "/icons/fontawesome/plus.svg",
+    FaMinus, "/icons/fontawesome/minus.svg",
+    FaAngleLeft, "/icons/fontawesome/angle-left.svg",
+    FaCompress, "/icons/fontawesome/compress.svg",
+    FaLock, "/icons/fontawesome/lock.svg",
+    FaLockOpen, "/icons/fontawesome/lock-open.svg",
 }

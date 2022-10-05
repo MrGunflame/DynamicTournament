@@ -1,3 +1,5 @@
+pub mod etag;
+pub mod path;
 mod v1;
 pub mod v2;
 pub mod v3;
@@ -6,12 +8,14 @@ pub mod v3;
 mod metrics;
 
 use crate::config::BindAddr;
+use crate::limits::File;
 use crate::{Error, State, StatusCodeError};
 
 use std::convert::Infallible;
+use std::mem;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{self, Poll};
 use std::time::Duration;
 
 use dynamic_tournament_macros::path;
@@ -19,7 +23,7 @@ use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
     HeaderValue, IntoHeaderName, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE,
+    AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH,
 };
 use hyper::http::request::Parts;
 use hyper::server::conn::Http;
@@ -30,6 +34,8 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpSocket;
 use tokio::time::Instant;
+
+use self::etag::Etag;
 
 #[cfg(target_family = "unix")]
 use {std::path::Path, tokio::net::UnixListener};
@@ -47,8 +53,6 @@ pub async fn bind(addr: BindAddr, state: State) -> std::result::Result<(), crate
 }
 
 async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), crate::Error> {
-    let mut shutdown = state.shutdown.listen();
-
     let socket = TcpSocket::new_v4()?;
     if let Err(err) = socket.set_reuseaddr(true) {
         log::warn!("Failed to set SO_REUSEADDR flag: {}", err);
@@ -64,27 +68,10 @@ async fn bind_tcp(addr: SocketAddr, state: State) -> std::result::Result<(), cra
     let listener = socket.listen(1024)?;
     log::info!("Server running on {}", addr);
     loop {
-        tokio::select! {
-            res = listener.accept() => {
-                let (stream, addr) = match res {
-                    Ok((stream, addr)) => (stream, addr),
-                    Err(err) => {
-                        log::warn!("Failed to accept connection: {:?}", err);
-                        continue;
-                    }
-                };
-                log::info!("Accepting new connection from {:?}", addr);
+        let fut = listener.accept();
 
-                let state = state.clone();
-                tokio::task::spawn(async move {
-                    serve_connection(stream, state).await;
-                });
-            }
-            // Shut down the server.
-            _ = &mut shutdown => {
-                log::debug!("Shutting down http server");
-                return Ok(());
-            }
+        if accept_connection(fut, &state).await.is_err() {
+            return Ok(());
         }
     }
 }
@@ -97,42 +84,81 @@ async fn bind_unix<P>(path: P, state: State) -> std::result::Result<(), crate::E
 where
     P: AsRef<Path>,
 {
-    let mut shutdown = state.shutdown.listen();
+    use std::io::ErrorKind;
+
     let path = path.as_ref();
 
-    let listener = UnixListener::bind(path)?;
-    log::debug!("Server running on {}", path.display());
-    loop {
-        tokio::select! {
-            res = listener.accept() => {
-                let (stream, addr) = match res {
-                    Ok((stream, addr)) => (stream, addr),
-                    Err(err) => {
-                        log::warn!("Failed to accept connection: {:?}", err);
-                        continue;
-                    }
-                };
-
-                log::info!("Accepting new connection from {:?}", addr);
-
-                let state = state.clone();
-                tokio::task::spawn(async move {
-                    serve_connection(stream, state).await;
-                });
-            }
-            _ = &mut shutdown => {
-                log::debug!("Shutting down http server");
-
-                // Remove the unix socket.
+    // Bind to the socket. If the socket file already exists and bind() returns
+    // EADDRINUSE remove it and try to bind again.
+    let listener = match UnixListener::bind(path) {
+        Ok(socket) => socket,
+        Err(err) => {
+            if err.kind() == ErrorKind::AddrInUse {
+                log::warn!("The socket already exists, did the server crash?");
                 tokio::fs::remove_file(path).await?;
 
-                return Ok(());
+                UnixListener::bind(path)?
+            } else {
+                return Err(err.into());
             }
+        }
+    };
+
+    log::debug!("Server running on {}", path.display());
+    loop {
+        let fut = listener.accept();
+
+        if accept_connection(fut, &state).await.is_err() {
+            return Ok(());
         }
     }
 }
 
-async fn serve_connection<S>(stream: S, state: State)
+/// Accepts a new connection from `F`. This function returns `Ok(())` if operation should continue
+/// normally or `Err(())` if the server should abort.
+async fn accept_connection<F, S, A>(fut: F, state: &State) -> std::result::Result<(), ()>
+where
+    F: Future<Output = std::io::Result<(S, A)>>,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    A: std::fmt::Debug,
+{
+    let mut shutdown = state.shutdown.listen();
+
+    tokio::select! {
+        file = state.limits.acquire_file() => {
+            tokio::select! {
+                res = fut => {
+                    let (stream, addr) = match res {
+                        Ok(val) => val,
+                        Err(err) => {
+                            log::warn!("Failed to accept connection: {:?}", err);
+                            return Ok(());
+                        }
+                    };
+
+                    log::debug!("Accepting new connection from {:?}", addr);
+
+                    // SAFETY: State always outlives `accept_connection`.
+                    let file = unsafe { std::mem::transmute(file) };
+                    let state = state.clone();
+                    tokio::task::spawn(async move {
+                        serve_connection(stream, state, file).await;
+                    });
+                }
+                _ = &mut shutdown => {
+                    return Err(());
+                }
+            }
+        }
+        _ = &mut shutdown => {
+            return Err(());
+        }
+    }
+
+    Ok(())
+}
+
+async fn serve_connection<S>(stream: S, state: State, file: File<'static>)
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -155,10 +181,18 @@ where
             Pin::new(&mut conn).graceful_shutdown();
 
             if let Err(err) = conn.await {
-                log::warn!("Error serving HTTP conn: {}", err);
+                if err.is_user() {
+                    log::warn!("Error serving HTTP conn: {}", err);
+                } else {
+                    log::debug!("Error serving HTTP conn: {}", err);
+                }
+
             }
         }
     }
+
+    // Release the file descriptor.
+    drop(file);
 }
 
 #[derive(Clone, Debug)]
@@ -171,7 +205,10 @@ impl Service<hyper::Request<Body>> for RootService {
     type Error = crate::Error;
     type Future = RootServiceFuture;
 
-    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<std::result::Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        _cx: &mut task::Context,
+    ) -> Poll<std::result::Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
@@ -196,7 +233,7 @@ impl RootServiceFuture {
 impl Future for RootServiceFuture {
     type Output = std::result::Result<hyper::Response<Body>, crate::Error>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
         let future = unsafe { self.map_unchecked_mut(|this| &mut this.0) };
         future.poll(cx)
     }
@@ -214,22 +251,16 @@ async fn service_root(
     #[cfg(feature = "metrics")]
     state.metrics.http_requests_total.inc();
 
-    let req = Request::new(req, state);
+    let mut ctx = Context::new(req, state);
 
-    let uri = String::from(req.uri().path());
+    let origin = ctx.req.headers().get("Origin").cloned();
 
-    let mut uri = RequestUri::new(&uri);
-
-    log::debug!("{:?}", uri);
-
-    let origin = req.headers().get("Origin").cloned();
-
-    let res = path!(uri, {
+    let res = path!(ctx, {
         "v1" => v1::route().await,
-        "v2" => v2::route(req, uri).await,
-        "v3" => v3::route(req, uri).await,
+        "v2" => v2::route(ctx).await,
+        "v3" => v3::route(ctx).await,
         #[cfg(feature = "metrics")]
-        "metrics" => metrics::route(req).await,
+        "metrics" => metrics::route(ctx).await,
     });
 
     match res {
@@ -250,17 +281,6 @@ async fn service_root(
             let mut resp = Response::ok();
 
             match err {
-                Error::NotFound => {
-                    resp = resp.status(StatusCode::NOT_FOUND).body("Not Found");
-                }
-                Error::BadRequest => {
-                    resp = resp.status(StatusCode::BAD_REQUEST).body("Bad Request");
-                }
-                Error::MethodNotAllowed => {
-                    resp = resp
-                        .status(StatusCode::METHOD_NOT_ALLOWED)
-                        .body("Method Not Allowed");
-                }
                 Error::StatusCodeError(err) => {
                     log::debug!("Responding with error: {:?}", err);
 
@@ -283,30 +303,148 @@ async fn service_root(
     }
 }
 
+/// A context carried with a HTTP request.
+pub struct Context {
+    pub req: Request,
+    pub state: State,
+    /// This field is the owner of `self.path`. It is only ever accessed through that
+    /// reference and therefore not dead code.
+    _path_buf: Box<str>,
+    /// A self-referential field borrowing `self._path_buf`. We need to make sure it is never
+    /// made avaliable to the outside using the internal 'static lifetime. The field is only
+    /// valid for as long as self is.
+    path: path::Path<'static>,
+}
+
+impl Context {
+    fn new(req: hyper::Request<Body>, state: State) -> Self {
+        let req = Request::new(req);
+
+        // We make sure to copy the request path into a private field to make it impossible
+        // to accidently swap the strings, which would cause `Path` to have an invalid reference.
+        let path_buf: Box<str> = req.uri().path().into();
+
+        // Convert this lifetime into a 'static lifetime. This allows to field to reference
+        // a value in self.
+
+        // SAFETY: We guarantee to drop this 'static reference before the owner is dropped.
+        // We also never give access to this field to prevent copies from the outside.
+        let path = unsafe {
+            let path = path::Path::new(&path_buf);
+
+            mem::transmute::<_, path::Path<'static>>(path)
+        };
+
+        Self {
+            req,
+            state,
+            _path_buf: path_buf,
+            path,
+        }
+    }
+
+    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
+    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
+        let header = self.req.authorization()?;
+
+        let mut parts = header.split(' ');
+
+        match parts.next() {
+            Some("Bearer") => (),
+            _ => return Err(StatusCodeError::bad_request().into()),
+        }
+
+        let token = match parts.next() {
+            Some(token) => token,
+            None => return Err(StatusCodeError::bad_request().into()),
+        };
+
+        match self.state.auth.validate_auth_token(token) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(StatusCodeError::unauthorized().into()),
+        }
+    }
+
+    pub fn path(&mut self) -> &mut path::Path<'static> {
+        &mut self.path
+    }
+
+    pub fn compare_etag(&self, etag: Etag) -> Option<Result> {
+        // Comparing ETag and `If-Match`/`If-None-Match` headers can have two different
+        // meanings. If the request method is "safe" i.e. GET or HEAD we return 304 if the
+        // content DID NOT change. On all other methods we return 412 if the content DID
+        // change.
+
+        let if_match = self.req.if_match();
+        let if_none_match = self.req.if_none_match();
+
+        // We don't need to check anything if the client did not make any conditional
+        // requests.
+        if if_match.is_none() && if_none_match.is_none() {
+            return None;
+        }
+
+        match *self.req.method() {
+            // Safe methods
+            Method::GET | Method::HEAD => {
+                if let Some(val) = self.req.if_none_match() {
+                    // TODO: This should happen the other way around, i.e. try to convert
+                    // val into an Etag to avoid the allocation of `to_string`.
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Ok(Response::not_modified()));
+                    }
+                }
+
+                if let Some(val) = self.req.if_match() {
+                    if etag.to_string().as_bytes() != val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+            }
+            // Non-safe methods
+            _ => {
+                if let Some(val) = self.req.if_none_match() {
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+
+                if let Some(val) = self.req.if_match() {
+                    if etag.to_string().as_bytes() == val {
+                        return Some(Err(StatusCodeError::precondition_failed().into()));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+impl AsRef<Request> for Context {
+    #[inline]
+    fn as_ref(&self) -> &Request {
+        &self.req
+    }
+}
+
 #[derive(Debug)]
 pub struct Request {
     pub parts: Parts,
     pub body: Option<Body>,
-    state: State,
 }
 
 impl Request {
     const BODY_MAX_SIZE: usize = 16384;
 
     #[inline]
-    fn new(req: hyper::Request<Body>, state: State) -> Self {
+    fn new(req: hyper::Request<Body>) -> Self {
         let (parts, body) = req.into_parts();
 
         Self {
             parts,
             body: Some(body),
-            state,
         }
-    }
-
-    #[inline]
-    pub fn state(&self) -> &State {
-        &self.state
     }
 
     #[inline]
@@ -412,59 +550,12 @@ impl Request {
         }
     }
 
-    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
-    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
-        let header = self.authorization()?;
-
-        let mut parts = header.split(' ');
-
-        match parts.next() {
-            Some("Bearer") => (),
-            _ => return Err(StatusCodeError::bad_request().into()),
-        }
-
-        let token = match parts.next() {
-            Some(token) => token,
-            None => return Err(StatusCodeError::bad_request().into()),
-        };
-
-        match self.state().auth.validate_auth_token(token) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(StatusCodeError::unauthorized().into()),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct RequestUri<'a> {
-    path: &'a str,
-}
-
-impl<'a> RequestUri<'a> {
-    pub fn new(mut path: &'a str) -> Self {
-        if path.starts_with('/') {
-            path = &path[1..];
-        }
-
-        Self { path }
+    pub fn if_match(&self) -> Option<&[u8]> {
+        self.headers().get(IF_MATCH).map(|val| val.as_bytes())
     }
 
-    pub fn take_str(&mut self) -> Option<&str> {
-        if self.path.is_empty() {
-            None
-        } else {
-            Some(match self.path.split_once('/') {
-                Some((part, rem)) => {
-                    self.path = rem;
-                    part
-                }
-                None => {
-                    let path = self.path;
-                    self.path = "";
-                    path
-                }
-            })
-        }
+    pub fn if_none_match(&self) -> Option<&[u8]> {
+        self.headers().get(IF_NONE_MATCH).map(|val| val.as_bytes())
     }
 }
 
@@ -518,6 +609,15 @@ impl Response {
         }
     }
 
+    /// 304 Not Modified
+    pub fn not_modified() -> Self {
+        Self {
+            status: StatusCode::NOT_MODIFIED,
+            headers: HeaderMap::new(),
+            body: Body::empty(),
+        }
+    }
+
     pub fn status(mut self, status: StatusCode) -> Self {
         self.status = status;
         self
@@ -547,10 +647,25 @@ impl Response {
         self
     }
 
+    pub fn etag(self, etag: Etag) -> Self {
+        self.header(ETAG, etag.into())
+    }
+
     fn build(self) -> hyper::Response<Body> {
         let mut resp = hyper::Response::new(self.body);
         *resp.status_mut() = self.status;
         *resp.headers_mut() = self.headers;
         resp
     }
+}
+
+/// Compares the etag requested in the `If-Match` and `If-None-Match` headers with the current
+/// etag and returns the response if the headers matched/didn't match the current etag.
+#[macro_export]
+macro_rules! compare_etag {
+    ($ctx:expr, $etag:expr) => {
+        if let Some(res) = $ctx.compare_etag($etag) {
+            return res;
+        }
+    };
 }

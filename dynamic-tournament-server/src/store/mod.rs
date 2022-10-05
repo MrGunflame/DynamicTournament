@@ -307,7 +307,7 @@ impl<'a> TournamentsClient<'a> {
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>, Error> {
         let sql = format!(
-            "SELECT id, name, date, kind FROM {}tournaments",
+            "SELECT id, name, date, kind FROM {}tournaments ORDER BY date DESC",
             self.store.table_prefix
         );
 
