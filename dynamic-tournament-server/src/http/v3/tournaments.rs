@@ -10,6 +10,7 @@ use dynamic_tournament_api::Payload;
 use dynamic_tournament_macros::{method, path};
 
 use crate::http::etag::HashEtag;
+use crate::http::HttpResult;
 use crate::{
     compare_etag,
     http::{etag::Etag, Context, Response, Result},
@@ -79,11 +80,10 @@ async fn create(mut ctx: Context) -> Result {
 async fn patch(mut ctx: Context, id: TournamentId) -> Result {
     ctx.require_authentication()?;
 
-    // Check if the tournament exists.
-    let mut tournament = match ctx.state.store.tournaments().get(id).await? {
-        Some(tournament) => tournament,
-        None => return Err(StatusCodeError::not_found().into()),
-    };
+    let mut tournament = ctx.state.store.tournaments().get(id).await.map_404()?;
+
+    let etag = Etag::new(&tournament);
+    compare_etag!(ctx, etag);
 
     let partial = ctx.req.json().await?;
     ctx.state.store.tournaments().update(id, &partial).await?;
@@ -97,8 +97,12 @@ async fn patch(mut ctx: Context, id: TournamentId) -> Result {
 async fn delete(ctx: Context, id: TournamentId) -> Result {
     ctx.require_authentication()?;
 
-    ctx.state.store.tournaments().delete(id).await?;
+    let tournament = ctx.state.store.tournaments().get(id).await.map_404()?;
 
+    let etag = Etag::new(&tournament);
+    compare_etag!(ctx, etag);
+
+    ctx.state.store.tournaments().delete(id).await?;
     Ok(Response::ok())
 }
 

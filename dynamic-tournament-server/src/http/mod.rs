@@ -659,6 +659,38 @@ impl Response {
     }
 }
 
+pub trait HttpResult {
+    type Output;
+
+    /// Unwraps the contained value or returns an `404 Not Found` error.
+    fn map_404(self) -> std::result::Result<Self::Output, Error>;
+}
+
+impl<T> HttpResult for Option<T> {
+    type Output = T;
+
+    fn map_404(self) -> std::result::Result<T, Error> {
+        match self {
+            Some(val) => Ok(val),
+            None => return Err(StatusCodeError::not_found().into()),
+        }
+    }
+}
+
+impl<T, E> HttpResult for std::result::Result<Option<T>, E>
+where
+    E: Into<Error>,
+{
+    type Output = T;
+
+    fn map_404(self) -> std::result::Result<Self::Output, Error> {
+        match self {
+            Ok(val) => val.map_404(),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
 /// Compares the etag requested in the `If-Match` and `If-None-Match` headers with the current
 /// etag and returns the response if the headers matched/didn't match the current etag.
 #[macro_export]
