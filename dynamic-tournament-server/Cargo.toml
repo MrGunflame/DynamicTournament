@@ -49,4 +49,3 @@ debug-assertions = false
 opt-level = 3
 lto = "fat"
 strip = true
-

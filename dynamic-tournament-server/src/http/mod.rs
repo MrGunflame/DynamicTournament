@@ -672,7 +672,7 @@ impl<T> HttpResult for Option<T> {
     fn map_404(self) -> std::result::Result<T, Error> {
         match self {
             Some(val) => Ok(val),
-            None => return Err(StatusCodeError::not_found().into()),
+            None => Err(StatusCodeError::not_found().into()),
         }
     }
 }

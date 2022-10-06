@@ -68,8 +68,6 @@ impl Log for Logger {
             record.args()
         );
 
-        drop(stdout);
-
         if let Err(err) = res {
             if err.kind() != ErrorKind::BrokenPipe {
                 panic!("Failed to write to stdout: {}", err);
