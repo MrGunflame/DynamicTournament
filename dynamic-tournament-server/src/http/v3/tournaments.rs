@@ -108,10 +108,17 @@ impl HashEtag for [TournamentOverview] {
         H: Hasher,
     {
         for elem in self {
-            elem.id.hash(state);
-            elem.name.hash(state);
-            elem.date.hash(state);
-            elem.kind.hash(state);
+            let TournamentOverview {
+                id,
+                name,
+                date,
+                kind,
+            } = elem;
+
+            id.hash(state);
+            name.hash(state);
+            date.hash(state);
+            kind.hash(state);
         }
     }
 }
@@ -121,9 +128,17 @@ impl HashEtag for Tournament {
     where
         H: Hasher,
     {
-        self.name.hash(state);
-        self.description.hash(state);
-        self.date.hash(state);
-        self.kind.hash(state);
+        let Tournament {
+            id: _,
+            name,
+            description,
+            date,
+            kind,
+        } = self;
+
+        name.hash(state);
+        description.hash(state);
+        date.hash(state);
+        kind.hash(state);
     }
 }

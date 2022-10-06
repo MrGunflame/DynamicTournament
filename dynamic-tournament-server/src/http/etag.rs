@@ -1,15 +1,17 @@
 use std::fmt::{self, Display, Formatter};
+use std::hash::Hasher;
 use std::str::FromStr;
 
-use crc32fast::Hasher;
 use hyper::header::HeaderValue;
+use sha1::digest::Output;
+use sha1::{Digest, Sha1};
 
 /// An entity tag (etag) for a resource.
 ///
 /// This is a cheaply created and copy-able hash internally.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Etag {
-    hash: u32,
+    buf: Output<Sha1>,
 }
 
 impl Etag {
@@ -17,22 +19,11 @@ impl Etag {
     where
         T: ?Sized + HashEtag,
     {
-        let mut hasher = Hasher::new();
+        let mut hasher = EtagHasher(Sha1::new());
         value.hash(&mut hasher);
-        let hash = hasher.finalize();
+        let buf = hasher.0.finalize();
 
-        Self { hash }
-    }
-
-    pub fn from_fn<F>(f: F) -> Self
-    where
-        F: FnOnce(&mut Hasher),
-    {
-        let mut hasher = Hasher::new();
-        f(&mut hasher);
-        let hash = hasher.finalize();
-
-        Self { hash }
+        Self { buf }
     }
 
     #[inline]
@@ -46,9 +37,11 @@ impl Etag {
 
 impl Display for Etag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let bytes = self.hash.to_le_bytes();
+        for b in &self.buf {
+            write!(f, "{:x}", *b)?;
+        }
 
-        f.write_str(&hex::encode(bytes))
+        Ok(())
     }
 }
 
@@ -65,12 +58,10 @@ impl FromStr for Etag {
     type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut buf = [0; 4];
+        let mut buf: Output<Sha1> = Default::default();
         hex::decode_to_slice(s, &mut buf)?;
 
-        Ok(Self {
-            hash: u32::from_le_bytes(buf),
-        })
+        Ok(Self { buf })
     }
 }
 
@@ -83,5 +74,18 @@ pub trait HashEtag {
     /// [`Hasher`]: std::hash::Hasher
     fn hash<H>(&self, state: &mut H)
     where
-        H: std::hash::Hasher;
+        H: Hasher;
+}
+
+#[derive(Debug)]
+pub struct EtagHasher(Sha1);
+
+impl Hasher for EtagHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        Digest::update(&mut self.0, bytes);
+    }
+
+    fn finish(&self) -> u64 {
+        0
+    }
 }
