@@ -3,7 +3,6 @@ mod brackets;
 mod entrants;
 mod navbar;
 mod overview;
-mod teamdetails;
 mod tournament;
 
 use entrants::Entrants;
@@ -37,7 +36,7 @@ impl Component for Tournaments {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Properties)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Props {
     pub id: TournamentId,
 }

@@ -1,3 +1,5 @@
+mod id;
+
 use crate::Error;
 use dynamic_tournament_api::v3::id::RoleId;
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
@@ -113,10 +115,13 @@ impl Store {
         tournament_id: TournamentId,
         entrant: Entrant,
     ) -> Result<EntrantId, Error> {
+        let id: u64 = id::ENTRANT.generate();
+
         let res = sqlx::query(&format!(
-            "INSERT INTO {}entrants (tournament_id, data) VALUES (?, ?)",
+            "INSERT INTO {}entrants (id, tournament_id, data) VALUES (?, ?, ?)",
             self.table_prefix
         ))
+        .bind(id)
         .bind(tournament_id.0)
         .bind(serde_json::to_vec(&entrant)?)
         .execute(&self.pool)
@@ -201,10 +206,13 @@ impl Store {
         tournament_id: TournamentId,
         bracket: &Bracket,
     ) -> Result<BracketId, Error> {
+        let id: u64 = id::BRACKET.generate();
+
         let res = sqlx::query(&format!(
-            "INSERT INTO {}brackets (tournament_id, data, state) VALUES (?, ?, ?)",
+            "INSERT INTO {}brackets (id, tournament_id, data, state) VALUES (?, ?, ?, ?)",
             self.table_prefix
         ))
+        .bind(id)
         .bind(tournament_id.0)
         .bind(serde_json::to_vec(bracket)?)
         .bind(serde_json::to_vec::<Option<u8>>(&None)?)
@@ -371,10 +379,13 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn insert(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
+        let id: u64 = id::TOURNAMENT.generate();
+
         let res = sqlx::query(&format!(
-            "INSERT INTO {}tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
+            "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
             self.store.table_prefix
         ))
+        .bind(id)
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
@@ -526,10 +537,13 @@ impl<'a> EntrantsClient<'a> {
     }
 
     pub async fn insert(&self, entrant: &Entrant) -> Result<EntrantId, Error> {
+        let id: u64 = id::ENTRANT.generate();
+
         let res = sqlx::query(&format!(
-            "INSERT INTO {}entrants (tournament_id, data) VALUES (?, ?)",
+            "INSERT INTO {}entrants (id, tournament_id, data) VALUES (?, ?, ?)",
             self.store.table_prefix
         ))
+        .bind(id)
         .bind(self.id.0)
         .bind(serde_json::to_vec(entrant)?)
         .execute(&self.store.pool)
@@ -612,10 +626,13 @@ impl<'a> RolesClient<'a> {
     }
 
     pub async fn insert(&self, role: &Role) -> Result<RoleId, Error> {
+        let id: u64 = id::ROLE.generate();
+
         let res = sqlx::query(&format!(
-            "INSERT INTO {}roles (name, tournament_id) VALUES (?, ?)",
+            "INSERT INTO {}roles (id, name, tournament_id) VALUES (?, ?, ?)",
             self.store.table_prefix
         ))
+        .bind(id)
         .bind(&role.name)
         .bind(&self.id.0)
         .execute(&self.store.pool)

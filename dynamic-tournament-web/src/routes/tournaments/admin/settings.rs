@@ -138,13 +138,11 @@ impl Component for Settings {
             .map(|entrants| entrants.is_empty())
             .unwrap_or_default();
 
-        log::debug!("{}", disabled);
-
         html! {
             <div>
                 <h2>{ "Settings" }</h2>
                 <div>
-                    <table class="table-striped">
+                    <table class="dt-table-striped">
                         <tr>
                             <td>
                                 { "Name" }
@@ -183,7 +181,7 @@ impl Component for Settings {
                     </table>
                 </div>
 
-                <button class="button" onclick={on_update}>{ "Update" }</button>
+                <button class="dt-button" onclick={on_update}>{ "Update" }</button>
             </div>
         }
     }

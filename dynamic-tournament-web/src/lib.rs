@@ -1,3 +1,6 @@
+// Fix for html! macro doing unit value assignments. (yew 0.19.3)
+#![allow(clippy::let_unit_value)]
+
 mod api;
 mod components;
 mod consts;
@@ -17,8 +20,8 @@ use routes::App;
 use consts::TITLE_BASE;
 
 #[wasm_bindgen]
-pub fn run(config: &JsValue) {
-    let config = config.into_serde().expect("Failed to parse config");
+pub fn run(config: JsValue) {
+    let config = serde_wasm_bindgen::from_value(config).expect("Failed to parse config");
     run_with_config(config);
 }
 

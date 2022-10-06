@@ -74,7 +74,7 @@ where
                     let on_reset = ctx.link().callback(|_| Message::ResetMatch);
 
                     html! {
-                        <div class="match-action-buttons">
+                        <div class="dt-bracket-match-actions">
                             <Button classes="" {onclick} title="Edit">
                                 <FaPen label="Edit" size={FaSize::ExtraLarge} />
                             </Button>
@@ -85,7 +85,7 @@ where
                     }
                 } else {
                     html! {
-                        <div class="match-action-buttons">
+                        <div class="dt-bracket-match-actions">
                             <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
                                 <FaPen label="Edit (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
                             </Button>
@@ -109,10 +109,10 @@ where
         };
 
         html! {
-            <div class="match" {style}>
+            <div class="dt-bracket-match" {style}>
                 <span>{ number }</span>
                 <div>
-                    <div class="match-teams">
+                    <div class="dt-bracket-match-teams">
                         {entrants}
                     </div>
                     {action_button}

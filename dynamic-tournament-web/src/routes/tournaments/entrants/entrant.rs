@@ -115,7 +115,7 @@ impl Component for Entrant {
             html! {
                 <div>
                     <h2 class="title-label h-center">{ title }</h2>
-                    <table class="table-center">
+                    <table class="dt-table dt-table-center">
                         <thead>
                             <tr>
                                 <th>{ "Name" }</th>

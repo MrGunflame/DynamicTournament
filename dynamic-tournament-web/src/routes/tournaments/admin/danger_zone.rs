@@ -94,8 +94,8 @@ impl Component for DangerZone {
                 <div>
                     <h2>{ "The Danger Zone" }</h2>
 
-                    <button class="button">{ "Reset Tournament" }</button>
-                    <button class="button" onclick={delete}>{ "Delete Tournament" }</button>
+                    <button class="dt-button">{ "Reset Tournament" }</button>
+                    <button class="dt-button" onclick={delete}>{ "Delete Tournament" }</button>
                 </div>
             </>
         }

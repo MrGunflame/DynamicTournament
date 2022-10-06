@@ -259,12 +259,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.11"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51887d4adc7b564537b15adcfb307936f8075dfcd5f00dde9a9f1d29383682bc"
+checksum = "edbafec5fa1f196ca66527c1b12c2ec4745ca14b50f1ad8f9f6f720b55d11fac"
 dependencies = [
  "cfg-if",
- "once_cell",
 ]
 
 [[package]]
@@ -316,7 +315,7 @@ checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "dynamic-tournament-api"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64",
  "chrono",
@@ -332,13 +331,14 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_test",
+ "snowflaked",
  "thiserror",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
 name = "dynamic-tournament-cli"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "clap",
  "dynamic-tournament-api",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-tournament-core"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "log",
  "serde",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-tournament-macros"
-version = "0.1.0"
+version = "0.6.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-tournament-server"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64",
  "chrono",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-tournament-test"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "dynamic-tournament-api",
@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-tournament-web"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "asyncsync",
  "chrono",
@@ -425,6 +425,7 @@ dependencies = [
  "log",
  "reqwasm",
  "serde",
+ "serde-wasm-bindgen",
  "thiserror",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1002,9 +1003,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.133"
+version = "0.2.134"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0f80d65747a3e43d1596c7c5492d95d5edddaabd45a7fcdb02b95f644164966"
+checksum = "329c933548736bc49fd575ee68c89e8be4d260064184389a5b77517cddd99ffb"
 
 [[package]]
 name = "libm"
@@ -1439,9 +1440,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.45"
+version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3edcd08cf4fea98d1ae6c9ddd3b8ccb1acac7c3693d62625969a7daa04a2ae36"
+checksum = "94e2ef8dbfc347b10c094890f778ee2e36ca9bb4262e86dc99cd217e35f3470b"
 dependencies = [
  "unicode-ident",
 ]
@@ -1724,6 +1725,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-wasm-bindgen"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b4c031cd0d9014307d82b8abf653c0290fbdaeb4c02d00c63cf52f728628bf"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1817,7 +1829,7 @@ dependencies = [
  "num-bigint 0.4.3",
  "num-traits",
  "thiserror",
- "time 0.3.14",
+ "time 0.3.15",
 ]
 
 [[package]]
@@ -1831,15 +1843,15 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
+checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
 name = "snowflaked"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88337dd803f025d88ce44408b7aba11da7bb1fffd290560dd6be17b23609d739"
+checksum = "21659d7bf56d1ed7b233315c88178200e89bd15b4635ff729a854d02118e8d0b"
 
 [[package]]
 name = "socket2"
@@ -2065,9 +2077,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c3f9a28b618c3a6b9251b6908e9c99e04b9e5c02e6581ccbb67d59c34ef7f9b"
+checksum = "d634a985c4d4238ec39cacaed2e7ae552fbd3c476b552c1deac3021b7d7eaf0c"
 dependencies = [
  "itoa",
  "libc",

@@ -73,7 +73,7 @@ pub struct PartialTournament {
 /// The type of [`Entrant`]s accepted by the tournament.
 ///
 /// [`Entrant`]: entrants::Entrant
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntrantKind {
     Player,
