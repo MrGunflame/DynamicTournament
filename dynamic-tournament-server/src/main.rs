@@ -69,7 +69,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let tables = [
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}tournaments (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT NOT NULL,
             date TIMESTAMP NOT NULL,
@@ -79,7 +79,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}entrants (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL
         )",
@@ -87,7 +87,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}brackets (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             data BLOB NOT NULL,
             state BLOB NOT NULL
@@ -96,7 +96,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}roles (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id BIGINT UNSIGNED PRIMARY KEY,
             tournament_id BIGINT UNSIGNED NOT NULL,
             name TEXT NOT NULL
         )",
