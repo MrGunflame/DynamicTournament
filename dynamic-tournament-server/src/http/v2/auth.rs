@@ -48,7 +48,19 @@ async fn wp_validate(ctx: &Context) -> Result {
     let uri = format!("{}/api/wp/v2/users", ctx.state.config.wordpress.upstream);
     log::debug!("Validating using upstream {}", uri);
 
-    let mut req = reqwest::Request::new(reqwest::Method::GET, reqwest::Url::parse(&uri).unwrap());
+    let uri = match reqwest::Url::parse(&uri) {
+        Ok(uri) => uri,
+        Err(err) => {
+            log::error!(
+                "Failed to create uri: {} (using {:?}), is the upstream configured correctly?",
+                err,
+                uri
+            );
+            return Err(StatusCodeError::internal_server_error().into());
+        }
+    };
+
+    let mut req = reqwest::Request::new(reqwest::Method::GET, uri);
 
     // Append the host header as received.
     if let Some(val) = ctx.req.headers().get(HOST) {
