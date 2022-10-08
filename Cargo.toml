@@ -7,4 +7,5 @@ members = [
     "dynamic-tournament-server",
     "dynamic-tournament-test",
     "dynamic-tournament-web",
+    "tests",
 ]

@@ -23,6 +23,12 @@ impl Display for TournamentId {
     }
 }
 
+impl From<u64> for TournamentId {
+    fn from(id: u64) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TournamentOverview {
     pub id: TournamentId,
