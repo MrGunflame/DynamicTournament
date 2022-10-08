@@ -206,7 +206,7 @@ async fn test_v3(client: &Client) {
         id: 0.into(),
         name: "test tournament".into(),
         description: "test description".into(),
-        date: date.clone(),
+        date,
         kind: v3::tournaments::EntrantKind::Team,
     };
 
