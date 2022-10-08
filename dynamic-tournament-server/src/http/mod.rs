@@ -439,7 +439,7 @@ pub struct Request {
 }
 
 impl Request {
-    const BODY_MAX_SIZE: usize = 16384;
+    const BODY_MAX_SIZE: usize = 16384 * 1000;
 
     #[inline]
     fn new(req: hyper::Request<Body>) -> Self {
