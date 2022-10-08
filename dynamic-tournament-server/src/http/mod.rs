@@ -290,11 +290,15 @@ async fn service_root(
                     });
                 }
                 err => {
-                    log::error!("{:?}", err);
+                    log::error!("HTTP handler returned an error: {}", err);
+                    log::warn!("Responding with 500");
 
                     resp = resp
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body("Internal Server Error");
+                        .json(&ErrorResponse {
+                            code: 500,
+                            message: "Internal Server Error".into(),
+                        });
                 }
             }
 
