@@ -43,10 +43,9 @@ impl Store {
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
         let res = sqlx::query(&format!(
-            "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO {}tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
             self.table_prefix
         ))
-        .bind(tournament.id.as_ref())
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
