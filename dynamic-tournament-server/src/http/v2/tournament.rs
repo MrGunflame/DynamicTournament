@@ -88,6 +88,7 @@ async fn create(mut ctx: Context) -> Result {
 
     let mut roles = HashMap::new();
     for role in [
+        Role::Unknown,
         Role::Roamer,
         Role::Teamfighter,
         Role::Duelist,
