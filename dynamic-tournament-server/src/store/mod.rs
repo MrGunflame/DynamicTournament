@@ -44,11 +44,13 @@ impl Store {
     }
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
-        let res = sqlx::query(&format!(
+        let id: TournamentId = id::TOURNAMENT.generate();
+
+        sqlx::query(&format!(
             "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
             self.table_prefix
         ))
-        .bind(tournament.id.as_ref())
+        .bind(id.0)
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
@@ -56,9 +58,7 @@ impl Store {
         .execute(&self.pool)
         .await?;
 
-        let id = res.last_insert_id();
-
-        Ok(TournamentId(id))
+        Ok(id)
     }
 
     pub async fn list_tournaments(&self) -> Result<Vec<TournamentOverview>, Error> {
@@ -115,21 +115,19 @@ impl Store {
         tournament_id: TournamentId,
         entrant: Entrant,
     ) -> Result<EntrantId, Error> {
-        let id: u64 = id::ENTRANT.generate();
+        let id: EntrantId = id::ENTRANT.generate();
 
-        let res = sqlx::query(&format!(
+        sqlx::query(&format!(
             "INSERT INTO {}entrants (id, tournament_id, data) VALUES (?, ?, ?)",
             self.table_prefix
         ))
-        .bind(id)
+        .bind(id.0)
         .bind(tournament_id.0)
         .bind(serde_json::to_vec(&entrant)?)
         .execute(&self.pool)
         .await?;
 
-        let id = res.last_insert_id();
-
-        Ok(EntrantId(id))
+        Ok(id)
     }
 
     pub async fn get_entrant(
@@ -206,22 +204,20 @@ impl Store {
         tournament_id: TournamentId,
         bracket: &Bracket,
     ) -> Result<BracketId, Error> {
-        let id: u64 = id::BRACKET.generate();
+        let id: BracketId = id::BRACKET.generate();
 
-        let res = sqlx::query(&format!(
+        sqlx::query(&format!(
             "INSERT INTO {}brackets (id, tournament_id, data, state) VALUES (?, ?, ?, ?)",
             self.table_prefix
         ))
-        .bind(id)
+        .bind(id.0)
         .bind(tournament_id.0)
         .bind(serde_json::to_vec(bracket)?)
         .bind(serde_json::to_vec::<Option<u8>>(&None)?)
         .execute(&self.pool)
         .await?;
 
-        let id = res.last_insert_id();
-
-        Ok(BracketId(id))
+        Ok(id)
     }
 
     pub async fn get_bracket(
@@ -379,13 +375,13 @@ impl<'a> TournamentsClient<'a> {
     ///
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn insert(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
-        let id: u64 = id::TOURNAMENT.generate();
+        let id: TournamentId = id::TOURNAMENT.generate();
 
-        let res = sqlx::query(&format!(
+        sqlx::query(&format!(
             "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
             self.store.table_prefix
         ))
-        .bind(id)
+        .bind(id.0)
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
@@ -393,7 +389,7 @@ impl<'a> TournamentsClient<'a> {
         .execute(&self.store.pool)
         .await?;
 
-        Ok(TournamentId(res.last_insert_id()))
+        Ok(id)
     }
 
     /// Deletes the [`Tournament`] with the given `id`.
@@ -537,19 +533,19 @@ impl<'a> EntrantsClient<'a> {
     }
 
     pub async fn insert(&self, entrant: &Entrant) -> Result<EntrantId, Error> {
-        let id: u64 = id::ENTRANT.generate();
+        let id: EntrantId = id::ENTRANT.generate();
 
-        let res = sqlx::query(&format!(
+        sqlx::query(&format!(
             "INSERT INTO {}entrants (id, tournament_id, data) VALUES (?, ?, ?)",
             self.store.table_prefix
         ))
-        .bind(id)
+        .bind(id.0)
         .bind(self.id.0)
         .bind(serde_json::to_vec(entrant)?)
         .execute(&self.store.pool)
         .await?;
 
-        Ok(EntrantId(res.last_insert_id()))
+        Ok(id)
     }
 
     pub async fn delete(&self, id: EntrantId) -> Result<(), Error> {
@@ -626,19 +622,19 @@ impl<'a> RolesClient<'a> {
     }
 
     pub async fn insert(&self, role: &Role) -> Result<RoleId, Error> {
-        let id: u64 = id::ROLE.generate();
+        let id: RoleId = id::ROLE.generate();
 
-        let res = sqlx::query(&format!(
+        sqlx::query(&format!(
             "INSERT INTO {}roles (id, name, tournament_id) VALUES (?, ?, ?)",
             self.store.table_prefix
         ))
-        .bind(id)
+        .bind(id.0)
         .bind(&role.name)
         .bind(&self.id.0)
         .execute(&self.store.pool)
         .await?;
 
-        Ok(RoleId(res.last_insert_id()))
+        Ok(id)
     }
 
     pub async fn delete(&self, id: RoleId) -> Result<(), Error> {
