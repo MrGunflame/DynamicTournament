@@ -6,6 +6,7 @@ use web_sys::{HtmlElement, MouseEvent, TouchEvent};
 use yew::prelude::*;
 
 use crate::components::icons::{FaCompress, FaLock, FaLockOpen, FaMinus, FaPlus};
+use crate::utils::router::RouterContextExt;
 use crate::{
     components::button::Button,
     utils::{document, Rc},
@@ -31,13 +32,19 @@ pub struct MovableBoxed {
     /// Whether the box is currently allowed to be moved.
     is_moving: Rc<Cell<bool>>,
     is_locked: Rc<Cell<bool>>,
+    is_fullscreen: Rc<Cell<bool>>,
 }
 
 impl Component for MovableBoxed {
     type Message = Message;
     type Properties = Properties;
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        let is_fullscreen = matches!(
+            ctx.router().get().query().get("fullscreen"),
+            Some("1") | Some("true")
+        );
+
         Self {
             element: NodeRef::default(),
             body: document().body().unwrap(),
@@ -52,10 +59,11 @@ impl Component for MovableBoxed {
 
             is_moving: Rc::new(Cell::new(false)),
             is_locked: Rc::new(Cell::new(false)),
+            is_fullscreen: Rc::new(Cell::new(is_fullscreen)),
         }
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Message::Reposition => {
                 self.translate = Coordinates::default();
@@ -84,6 +92,19 @@ impl Component for MovableBoxed {
             Message::ZoomIn(amount) => self.scale = self.scale.saturating_add(amount),
             Message::ZoomOut(amount) => self.scale = self.scale.saturating_sub(amount),
             Message::ToggleLock => self.is_locked.set(!self.is_locked.get()),
+            Message::ToggleFullscreen => {
+                self.is_fullscreen.set(!self.is_fullscreen.get());
+
+                // Update the fullscreen query arg.
+                let mut url = ctx.router().get();
+                if self.is_fullscreen.get() {
+                    url.query_mut().set("fullscreen", "1");
+                } else {
+                    url.query_mut().remove("fullscreen");
+                }
+
+                ctx.router().push(url);
+            }
         }
 
         true
@@ -235,13 +256,22 @@ impl Component for MovableBoxed {
 
         let on_lock = ctx.link().callback(|_| Message::ToggleLock);
 
-        let cursor = if self.is_locked.get() {
+        let on_fullscreen = ctx.link().callback(|_| Message::ToggleFullscreen);
+
+        let mut frame_style = String::new();
+
+        // Cursor
+        frame_style.push_str(if self.is_locked.get() {
             "cursor: unset;"
         } else if self.is_moving.get() {
             "cursor: grabbing;"
         } else {
             "cursor: grab;"
-        };
+        });
+
+        if self.is_fullscreen.get() {
+            frame_style.push_str("position: absolute; top:0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; border: none;");
+        }
 
         let style = format!(
             "transform: translate({}px, {}px) scale({}%);",
@@ -270,7 +300,7 @@ impl Component for MovableBoxed {
         let header = ctx.props().header.clone();
 
         html! {
-            <div ref={self.element.clone()} class={classes} style={cursor}>
+            <div ref={self.element.clone()} class={classes} style={frame_style}>
                 <div class="dt-bracket-frame-header">
                     <div class="dt-bracket-frame-actions">
                         <Button onclick={on_reposition} title="Reposition">
@@ -283,6 +313,9 @@ impl Component for MovableBoxed {
                             <FaMinus label="Zoom Out" />
                         </Button>
                         {lock_button}
+                        <Button onclick={on_fullscreen} title="Fullscreen">
+                            <FaCompress label="Fullscreen" />
+                        </Button>
                     </div>
                     <div>
                         { header }
@@ -313,6 +346,7 @@ pub enum Message {
     ZoomIn(u32),
     ZoomOut(u32),
     ToggleLock,
+    ToggleFullscreen,
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
