@@ -209,7 +209,7 @@ impl<'a> TournamentsClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn create(&self, tournament: &Tournament) -> Result<()> {
+    pub async fn create(&self, tournament: &Tournament) -> Result<Tournament> {
         let req = self
             .client
             .request()
@@ -218,8 +218,7 @@ impl<'a> TournamentsClient<'a> {
             .body(tournament)
             .build();
 
-        self.client.send(req).await?;
-        Ok(())
+        self.client.send(req).await?.json().await
     }
 
     /// Deletes the tournament with the given `id`.
