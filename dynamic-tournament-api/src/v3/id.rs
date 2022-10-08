@@ -2,7 +2,6 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use snowflaked::Snowflake;
 
 macro_rules! id {
     ($name:ident, $id:ty) => {
@@ -57,28 +56,6 @@ macro_rules! id {
             #[inline]
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Ok(Self(s.parse::<$id>()?))
-            }
-        }
-
-        impl Snowflake for $name {
-            #[inline]
-            fn from_parts(timestamp: u64, instance: u64, sequence: u64) -> Self {
-                Self(<$id>::from_parts(timestamp, instance, sequence))
-            }
-
-            #[inline]
-            fn timestamp(&self) -> u64 {
-                self.0.timestamp()
-            }
-
-            #[inline]
-            fn instance(&self) -> u64 {
-                self.0.instance()
-            }
-
-            #[inline]
-            fn sequence(&self) -> u64 {
-                self.0.sequence()
             }
         }
     };
