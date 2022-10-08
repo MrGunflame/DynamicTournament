@@ -2,25 +2,35 @@ mod fetch_data;
 mod rc;
 pub mod router;
 
+use std::process::abort;
+
 pub use fetch_data::FetchData;
 pub use rc::Rc;
 use web_sys::{Document, History, Window};
 
+/// Returns the root [`Window`]. This function aborts when no window is present.
 #[inline]
 pub fn window() -> Window {
-    web_sys::window().expect("no window found")
+    match web_sys::window() {
+        Some(window) => window,
+        None => abort(),
+    }
 }
 
-/// Returns the root [`Document`].
-///
-/// # Panics
-///
-/// Panics if there is no [`Document`] in root window or no root window is present. This should
-/// never be the case in a web environment.
+/// Returns the root [`Document`]. This function aborts when no document is present.
+#[inline]
 pub fn document() -> Document {
-    window().document().expect("no document present")
+    match window().document() {
+        Some(document) => document,
+        None => abort(),
+    }
 }
 
+/// Returns the window [`History`]. This function aborts when no history is present.
+#[inline]
 pub fn history() -> History {
-    window().history().expect("no history")
+    match window().history() {
+        Ok(history) => history,
+        Err(_) => abort(),
+    }
 }
