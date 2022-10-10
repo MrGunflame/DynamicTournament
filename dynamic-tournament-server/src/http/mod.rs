@@ -18,6 +18,7 @@ use std::pin::Pin;
 use std::task::{self, Poll};
 use std::time::Duration;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_macros::path;
 use futures::future::BoxFuture;
 use futures::Future;
@@ -347,8 +348,9 @@ impl Context {
         }
     }
 
-    /// Asserts that the request is authenticated. Returns an [`enum@Error`] if this is not the case.
-    pub fn require_authentication(&self) -> std::result::Result<(), Error> {
+    /// Asserts that the request is authenticated and the token satisfies all [`Flags`] provided.
+    /// Returns an [`enum@Error`] if this is not the case.
+    pub fn require_authentication(&self, flags: Flags) -> std::result::Result<(), Error> {
         let header = self.req.authorization()?;
 
         let mut parts = header.split(' ');
@@ -364,7 +366,14 @@ impl Context {
         };
 
         match self.state.auth.validate_auth_token(token) {
-            Ok(_) => Ok(()),
+            Ok(token) => {
+                // Validates the permissions flags.
+                if token.claims().flags.intersects(flags) {
+                    Ok(())
+                } else {
+                    Err(StatusCodeError::forbidden().into())
+                }
+            }
             Err(_) => Err(StatusCodeError::unauthorized().into()),
         }
     }

@@ -5,6 +5,7 @@ use std::mem;
 
 use crate::State;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     Decode, ErrorResponse, Request, Response,
@@ -383,9 +384,14 @@ where
         match req {
             Request::Reserved => None,
             Request::Authorize(token) => match self.global_state.auth.validate_auth_token(&token) {
-                Ok(_) => {
-                    self.is_authenticated = true;
-                    None
+                // The token is valid but we still need to verify the flags.
+                Ok(token) => {
+                    if token.claims().flags.intersects(Flags::EDIT_SCORES) {
+                        self.is_authenticated = true;
+                        None
+                    } else {
+                        Some(Response::Error(ErrorResponse::Unauthorized))
+                    }
                 }
                 Err(err) => {
                     log::debug!("Failed to validate token: {}", err);

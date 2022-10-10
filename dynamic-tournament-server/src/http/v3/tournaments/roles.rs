@@ -1,3 +1,4 @@
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::{RoleId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::roles::Role;
 use dynamic_tournament_api::Payload;
@@ -35,7 +36,7 @@ async fn get(ctx: Context, tournament_id: TournamentId, id: RoleId) -> Result {
 }
 
 async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let mut roles: Payload<Role> = ctx.req.json().await?;
 
@@ -47,7 +48,7 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
 }
 
 async fn delete(ctx: Context, tournament_id: TournamentId, id: RoleId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     ctx.state.store.roles(tournament_id).delete(id).await?;
 

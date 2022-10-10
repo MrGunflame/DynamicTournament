@@ -1,5 +1,6 @@
 use std::hash::{Hash, Hasher};
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant, Player, Team};
 use dynamic_tournament_api::Payload;
@@ -47,7 +48,7 @@ async fn get(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result
 }
 
 async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let tournament = ctx
         .state
@@ -105,7 +106,7 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
 }
 
 async fn delete(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let entrant = ctx
         .state
@@ -123,7 +124,7 @@ async fn delete(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Res
 }
 
 async fn patch(mut ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let entrant = ctx
         .state

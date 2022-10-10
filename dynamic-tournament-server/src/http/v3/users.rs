@@ -1,3 +1,4 @@
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::users::User;
 use dynamic_tournament_macros::{method, path};
 use snowflaked::sync::Generator;
@@ -18,7 +19,7 @@ pub async fn route(mut ctx: Context) -> Result {
 }
 
 async fn create(mut ctx: Context) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let mut user: User = ctx.req.json().await?;
 
