@@ -87,7 +87,7 @@ where
         } else {
             html! {
                 <Protected flags={Flags::EDIT_SCORES}>
-                    <div class="dt-bracket-match-actions">
+                    <div class="dt-bracket-match-actions" style="filter: contrast(0%);">
                         <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
                             <FaPen label="Edit (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
                         </Button>
