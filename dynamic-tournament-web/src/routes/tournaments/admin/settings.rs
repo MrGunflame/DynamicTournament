@@ -172,7 +172,7 @@ impl Component for Settings {
                                 { "Type" }
                             </td>
                             <td>
-                                <select {disabled}>
+                                <select class="dt-input" {disabled}>
                                     <option selected={kind_player}>{ "Player" }</option>
                                     <option selected={kind_team}>{ "Team" }</option>
                                 </select>
