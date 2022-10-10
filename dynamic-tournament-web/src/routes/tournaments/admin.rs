@@ -2,10 +2,11 @@ mod danger_zone;
 mod entrants;
 mod settings;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
-use crate::components::Protected;
+use crate::components::protected::{ForbiddenAction, Protected};
 use crate::utils::Rc;
 
 use self::danger_zone::DangerZone;
@@ -30,7 +31,7 @@ impl Component for Admin {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
-            <Protected>
+            <Protected flags={Flags::ADMIN} action={ForbiddenAction::NotFound}>
                 <div>
                     <settings::Settings tournament={ctx.props().tournament.clone()} />
                     <entrants::Entrants tournament={ctx.props().tournament.clone()} />

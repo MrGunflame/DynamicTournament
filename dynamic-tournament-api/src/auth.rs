@@ -340,6 +340,17 @@ mod tests {
             (Flags::ADMIN | Flags::EDIT_SCORES),
         );
     }
+
+    #[test]
+    fn test_flags_intersects() {
+        let flags = Flags::EMPTY;
+        assert!(!flags.intersects(Flags::ADMIN));
+        assert!(!flags.intersects(Flags::ALL));
+
+        let flags = Flags::ALL;
+        assert!(flags.intersects(Flags::ADMIN));
+        assert!(flags.intersects(Flags::EDIT_SCORES));
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

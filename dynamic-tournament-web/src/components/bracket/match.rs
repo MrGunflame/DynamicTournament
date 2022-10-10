@@ -1,12 +1,13 @@
 use dynamic_tournament_core::render::Position;
 use yew::prelude::*;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_core::{EntrantScore, EntrantSpot};
 
 use super::BracketEntrant;
 use crate::components::button::Button;
 use crate::components::icons::{FaPen, FaRotateLeft, FaSize};
-use crate::components::providers::{ClientProvider, Provider};
+use crate::components::Protected;
 
 use std::fmt::Display;
 use std::marker::PhantomData;
@@ -64,40 +65,37 @@ where
             })
             .collect();
 
-        let client = ClientProvider::get(ctx);
+        let action_button = if ctx.props().entrants[0].is_entrant()
+            && ctx.props().entrants[1].is_entrant()
+        {
+            let onclick = ctx.link().callback(|_| Message::UpdateScore);
 
-        let action_button = match client.is_authenticated() {
-            true => {
-                if ctx.props().entrants[0].is_entrant() && ctx.props().entrants[1].is_entrant() {
-                    let onclick = ctx.link().callback(|_| Message::UpdateScore);
+            let on_reset = ctx.link().callback(|_| Message::ResetMatch);
 
-                    let on_reset = ctx.link().callback(|_| Message::ResetMatch);
-
-                    html! {
-                        <div class="dt-bracket-match-actions">
-                            <Button classes="" {onclick} title="Edit">
-                                <FaPen label="Edit" size={FaSize::ExtraLarge} />
-                            </Button>
-                            <Button classes="" onclick={on_reset} title="Reset">
-                                <FaRotateLeft label="Reset" size={FaSize::ExtraLarge} />
-                            </Button>
-                        </div>
-                    }
-                } else {
-                    html! {
-                        <div class="dt-bracket-match-actions">
-                            <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
-                                <FaPen label="Edit (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
-                            </Button>
-                            <Button classes="" title="Reset (Some entrant spots are not occupied.)" disabled=true>
-                                <FaRotateLeft label="Reset (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
-                            </Button>
-                        </div>
-                    }
-                }
+            html! {
+                <Protected flags={Flags::EDIT_SCORES}>
+                    <div class="dt-bracket-match-actions">
+                        <Button classes="" {onclick} title="Edit">
+                            <FaPen label="Edit" size={FaSize::ExtraLarge} />
+                        </Button>
+                        <Button classes="" onclick={on_reset} title="Reset">
+                            <FaRotateLeft label="Reset" size={FaSize::ExtraLarge} />
+                        </Button>
+                    </div>
+                </Protected>
             }
-            false => {
-                html! {}
+        } else {
+            html! {
+                <Protected flags={Flags::EDIT_SCORES}>
+                    <div class="dt-bracket-match-actions">
+                        <Button classes="" title="Edit (Some entrant spots are not occupied.)" disabled=true>
+                            <FaPen label="Edit (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
+                        </Button>
+                        <Button classes="" title="Reset (Some entrant spots are not occupied.)" disabled=true>
+                            <FaRotateLeft label="Reset (Some entrant spots are not occupied.)" size={FaSize::ExtraLarge} />
+                        </Button>
+                    </div>
+                </Protected>
             }
         };
 
