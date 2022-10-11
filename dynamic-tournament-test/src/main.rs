@@ -9,8 +9,8 @@ async fn main() {
     let mut args = std::env::args().skip(1);
 
     let host = args.next().unwrap();
-    let username = args.next().unwrap();
-    let password = args.next().unwrap();
+    let _username = args.next().unwrap();
+    let _password = args.next().unwrap();
     let entrants: usize = args.next().unwrap().parse().unwrap();
 
     let client = Client::new(host);

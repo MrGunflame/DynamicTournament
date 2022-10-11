@@ -73,15 +73,6 @@ impl Client {
         }
     }
 
-    /// Returns the current [`State`] of the `Client`.
-    pub fn state(&self) -> State {
-        // Skips validating the actual token currently.
-        match self.inner.authorization().refresh_token() {
-            Some(_) => State::LoggedIn,
-            None => State::LoggedOut,
-        }
-    }
-
     /// Spawns a new refresh task on the current task.
     ///
     /// Note: The task runs util it is destroyed using `self.waker`.
@@ -162,16 +153,6 @@ impl Client {
             sleep(Duration::new(30, 0)).await;
         }
     }
-
-    pub fn is_authenticated(&self) -> bool {
-        if let Some(token) = self.authorization().refresh_token() {
-            if token_lifetime(token) >= 30 {
-                return true;
-            }
-        }
-
-        false
-    }
 }
 
 impl Deref for Client {
@@ -231,10 +212,4 @@ impl<'a> Future for Changed<'a> {
 /// Returns the remaining lifetime of the `token`.
 fn token_lifetime(token: &Token) -> u64 {
     token.claims().exp - Utc::now().timestamp() as u64
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum State {
-    LoggedIn,
-    LoggedOut,
 }

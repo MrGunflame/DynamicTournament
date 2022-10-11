@@ -40,7 +40,7 @@ async fn main() {
 
     let client = Client::new(args.uri);
 
-    if let Some((username, password)) = args.username.zip(args.password) {
+    if let Some((_username, _password)) = args.username.zip(args.password) {
         match client.v3().auth().login().await {
             Ok(_) => (),
             Err(err) => {

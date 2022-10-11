@@ -14,7 +14,7 @@ use dynamic_tournament_api::{
 #[tokio::main]
 async fn main() {
     let client = Client::new("http://localhost:3030");
-    client.v3().auth().login("a", "a").await.unwrap();
+    client.v3().auth().login().await.unwrap();
 
     test_v3(&client).await;
     v2_to_v3(&client).await;
