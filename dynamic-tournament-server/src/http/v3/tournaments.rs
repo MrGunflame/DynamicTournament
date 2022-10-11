@@ -4,6 +4,7 @@ mod roles;
 
 use std::hash::{Hash, Hasher};
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::TournamentId, tournaments::TournamentOverview};
 use dynamic_tournament_api::Payload;
@@ -66,7 +67,7 @@ async fn get(ctx: Context, id: TournamentId) -> Result {
 }
 
 async fn create(mut ctx: Context) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let mut tournaments: Payload<Tournament> = ctx.req.json().await?;
 
@@ -78,7 +79,7 @@ async fn create(mut ctx: Context) -> Result {
 }
 
 async fn patch(mut ctx: Context, id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let mut tournament = ctx.state.store.tournaments().get(id).await.map_404()?;
 
@@ -95,7 +96,7 @@ async fn patch(mut ctx: Context, id: TournamentId) -> Result {
 }
 
 async fn delete(ctx: Context, id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let tournament = ctx.state.store.tournaments().get(id).await.map_404()?;
 

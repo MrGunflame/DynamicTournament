@@ -50,7 +50,7 @@ where
 
         html! {
             <div class={classes}>
-                <div class="dt-bracket-team-name flex-col">
+                <div class="dt-bracket-team-name dt-flex">
                     <div class="dt-bracket-team-color" { style }></div>
                     <span>{ text }</span>
                 </div>

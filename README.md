@@ -1,33 +1,46 @@
 # DynamicTournament
 
-## Building (Web)
+A modular tournament generator and viewer.
 
-### Requirements (build only)
+## Crates
 
-- A stable rust toolchain
-- [Trunk](https://crates.io/crates/trunk) (`cargo install trunk`)
+The project is split up in a modular approach. Components are connected via the API.
 
-### Building
+- `dynamic-tournament-web`: A WebAssembly frontend for viewing tournaments.
+- `dynamic-tournament-server`: A server implementation of the tournaments API.
+- `dynamic-tournament-api`: Contains API types and an API client capable of using the system or WebAssembly interface.
+- `dynamic-tournament-core`: The point of this project. Contains generic types and functions for creating and rendering tournament trees.
+- `dynamic-tournament-macros`: Shared proc macros for the `dynamic-tournament-web` and `dynamic-tournament-server` crates.
+- `dynamic-tournament-test`: A utility crate for generating test data for the API.
+- `dynamic-tournament-cli`: A CLI for interacting with the API.
 
-- Clone the repo: `git clone https://github.com/MrGunflame/dynamic-tournament`
-- Build using trunk: `trunk build --release`
-
-All bundled files can be found in `dist/`.
-
-## Building (Server)
+## Building
 
 ### Requirements
 
-- A stable rust toolchain (build only).
+- A stable rust toolchain with `rustup` and `cargo`.
+- Docker if building the server docker image.
 
-### Building
+### Web Client
 
-- Clone the repo: `git clone https://github.com/MrGunflame/dynamic-tournament`
-- Build the server: `cargo build --bin dynamic-tournament-server --release`
+- Clone the repo: `git clone https://github.com/MrGunflame/DynamicTournament`
+- Build with make: `cd DynamicTournament/dynamic-tournament-web && make`
 
-The final binary will be `target/release/dynamic-tournament-server`.
+See [dynamic-tournament-web](https://github.com/MrGunflame/DynamicTournament/tree/master/dynamic-tournament-web) for more details.
 
-For more information see the server crate: https://github.com/MrGunflame/DynamicTournament/tree/master/dynamic-tournament-server
+### Server
+
+- Clone the repo: `git clone https://github.com/MrGunflame/DynamicTournament`
+- Build with make: `cd DynamicTournament/dynamic-tournament-server && make`
+
+See [dynamic-tournament-server](https://github.com/MrGunflame/DynamicTournament/tree/master/dynamic-tournament-server) for more details.
+
+## Documentation
+
+The API documentation for all currently stable versions [can be found here](https://github.com/MrGunflame/DynamicTournament/tree/master/docs).
+
+The documentation for all rust crates must be generated manually:
+- `cargo doc --no-deps`
 
 ## License
 

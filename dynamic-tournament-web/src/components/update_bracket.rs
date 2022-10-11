@@ -67,14 +67,14 @@ impl Component for BracketUpdate {
             *entrant = html! {
                 <tr class="dt-popup-team">
                     <td>{ team.clone() }</td>
-                    <td><ParseInput<u64> classes="input-u64" kind="number" value={score} {onchange} /></td>
+                    <td><ParseInput<u64> kind="number" value={score} {onchange} /></td>
                 </tr>
             };
 
             let classes = if winner {
-                "winner-input active"
+                "dt-winner-input active"
             } else {
-                "winner-input"
+                "dt-winner-input"
             };
 
             let onclick = ctx.link().callback(move |_| Msg::UpdateWinner { index });
@@ -95,13 +95,13 @@ impl Component for BracketUpdate {
                     </tr>
                     { for entrants.into_iter() }
                 </table>
-                <div class="winner-input-box">
-                    <h3 class="h-center">{ "Declare a winner (optional)"}</h3>
-                    <div class="flex-center winner-input-wrapper">
+                <div class="dt-winner-input-box">
+                    <h3>{ "Declare a winner (optional)"}</h3>
+                    <div class="flex-center dt-winner-input-wrapper">
                         { for winners.into_iter() }
                     </div>
                 </div>
-                <button class="button" type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
+                <button class="dt-button" type="submit" onclick={on_submit} disabled=false>{ "Submit" }</button>
             </div>
         }
     }

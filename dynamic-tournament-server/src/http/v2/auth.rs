@@ -1,7 +1,7 @@
 use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
-use dynamic_tournament_api::auth::Claims;
+use dynamic_tournament_api::auth::{Claims, Flags};
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_macros::{method, path};
 use hyper::header::{AUTHORIZATION, COOKIE, HOST};
@@ -20,7 +20,10 @@ pub async fn route(mut ctx: Context) -> Result {
 async fn login(ctx: Context) -> Result {
     wp_validate(&ctx).await?;
 
-    let tokens = ctx.state.auth.create_tokens(Claims::new(0))?;
+    let mut claims = Claims::new(0);
+    claims.flags = Flags::ALL;
+
+    let tokens = ctx.state.auth.create_tokens(claims)?;
     Ok(Response::ok().json(&tokens))
 }
 
