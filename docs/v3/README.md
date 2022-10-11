@@ -9,7 +9,17 @@
 ## Authentication
 
 Authentication for write-endpoints is provided via a [JWT](https://jwt.io) in the `Authorization` header. If the header is missing for a request a `401` error
-is returned.
+is returned. The payload contains the following claims:
+
+| Field | Type  | Description                                                        |
+| ----- | ----- | ------------------------------------------------------------------ |
+| sub   | u64   | The id of the user.                                                |
+| iat   | u64   | The timestamp in seconds of the creation of this token.            |
+| exp   | u64   | Expiration timestamp in seconds of this token.                     |
+| nbf   | u64   | Timestamp in seconds before which the token may no be used yet.    |
+| flags  | u8    | (Optional) A bitmap of optional features this token is capable of. |
+
+**Note that the payload has the same stability guarantees as the rest of the REST API, i.e. new fields may be added in the future.**
 
 ## Request Headers
 
