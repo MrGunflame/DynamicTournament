@@ -28,8 +28,8 @@ where
     fn view(&self, ctx: &Context<Self>) -> Html {
         let text = match &ctx.props().entrant {
             EntrantSpot::Entrant(entrant) => html! { entrant.to_string() },
-            EntrantSpot::Empty => html! { <i>{ "BYE" }</i> },
-            EntrantSpot::TBD => html! { <i>{ "TBD" }</i> },
+            EntrantSpot::Empty => html! { "BYE" },
+            EntrantSpot::TBD => html! { "TBD" },
         };
 
         let (score, winner) = match &ctx.props().node {
@@ -44,14 +44,14 @@ where
             None => String::from("display: hidden;"),
         };
 
+        let x = ctx.props().x;
+        let y = ctx.props().y;
+
         html! {
-            <div class={classes}>
-                <div class="team-label flex-col">
-                    <div class="team-color" { style }></div>
-                    <span>{ text }</span>
-                </div>
-                <div class="team-score">{ score }</div>
-            </div>
+            <g>
+                <text dominant-baseline="hanging" x={x.to_string()} y={y.to_string()} fill="white">{ text }</text>
+                <text dominant-baseline="hanging" x={(x + 200).to_string()} y={y.to_string()} fill="white">{ score }</text>
+            </g>
         }
     }
 }
@@ -61,6 +61,8 @@ pub struct Props<T> {
     pub entrant: EntrantSpot<T>,
     pub node: EntrantSpot<EntrantScore<u64>>,
     pub color: Option<&'static str>,
+    pub x: i32,
+    pub y: i32,
 }
 
 impl<T> PartialEq for Props<T> {

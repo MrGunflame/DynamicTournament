@@ -155,7 +155,7 @@ where
 
         html! {
             <div class="dt-bracket">
-                <svg width="100%" height="100%">
+                <svg width="2000" height="2000">
                     { self.output }
                 </svg>
             </div>
@@ -180,9 +180,9 @@ where
 
         html! {
             // <div class="dt-bracket-bracket-row">
-            //<g width="100" height="100">
+            <g>
                 { brackets }
-            //</g>
+            </g>
         }
     }
 
@@ -190,9 +190,9 @@ where
         let rounds: Html = input.map(|round| self.render_round(round)).collect();
 
         html! {
-            //<g width="100" height="100">
+            <g>
                 { rounds }
-            //</g>
+            </g>
         }
     }
 
@@ -207,10 +207,15 @@ where
             })
             .collect();
 
+        let x = self.match_x;
+        self.match_x += 200;
+
+        let transform = format!("translate({},0)", x);
+
         html! {
-            //<g width="100" height="100">
+            <g {transform}>
                 { round }
-            //</g>
+            </g>
         }
     }
 
@@ -234,7 +239,6 @@ where
 
         let x = self.match_x;
         let y = self.match_y;
-        self.match_x += 200;
         self.match_y += 200;
 
         html! {

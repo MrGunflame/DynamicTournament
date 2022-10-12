@@ -59,7 +59,7 @@ where
                 };
 
                 html! {
-                    <BracketEntrant<T> entrant={entrant.clone()} {node} {color} />
+                    <BracketEntrant<T> entrant={entrant.clone()} {node} {color} x={0} y={(index * 20) as i32} />
                 }
             })
             .collect();
@@ -116,12 +116,7 @@ where
         html! {
             <g x={x.clone()} y={y.clone()} {transform} class="match" {style}>
                 <text y="50%" fill="white">{ number }</text>
-                <div>
-                    <div class="match-teams">
-                        {entrants}
-                    </div>
-                    {action_button}
-                </div>
+                {entrants}
             </g>
         }
     }
