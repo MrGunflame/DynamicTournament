@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 #[cfg(feature = "server")]
 mod server;
 
