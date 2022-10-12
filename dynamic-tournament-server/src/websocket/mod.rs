@@ -98,10 +98,12 @@ where
     // Has the server initialized a close event.
     close_state: Option<CloseState>,
 
-    is_authenticated: bool,
     global_state: State,
     bracket: LiveBracket,
     changed: EventStream<'static>,
+
+    /// Id of the connected user. This is `None` if the user didn't authenticate yet.
+    client_user: Option<u64>,
 }
 
 impl<S> Connection<S>
@@ -124,10 +126,10 @@ where
             state: ConnectionState::Init,
             ping_interval,
             close_state: None,
-            is_authenticated: false,
             global_state: state,
             bracket,
             changed,
+            client_user: None,
         }
     }
 
@@ -387,7 +389,7 @@ where
                 // The token is valid but we still need to verify the flags.
                 Ok(token) => {
                     if token.claims().flags.intersects(Flags::EDIT_SCORES) {
-                        self.is_authenticated = true;
+                        self.client_user = Some(token.claims().sub);
                         None
                     } else {
                         Some(Response::Error(ErrorResponse::Unauthorized))
@@ -403,7 +405,7 @@ where
                 Some(Response::SyncState(matches))
             }
             Request::UpdateMatch { index, nodes } => {
-                if self.is_authenticated {
+                if self.client_user.is_some() {
                     self.bracket.update(index, nodes);
                     None
                 } else {
@@ -411,7 +413,7 @@ where
                 }
             }
             Request::ResetMatch { index } => {
-                if self.is_authenticated {
+                if self.client_user.is_some() {
                     self.bracket.reset(index as usize);
                     None
                 } else {
