@@ -1,6 +1,7 @@
 mod matches;
 
 use dynamic_tournament_api::{
+    auth::Flags,
     v3::{
         id::{BracketId, SystemId, TournamentId},
         tournaments::brackets::Bracket,
@@ -46,7 +47,7 @@ async fn get(ctx: Context, tournament_id: TournamentId, id: BracketId) -> Result
 }
 
 async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let mut brackets: Payload<Bracket> = ctx.req.json().await?;
 

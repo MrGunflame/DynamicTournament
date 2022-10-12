@@ -73,7 +73,7 @@ pub struct PartialTournament {
 /// The type of [`Entrant`]s accepted by the tournament.
 ///
 /// [`Entrant`]: entrants::Entrant
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntrantKind {
     Player,
@@ -209,7 +209,7 @@ impl<'a> TournamentsClient<'a> {
     /// # Errors
     ///
     /// Returns an error if the request fails.
-    pub async fn create(&self, tournament: &Tournament) -> Result<()> {
+    pub async fn create(&self, tournament: &Tournament) -> Result<Tournament> {
         let req = self
             .client
             .request()
@@ -218,8 +218,7 @@ impl<'a> TournamentsClient<'a> {
             .body(tournament)
             .build();
 
-        self.client.send(req).await?;
-        Ok(())
+        self.client.send(req).await?.json().await
     }
 
     /// Deletes the tournament with the given `id`.

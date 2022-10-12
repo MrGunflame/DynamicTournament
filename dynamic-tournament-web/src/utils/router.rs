@@ -12,11 +12,13 @@
 //! **Note that before using the router you must call [`init`] exactly once. Using any router
 //! features before the function finishes execution will result in undefined behavoir.**
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
+use std::str::FromStr;
 
+use gloo_events::EventListener;
 use wasm_bindgen::JsValue;
 use web_sys::MouseEvent;
 use yew::html::Classes;
@@ -62,6 +64,9 @@ pub struct State {
     path: RefCell<PathBuf>,
     /// A list of active switches waiting for an url change.
     switches: RefCell<SwitchList>,
+    /// Listener for the popstate event. This event will be fired when the browser changes
+    /// the url path directly (e.g. using Forward/Back actions).
+    _listener: EventListener,
 }
 
 fn strip_root(path: &mut String) {
@@ -88,23 +93,53 @@ impl State {
         let mut path = super::document().location().unwrap().pathname().unwrap();
         strip_root(&mut path);
 
+        let listener = EventListener::new(&super::window(), "popstate", |_| {
+            let mut path = super::document().location().unwrap().pathname().unwrap();
+            strip_root(&mut path);
+
+            let state = state();
+            *state.path.borrow_mut() = PathBuf::from(path);
+
+            state.notify();
+        });
+
         Self {
             history: super::history(),
             path: RefCell::new(PathBuf::from(path)),
             switches: RefCell::new(SwitchList::new()),
+            _listener: listener,
+        }
+    }
+
+    /// Returns the current [`Url`] of the router.
+    pub fn get(&self) -> Url {
+        let mut path = super::document().location().unwrap().pathname().unwrap();
+        strip_root(&mut path);
+
+        let query = super::document().location().unwrap().search().unwrap();
+
+        Url {
+            path,
+            query: query.parse().unwrap_or_default(),
         }
     }
 
     /// Pushes a new `url` onto the history stack. This will rerender any existing [`Switch`]es.
-    pub fn push(&self, url: String) {
+    pub fn push<T>(&self, url: T)
+    where
+        T: Into<Url>,
+    {
+        let url = url.into();
+        let query = url.query;
+
         let state = state();
 
-        let path = PathBuf::from(url);
+        let path = PathBuf::from(url.path);
         *state.path.borrow_mut() = path.clone();
 
         let root = config().root();
 
-        let url = format!("{}/{}", root, path);
+        let url = format!("{}/{}{}", root, path, query);
         let path = PathBuf::from(url);
 
         log::debug!("State::push({:?})", path);
@@ -115,7 +150,34 @@ impl State {
             .expect("Failed to push history state");
 
         // TODO: Don't wake when the url doesn't change.
-        state.switches.borrow().wake();
+        self.notify();
+    }
+
+    pub fn replace<T>(&self, url: T)
+    where
+        T: Into<Url>,
+    {
+        let url = url.into();
+        let query = url.query;
+
+        let state = state();
+
+        let path = PathBuf::from(url.path);
+        *state.path.borrow_mut() = path.clone();
+
+        let root = config().root();
+
+        let url = format!("{}/{}{}", root, path, query);
+        let path = PathBuf::from(url);
+
+        log::debug!("State::replace({:?})", path);
+
+        state
+            .history
+            .replace_state_with_url(&JsValue::NULL, "", Some(&path.to_string()))
+            .expect("Failed to replace history state");
+
+        self.notify();
     }
 
     /// Update the current url, pushing a new one if it changes.
@@ -131,6 +193,11 @@ impl State {
         f(&mut path);
 
         self.push(path.to_string());
+    }
+
+    /// Notify all switches that the path changed.
+    pub fn notify(&self) {
+        SwitchList::wake();
     }
 }
 
@@ -306,7 +373,7 @@ impl Component for Redirect {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        state().push(ctx.props().to.clone());
+        state().replace(ctx.props().to.clone());
 
         html! {}
     }
@@ -541,10 +608,16 @@ impl SwitchList {
 
     /// Wakes all switches in the list, causing them to rerender. They will be woken in the order
     /// they were registered.
-    pub fn wake(&self) {
-        log::debug!("Waking {} waiting switches", self.list.len());
+    pub fn wake() {
+        // Clone all active callbacks into a separate collection. Doing this is necessary if the
+        // callback destroys a switch, causing `state.switches` to be borrowed mutably.
+        let switches = state().switches.borrow();
+        let list: Vec<_> = switches.list.iter().map(|(_, cb)| cb.clone()).collect();
+        drop(switches);
 
-        for cb in self.list.values() {
+        log::debug!("Waking {} waiting switches", list.len());
+
+        for cb in list {
             cb.emit(());
         }
     }
@@ -552,7 +625,7 @@ impl SwitchList {
 
 /// An extension trait for [`yew::Context`] that provides direct access to the routers [`State`].
 pub trait RouterContextExt {
-    /// Returns a reference to the routers [`State`].
+    /// Returns a reference to the router's [`State`].
     fn router(&self) -> &'static State;
 }
 
@@ -566,9 +639,121 @@ where
     }
 }
 
+/// An absolute url relative to the application route.
+///
+/// A `Url` is used to represent the current state of the router within the application. It is the
+/// absolute url of the application, but not the absolute url of the current page. For example, if
+/// the application is loaded at `/app`, a `Url` of `/hello_world` represents a real url of
+/// `/app/hello_world` of the current page.
+#[derive(Clone, Debug)]
+pub struct Url {
+    path: String,
+    query: Query,
+}
+
+impl Url {
+    /// Returns a reference to the [`Query`] arguments of the `Url`.
+    #[inline]
+    pub fn query(&self) -> &Query {
+        &self.query
+    }
+
+    /// Returns a mutable reference to the [`Query`] arguments of the `Url`.
+    #[inline]
+    pub fn query_mut(&mut self) -> &mut Query {
+        &mut self.query
+    }
+}
+
+// From app-absolute path
+impl From<String> for Url {
+    fn from(path: String) -> Self {
+        Self {
+            path,
+            query: Query::new(),
+        }
+    }
+}
+
+/// The uri query string.
+///
+/// A query allows specifing options in the uri. They are ignored by routers.
+#[derive(Clone, Debug, Default)]
+pub struct Query {
+    args: HashMap<String, String>,
+}
+
+impl Query {
+    /// Creates a new, empty `Query` map.
+    pub fn new() -> Self {
+        Self {
+            args: HashMap::new(),
+        }
+    }
+
+    /// Returns the value for the given key from the `Query`. Returns `None` if `key` is not set.
+    #[inline]
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.args.get(key).map(|s| s.as_str())
+    }
+
+    /// Inserts a new key-value pair into the `Query`.
+    #[inline]
+    pub fn set(&mut self, key: &str, value: &str) {
+        self.args.insert(key.to_owned(), value.to_owned());
+    }
+
+    /// Removes and returns the value with the given `key`. Returns `None` if the key doesn't
+    /// exist.
+    #[inline]
+    pub fn remove(&mut self, key: &str) -> Option<String> {
+        self.args.remove(key)
+    }
+}
+
+impl Display for Query {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for (index, (key, val)) in self.args.iter().enumerate() {
+            if index == 0 {
+                write!(f, "?{}={}", key, val)?;
+            } else {
+                write!(f, "&{}={}", key, val)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl FromStr for Query {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut query = Query::new();
+
+        for (index, mut arg) in s.split('&').enumerate() {
+            if index == 0 {
+                arg = arg.strip_prefix('?').ok_or(())?;
+            }
+
+            let mut parts = arg.split('=');
+            let key = parts.next().ok_or(())?;
+            let val = parts.next().ok_or(())?;
+
+            if parts.next().is_some() {
+                return Err(());
+            }
+
+            query.set(key, val);
+        }
+
+        Ok(query)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::PathBuf;
+    use super::{PathBuf, Query};
 
     #[test]
     fn test_path_buf_push() {
@@ -606,5 +791,17 @@ mod tests {
     fn test_path_buf_from_string() {
         let path = PathBuf::from("/a/b/c");
         assert_eq!(path, "/a/b/c");
+    }
+
+    #[test]
+    fn test_query_from_str() {
+        let input = "?fullscreen=true";
+        let query: Query = input.parse().unwrap();
+        assert_eq!(query.get("fullscreen"), Some("true"));
+
+        let input = "?a=b&c=d";
+        let query: Query = input.parse().unwrap();
+        assert_eq!(query.get("a"), Some("b"));
+        assert_eq!(query.get("c"), Some("d"));
     }
 }

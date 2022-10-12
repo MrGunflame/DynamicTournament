@@ -50,11 +50,7 @@ impl Component for Brackets {
     fn view(&self, ctx: &Context<Self>) -> Html {
         self.brackets.render(|brackets| match brackets.first() {
             Some(bracket) => {
-                let to = format!(
-                    "/tournaments/{}/brackets/{}",
-                    ctx.props().tournament.id,
-                    bracket.id
-                );
+                let to = format!("/{}/brackets/{}", ctx.props().tournament.id, bracket.id);
 
                 html! {
                     <Redirect {to} />

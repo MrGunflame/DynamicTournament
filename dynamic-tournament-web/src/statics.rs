@@ -15,6 +15,7 @@ pub struct Config {
     // We never need to resize this, so `Box<str>` saves us 1 * usize of space.
     pub api_base: Box<str>,
     pub root: Box<str>,
+    pub mountpoint: Box<str>,
 }
 
 impl Config {
@@ -27,6 +28,11 @@ impl Config {
     #[inline]
     pub fn root(&self) -> &'static str {
         &self.static_ref().root
+    }
+
+    #[inline]
+    pub fn mountpoint(&self) -> &'static str {
+        &self.static_ref().mountpoint
     }
 
     /// Converts a `&Config` reference into a `&'static Config` reference.

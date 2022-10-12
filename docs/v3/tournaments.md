@@ -69,6 +69,7 @@ Returns the newly created [Tournament](#tournament).
 
 - `400 Bad Request`: Returned if the request body is malformed or fields are missing.
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
+- `403 Forbidden`: Returned if the token provided in the `Authorization` header is valid, but is lacking the required permissions.
 
 ## PATCH `/v3/tournaments/:id`
 
@@ -96,6 +97,7 @@ Returns the updated [Tournament](#tournament).
 
 - `400 Bad Request`: Returned if the request body is malformed.
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
+- `403 Forbidden`: Returned if the token provided in the `Authorization` header is valid, but is lacking the required permissions.
 - `404 Not Found`: Returned if the tournament with the requested `id` does not exist.
 
 ## DELETE `/v3/tournaments/:id`
@@ -110,6 +112,7 @@ Requires the following headers to be set:
 ### Errors
 
 - `401 Unauthorized`: Returned if the `Authorization` header is missing or contains an invalid token.
+- `403 Forbidden`: Returned if the token provided in the `Authorization` header is valid, but is lacking the required permissions.
 - `404 Not Found`: Returned if the tournament with the requested `id` does not exist.
 
 ## Sub-Endpoints

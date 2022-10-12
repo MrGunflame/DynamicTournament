@@ -40,8 +40,8 @@ impl Component for ErrorLog {
                 let onclick = ctx.link().callback(move |_| Message::Remove(index));
 
                 html! {
-                    <div class="dt-errorlog-msg">
-                        <div class="dt-errorlog-button">
+                    <div class="dt-msglog-msg">
+                        <div class="dt-msglog-button">
                             <button {onclick}>
                                 <i aria-hidden="true" class="fa-xmark fa-solid fa-2xl"></i>
                                 <span class="sr-only">{ "Close" }</span>
@@ -55,7 +55,7 @@ impl Component for ErrorLog {
             .collect();
 
         html! {
-            <div class="dt-errorlog">
+            <div class="dt-msglog">
                 { msgs }
             </div>
         }

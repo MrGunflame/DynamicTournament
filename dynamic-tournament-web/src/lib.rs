@@ -1,3 +1,7 @@
+#![deny(unused_crate_dependencies)]
+// Fix for html! macro doing unit value assignments. (yew 0.19.3)
+#![allow(clippy::let_unit_value)]
+
 mod api;
 mod components;
 mod consts;
@@ -14,11 +18,11 @@ pub use statics::Config;
 
 use routes::App;
 
-use consts::{MOUNTPOINT, TITLE_BASE};
+use consts::TITLE_BASE;
 
 #[wasm_bindgen]
-pub fn run(config: &JsValue) {
-    let config = config.into_serde().expect("Failed to parse config");
+pub fn run(config: JsValue) {
+    let config = serde_wasm_bindgen::from_value(config).expect("Failed to parse config");
     run_with_config(config);
 }
 
@@ -28,30 +32,27 @@ pub fn run_with_config(config: Config) {
         logger::init();
     }
 
-    // SAFETY: There are no references to the config.
-    unsafe {
-        statics::set_config(config);
-    }
-
     let document = web_sys::window()
         .expect("No window")
         .document()
         .expect("No Document");
 
-    let element = match MOUNTPOINT {
-        Mountpoint::Body => document.body().expect("No document body found").into(),
-        Mountpoint::Element(id) => document
-            .get_element_by_id(id)
-            .expect("No element with the given id found"),
+    let element = match document.get_element_by_id(config.mountpoint()) {
+        Some(element) => element,
+        None => {
+            log::error!("Cannot find element with id {}", config.mountpoint());
+            log::error!("Fatal error: Failed to mount app");
+
+            return;
+        }
     };
 
-    start_app_in_element::<App>(element);
-}
+    // SAFETY: There are no references to the config.
+    unsafe {
+        statics::set_config(config);
+    }
 
-#[derive(Copy, Clone, Debug)]
-pub enum Mountpoint {
-    Body,
-    Element(&'static str),
+    start_app_in_element::<App>(element);
 }
 
 pub struct Title;

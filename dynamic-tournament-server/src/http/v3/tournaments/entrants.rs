@@ -1,10 +1,14 @@
+use std::hash::{Hash, Hasher};
+
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::{EntrantId, TournamentId};
-use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant};
+use dynamic_tournament_api::v3::tournaments::entrants::{Entrant, EntrantVariant, Player, Team};
 use dynamic_tournament_api::Payload;
 use dynamic_tournament_macros::{method, path};
 
-use crate::http::{Context, Response, Result};
-use crate::StatusCodeError;
+use crate::http::etag::{Etag, HashEtag};
+use crate::http::{Context, HttpResult, Response, Result};
+use crate::{compare_etag, StatusCodeError};
 
 pub async fn route(mut ctx: Context, tournament_id: TournamentId) -> Result {
     path!(ctx, {
@@ -21,22 +25,30 @@ pub async fn route(mut ctx: Context, tournament_id: TournamentId) -> Result {
 }
 
 async fn list(ctx: Context, id: TournamentId) -> Result {
-    let entrants = ctx.state.store.get_entrants(id).await?;
+    let entrants = ctx.state.store.entrants(id).list().await?;
 
-    Ok(Response::ok().json(&entrants))
+    let etag = Etag::new(entrants.as_slice());
+    compare_etag!(ctx, etag);
+
+    Ok(Response::ok().etag(etag).json(&entrants))
 }
 
 async fn get(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
-    let entrant = ctx.state.store.get_entrant(tournament_id, id).await?;
+    let entrant = ctx
+        .state
+        .store
+        .get_entrant(tournament_id, id)
+        .await
+        .map_404()?;
 
-    match entrant {
-        Some(entrant) => Ok(Response::ok().json(&entrant)),
-        None => Err(StatusCodeError::not_found().into()),
-    }
+    let etag = Etag::new(&entrant);
+    compare_etag!(ctx, etag);
+
+    Ok(Response::ok().etag(etag).json(&entrant))
 }
 
 async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let tournament = ctx
         .state
@@ -94,7 +106,17 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
 }
 
 async fn delete(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
+
+    let entrant = ctx
+        .state
+        .store
+        .get_entrant(tournament_id, id)
+        .await
+        .map_404()?;
+
+    let etag = Etag::new(&entrant);
+    compare_etag!(ctx, etag);
 
     ctx.state.store.entrants(tournament_id).delete(id).await?;
 
@@ -102,7 +124,17 @@ async fn delete(ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Res
 }
 
 async fn patch(mut ctx: Context, tournament_id: TournamentId, id: EntrantId) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
+
+    let entrant = ctx
+        .state
+        .store
+        .get_entrant(tournament_id, id)
+        .await
+        .map_404()?;
+
+    let etag = Etag::new(&entrant);
+    compare_etag!(ctx, etag);
 
     let mut entrant = ctx.req.json().await?;
     ctx.state
@@ -114,4 +146,62 @@ async fn patch(mut ctx: Context, tournament_id: TournamentId, id: EntrantId) -> 
     entrant.id = id;
 
     Ok(Response::ok().json(&entrant))
+}
+
+impl HashEtag for [Entrant] {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        for elem in self {
+            elem.hash(state);
+        }
+    }
+}
+
+impl HashEtag for Entrant {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let Self { id: _, inner } = self;
+
+        match inner {
+            EntrantVariant::Player(player) => {
+                0u8.hash(state);
+                player.hash(state);
+            }
+            EntrantVariant::Team(team) => {
+                1u8.hash(state);
+                team.hash(state);
+            }
+        }
+    }
+}
+
+impl HashEtag for Player {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let Self { name, role, rating } = self;
+
+        name.hash(state);
+        role.hash(state);
+        rating.hash(state);
+    }
+}
+
+impl HashEtag for Team {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        let Self { name, players } = self;
+
+        name.hash(state);
+        for player in players {
+            player.hash(state);
+        }
+    }
 }

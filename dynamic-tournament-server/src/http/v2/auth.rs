@@ -2,7 +2,7 @@ use crate::auth::password_hash;
 use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
-use dynamic_tournament_api::auth::Claims;
+use dynamic_tournament_api::auth::{Claims, Flags};
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_api::v3::users::User;
 use dynamic_tournament_macros::{method, path};
@@ -37,7 +37,11 @@ async fn login(mut ctx: Context) -> Result {
         return Err(StatusCodeError::unauthorized().into());
     }
 
-    let tokens = ctx.state.auth.create_tokens(Claims::new(user.id.0))?;
+    // Set all permissions
+    let mut claims = Claims::new(user.id.0);
+    claims.flags = Flags::ALL;
+
+    let tokens = ctx.state.auth.create_tokens(claims)?;
     Ok(Response::ok().json(&tokens))
 }
 

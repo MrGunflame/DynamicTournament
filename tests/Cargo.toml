@@ -1,0 +1,9 @@
+[package]
+name = "tests"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+dynamic-tournament-api = { version = "*", path = "../dynamic-tournament-api" }
+tokio = { version = "1.21.2", features = ["full"] }
+chrono = "0.4.19"

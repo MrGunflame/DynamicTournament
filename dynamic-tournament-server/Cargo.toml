@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-server"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 description = "The server for the dynamic tournament system"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -9,13 +9,14 @@ license = "Apache-2.0"
 publish = false
 
 [features]
-default = ["metrics"]
+default = ["metrics", "limits"]
 metrics = []
+limits = []
 
 [dependencies]
-dynamic-tournament-api = { version = "0.5.1", path = "../dynamic-tournament-api", features = ["server"] }
-dynamic-tournament-core = { version = "0.5.1", path = "../dynamic-tournament-core", features = ["serde"] }
-dynamic-tournament-macros = { version = "0.1.0", path = "../dynamic-tournament-macros", features = ["server"] }
+dynamic-tournament-api = { version = "0.6.0", path = "../dynamic-tournament-api", features = ["server"] }
+dynamic-tournament-core = { version = "0.6.0", path = "../dynamic-tournament-core", features = ["serde"] }
+dynamic-tournament-macros = { version = "0.6.0", path = "../dynamic-tournament-macros", features = ["server"] }
 tokio = { version = "1.17.0", features = ["full"] }
 sqlx = { version = "0.5.11", features = ["runtime-tokio-rustls", "mysql", "json", "chrono"] }
 serde = "1.0.136"
@@ -29,7 +30,7 @@ log = { version = "0.4.16", features = ["serde"] }
 parking_lot = "0.12.0"
 snowflaked = { version = "0.1.2", features = ["sync"] }
 tokio-stream = { version = "0.1.9", features = ["sync"] }
-nix = { version = "0.25.0", features = ["signal"] }
+nix = { version = "0.25.0", features = ["resource", "signal"] }
 
 chrono = "0.4.19, < 0.4.20"
 base64 = "0.13.0"
@@ -48,4 +49,3 @@ debug-assertions = false
 opt-level = 3
 lto = "fat"
 strip = true
-

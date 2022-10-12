@@ -43,10 +43,9 @@ impl Store {
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
         let res = sqlx::query(&format!(
-            "INSERT INTO {}tournaments (id, name, description, date, kind) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO {}tournaments (name, description, date, kind) VALUES (?, ?, ?, ?)",
             self.table_prefix
         ))
-        .bind(tournament.id.as_ref())
         .bind(&tournament.name)
         .bind(&tournament.description)
         .bind(tournament.date)
@@ -307,7 +306,7 @@ impl<'a> TournamentsClient<'a> {
     /// Returns an [`enum@Error`] if an database error occured.
     pub async fn list(&self) -> Result<Vec<TournamentOverview>, Error> {
         let sql = format!(
-            "SELECT id, name, date, kind FROM {}tournaments",
+            "SELECT id, name, date, kind FROM {}tournaments ORDER BY date DESC",
             self.store.table_prefix
         );
 

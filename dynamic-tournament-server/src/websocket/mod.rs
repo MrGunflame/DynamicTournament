@@ -5,6 +5,7 @@ use std::mem;
 
 use crate::State;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::{BracketId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     Decode, ErrorResponse, Request, Response,
@@ -14,7 +15,7 @@ use futures::{SinkExt, Stream, StreamExt};
 use hyper::upgrade::Upgraded;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::select;
-use tokio::time::{Interval, MissedTickBehavior};
+use tokio::time::{Interval, MissedTickBehavior, Sleep};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
@@ -94,10 +95,15 @@ where
     state: ConnectionState<'static, WebSocketStream<S>>,
     ping_interval: Interval,
 
-    is_authenticated: bool,
+    // Has the server initialized a close event.
+    close_state: Option<CloseState>,
+
     global_state: State,
     bracket: LiveBracket,
     changed: EventStream<'static>,
+
+    /// Id of the connected user. This is `None` if the user didn't authenticate yet.
+    client_user: Option<u64>,
 }
 
 impl<S> Connection<S>
@@ -119,10 +125,11 @@ where
             stream,
             state: ConnectionState::Init,
             ping_interval,
-            is_authenticated: false,
+            close_state: None,
             global_state: state,
             bracket,
             changed,
+            client_user: None,
         }
     }
 
@@ -150,6 +157,14 @@ where
 
         #[cfg(debug_assertions)]
         assert!(matches!(self.state, ConnectionState::Read(_)));
+
+        // If we initialized a close handshake and the client didn't respond
+        // in time we forcefully close the connection.
+        if let Some(close_state) = &mut self.close_state {
+            if close_state.poll_deadline(cx).is_ready() {
+                return Poll::Ready(());
+            }
+        }
 
         loop {
             let fut = match &mut self.state {
@@ -183,14 +198,11 @@ where
                                     }
                                 };
 
-                                match self.handle_request(req) {
-                                    Some(resp) => {
-                                        let buf = resp.to_bytes();
+                                if let Some(resp) = self.handle_request(req) {
+                                    let buf = resp.to_bytes();
 
-                                        self.init_write(Message::Binary(buf));
-                                        return self.poll_write(cx);
-                                    }
-                                    None => (),
+                                    self.init_write(Message::Binary(buf));
+                                    return self.poll_write(cx);
                                 }
                             }
                             Ok(Message::Ping(buf)) => {
@@ -202,8 +214,16 @@ where
                                 log::debug!("Received pong with payload: {:?}", buf);
                                 continue;
                             }
-                            // Client initiated close.
                             Ok(Message::Close(frame)) => {
+                                // Server-side close.
+                                if let Some(close_state) = &self.close_state {
+                                    // Client confirmed server close frame.
+                                    if close_state.frame.as_ref() == frame.as_ref() {
+                                        return Poll::Ready(());
+                                    }
+                                }
+
+                                // Client-side close. We respond with the same close frame.
                                 self.init_write_close(frame);
                                 return self.poll_write_close(cx);
                             }
@@ -267,7 +287,8 @@ where
                     log::debug!("Failed to write close message: {}", err);
                 }
 
-                Poll::Ready(())
+                self.init_read();
+                self.poll_read(cx)
             }
             Poll::Pending => Poll::Pending,
         }
@@ -347,6 +368,8 @@ where
     fn init_write_close(&mut self, frame: Option<CloseFrame<'static>>) {
         let prev = self.state_str();
 
+        self.close_state = Some(CloseState::new(frame.clone()));
+
         let fut = self.stream.send(Message::Close(frame));
 
         // Extend Send<'a> into Send<'static>.
@@ -363,9 +386,14 @@ where
         match req {
             Request::Reserved => None,
             Request::Authorize(token) => match self.global_state.auth.validate_auth_token(&token) {
-                Ok(_) => {
-                    self.is_authenticated = true;
-                    None
+                // The token is valid but we still need to verify the flags.
+                Ok(token) => {
+                    if token.claims().flags.intersects(Flags::EDIT_SCORES) {
+                        self.client_user = Some(token.claims().sub);
+                        None
+                    } else {
+                        Some(Response::Error(ErrorResponse::Unauthorized))
+                    }
                 }
                 Err(err) => {
                     log::debug!("Failed to validate token: {}", err);
@@ -377,7 +405,7 @@ where
                 Some(Response::SyncState(matches))
             }
             Request::UpdateMatch { index, nodes } => {
-                if self.is_authenticated {
+                if self.client_user.is_some() {
                     self.bracket.update(index, nodes);
                     None
                 } else {
@@ -385,7 +413,7 @@ where
                 }
             }
             Request::ResetMatch { index } => {
-                if self.is_authenticated {
+                if self.client_user.is_some() {
                     self.bracket.reset(index as usize);
                     None
                 } else {
@@ -486,5 +514,27 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let conn = unsafe { self.map_unchecked_mut(|this| this.conn) };
         conn.poll_close(cx)
+    }
+}
+
+/// The progress in the closing handshake. This is only necessary when the server closes
+/// the connection.
+#[derive(Debug)]
+struct CloseState {
+    frame: Option<CloseFrame<'static>>,
+    /// The client must have responded to the close within this deadline.
+    deadline: Pin<Box<Sleep>>,
+}
+
+impl CloseState {
+    fn new(frame: Option<CloseFrame<'static>>) -> Self {
+        Self {
+            frame,
+            deadline: Box::pin(tokio::time::sleep(Duration::new(5, 0))),
+        }
+    }
+
+    fn poll_deadline(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        self.deadline.as_mut().poll(cx)
     }
 }

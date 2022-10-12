@@ -1,6 +1,7 @@
 .dt-icon {
     filter: invert(100%);
     vertical-align: -0.125em;
+    display: inline-block;
 }
 
 .dt-icon-size-xs {

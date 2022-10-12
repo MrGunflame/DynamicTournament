@@ -1,3 +1,5 @@
+use std::io::{self, ErrorKind, Write};
+
 use chrono::Local;
 use log::{set_logger, set_max_level, Level, Log, Metadata, Record};
 
@@ -54,7 +56,10 @@ impl Log for Logger {
             }
         };
 
-        println!(
+        let mut stdout = io::stdout();
+
+        let res = writeln!(
+            stdout,
             "[{}] [{}] [{}:{}] {}",
             now,
             level,
@@ -62,6 +67,12 @@ impl Log for Logger {
             record.line().unwrap_or(0),
             record.args()
         );
+
+        if let Err(err) = res {
+            if err.kind() != ErrorKind::BrokenPipe {
+                panic!("Failed to write to stdout: {}", err);
+            }
+        }
     }
 
     fn flush(&self) {}

@@ -34,8 +34,21 @@ build: wasm-pack
 # Move assets into $(PATH_DIST)
 assets:
 	cp -r $(PATH_ROOT)/assets $(PATH_DIST)
+
+	# cp $(PATH_ROOT)/hosted.css $(PATH_DIST)
 	cp $(PATH_ROOT)/index.css $(PATH_DIST)
-	cp $(PATH_ROOT)/hosted.css $(PATH_DIST)
+	cp $(PATH_ROOT)/assets/icons.css $(PATH_DIST)
+
+	# Concat all css files into a single index.css file.
+	touch $(PATH_DIST)/_make_css.out
+	@for file in $$(find $(PATH_DIST) -name '*.css'); \
+	do \
+		printf '\n' >> $(PATH_DIST)/_make_css.out; \
+		cat $$file >> $(PATH_DIST)/_make_css.out; \
+		rm $$file; \
+	done
+
+	mv $(PATH_DIST)/_make_css.out $(PATH_DIST)/dynamic_tournament.css;
 
 prepare-hash:
 	@for path in find sed awk; \

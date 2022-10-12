@@ -1,9 +1,9 @@
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::TournamentId;
 use yew::{html, Component, Context, Html, Properties};
 
 use super::tournament::Route;
-use crate::api::{Action, State};
-use crate::components::providers::{ClientProvider, Provider};
+use crate::components::Protected;
 use crate::utils::router::{Link, Routable};
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
@@ -14,72 +14,57 @@ pub struct Props {
 
 #[derive(Debug)]
 pub struct Navbar {
-    state: State,
+    _priv: (),
 }
 
 impl Component for Navbar {
-    type Message = Action;
+    type Message = ();
     type Properties = Props;
 
-    fn create(ctx: &Context<Self>) -> Self {
-        let client = ClientProvider::get(ctx);
-        let state = client.state();
-
-        let link = ctx.link().clone();
-        ctx.link().send_future_batch(async move {
-            loop {
-                let action = client.changed().await;
-                link.send_message(action);
-            }
-        });
-
-        Self { state }
-    }
-
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        self.state = match msg {
-            Action::Login => State::LoggedIn,
-            Action::Logout => State::LoggedOut,
-        };
-
-        true
+    #[inline]
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self { _priv: () }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let mut links = vec![
-            (Route::Index, "Overview"),
-            (Route::Brackets, "Brackets"),
-            (Route::Entrants, "Entrants"),
+        let links = vec![
+            (Route::Index, "Overview", None),
+            (Route::Brackets, "Brackets", None),
+            (Route::Entrants, "Entrants", None),
+            (Route::Admin, "Admin", Some(Flags::ADMIN)),
         ];
-
-        if self.state == State::LoggedIn {
-            links.push((Route::Admin, "Admin"));
-        }
 
         let links: Html = links
             .into_iter()
-            .map(|(route, name)| {
+            .map(|(route, name, flags)| {
                 let classes = if route == ctx.props().route {
-                    "active"
+                    "dt-active"
                 } else {
                     ""
                 };
 
-                let to = format!(
-                    "/tournaments/{}{}",
-                    ctx.props().tournament_id,
-                    route.to_path()
-                );
+                let to = format!("/{}{}", ctx.props().tournament_id, route.to_path());
 
-                html! {
-                    <li><Link {classes} {to}>{ name }</Link></li>
+                match flags {
+                    Some(flags) => {
+                        html! {
+                            <Protected {flags}>
+                                <li><Link {classes} {to}>{ name }</Link></li>
+                            </Protected>
+                        }
+                    }
+                    None => {
+                        html! {
+                            <li><Link {classes} {to}>{ name }</Link></li>
+                        }
+                    }
                 }
             })
             .collect();
 
         html! {
             <>
-                <div class="navbar">
+                <div class="dt-navbar">
                     <ul>
                         { links }
                     </ul>

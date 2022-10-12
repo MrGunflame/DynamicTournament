@@ -25,7 +25,7 @@ driver = "mysql"
 # The database host
 # Possible values: <ADDR>
 # Default value: 127.0.0.1
-host = "10.0.0.2"
+host = "127.0.0.1"
 # The database port
 # Possible values: <PORT>
 # Default value: 3306

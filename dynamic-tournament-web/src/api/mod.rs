@@ -161,6 +161,16 @@ impl Client {
             sleep(Duration::new(30, 0)).await;
         }
     }
+
+    pub fn is_authenticated(&self) -> bool {
+        if let Some(token) = self.authorization().refresh_token() {
+            if token_lifetime(token) >= 30 {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl Deref for Client {

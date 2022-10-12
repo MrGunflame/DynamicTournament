@@ -1,6 +1,19 @@
+//! The DynamicTournament server implementation
+//!
+//! # Features
+//!
+//! `metrics`: Enables the `/metrics` endpoint. This endpoint exposes some internal runtime
+//! statistics.
+//! `limits`: Enables checks to not exceed os resources, such as file descriptors. If this feature
+//! is not enabled an the server is under high load or has low resource limits you will see an
+//! increase in connection errors. If this feature is disabled all checks are disabled and special
+//! features to avoid hitting limits are removed.
+#![deny(unused_crate_dependencies)]
+
 mod auth;
 mod config;
 mod http;
+mod limits;
 mod logger;
 mod signal;
 mod state;
@@ -9,6 +22,8 @@ mod websocket;
 
 #[cfg(feature = "metrics")]
 mod metrics;
+
+use std::time::Duration;
 
 use config::Config;
 
@@ -140,6 +155,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
             }
+
+            tokio::time::sleep(Duration::new(10, 0)).await;
         }
     });
 
@@ -225,6 +242,11 @@ impl StatusCodeError {
     /// 411 Length Required
     pub fn length_required() -> Self {
         Self::new(StatusCode::LENGTH_REQUIRED, "Length Required")
+    }
+
+    /// 412 Precondition Failed
+    pub fn precondition_failed() -> Self {
+        Self::new(StatusCode::PRECONDITION_FAILED, "Precondition Failed")
     }
 
     /// 413 Payload Too Large

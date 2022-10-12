@@ -1,7 +1,10 @@
 use std::fmt::{self, Display, Formatter};
 
-use dynamic_tournament_macros::load_asset;
-use yew::{html, Component, Context, Html, Properties};
+use dynamic_tournament_macros::include_asset_str;
+use web_sys::{Element, Node};
+use yew::{Component, Context, Html, Properties};
+
+use crate::utils::document;
 
 #[derive(Clone, Debug, PartialEq, Eq, Properties)]
 pub struct Props {
@@ -80,13 +83,14 @@ macro_rules! fa_icon {
                 fn view(&self, ctx: &Context<Self>) -> Html {
                     let classes = format!("dt-icon {} {}", ctx.props().style, ctx.props().size);
 
-                    let label = ctx.props().label;
+                    // TODO: Display label text.
+                    // let label = ctx.props().label;
 
-                    html! {
-                        <>
-                            <img src={$src} alt={label} class={classes} />
-                        </>
-                    }
+                    let elem: Element = document().create_element("div").unwrap();
+                    elem.set_class_name(&classes);
+                    elem.set_inner_html(include_asset_str!($src));
+
+                    Html::VRef(Node::from(elem))
                 }
             }
         )*
@@ -94,15 +98,15 @@ macro_rules! fa_icon {
 }
 
 fa_icon! {
-    FaXmark, load_asset!("/icons/fontawesome/xmark.svg"),
-    FaPen, load_asset!("/icons/fontawesome/pen.svg"),
-    FaPenToSquare, load_asset!("/icons/fontawesome/pen-to-square.svg"),
-    FaRotateLeft, load_asset!("/icons/fontawesome/rotate-left.svg"),
-    FaTrash, load_asset!("/icons/fontawesome/trash.svg"),
-    FaPlus, load_asset!("/icons/fontawesome/plus.svg"),
-    FaMinus, load_asset!("/icons/fontawesome/minus.svg"),
-    FaAngleLeft, load_asset!("/icons/fontawesome/angle-left.svg"),
-    FaCompress, load_asset!("/icons/fontawesome/compress.svg"),
-    FaLock, load_asset!("/icons/fontawesome/lock.svg"),
-    FaLockOpen, load_asset!("/icons/fontawesome/lock-open.svg"),
+    FaXmark, "/icons/fontawesome/xmark.svg",
+    FaPen, "/icons/fontawesome/pen.svg",
+    FaPenToSquare, "/icons/fontawesome/pen-to-square.svg",
+    FaRotateLeft, "/icons/fontawesome/rotate-left.svg",
+    FaTrash, "/icons/fontawesome/trash.svg",
+    FaPlus, "/icons/fontawesome/plus.svg",
+    FaMinus, "/icons/fontawesome/minus.svg",
+    FaAngleLeft, "/icons/fontawesome/angle-left.svg",
+    FaCompress, "/icons/fontawesome/compress.svg",
+    FaLock, "/icons/fontawesome/lock.svg",
+    FaLockOpen, "/icons/fontawesome/lock-open.svg",
 }

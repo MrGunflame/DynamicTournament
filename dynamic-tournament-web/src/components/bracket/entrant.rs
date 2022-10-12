@@ -37,7 +37,11 @@ where
             _ => (0, false),
         };
 
-        let classes = if winner { "team winner" } else { "team" };
+        let classes = if winner {
+            "dt-bracket-team dt-bracket-winner"
+        } else {
+            "dt-bracket-team"
+        };
 
         let style = match ctx.props().color {
             Some(color) => format!("background-color: {};", color),

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::tournament::{
     BracketType, Entrants, Player, Role, Team, Tournament, TournamentId, TournamentOverview,
 };
@@ -67,7 +68,7 @@ async fn list(ctx: Context) -> Result {
 }
 
 async fn create(mut ctx: Context) -> Result {
-    ctx.require_authentication()?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let body: Tournament = ctx.req.json().await?;
 
@@ -88,6 +89,7 @@ async fn create(mut ctx: Context) -> Result {
 
     let mut roles = HashMap::new();
     for role in [
+        Role::Unknown,
         Role::Roamer,
         Role::Teamfighter,
         Role::Duelist,

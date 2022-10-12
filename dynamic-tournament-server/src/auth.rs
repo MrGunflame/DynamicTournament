@@ -214,19 +214,14 @@ mod tests {
     use super::Authorization;
 
     use chrono::Utc;
-    use dynamic_tournament_api::auth::{Claims, Token};
+    use dynamic_tournament_api::auth::{Claims, Flags, Token};
     use jsonwebtoken::Algorithm;
 
     #[test]
     fn test_create_tokens() {
         let auth = Authorization::new(Algorithm::HS256);
 
-        let claims = Claims {
-            sub: 0,
-            iat: 0,
-            nbf: 0,
-            exp: 0,
-        };
+        let claims = Claims::new(0);
         let tokens = auth.create_tokens(claims).unwrap();
 
         assert_eq!(
@@ -244,12 +239,7 @@ mod tests {
     fn test_encode_token() {
         let auth = Authorization::new(Algorithm::HS256);
 
-        let claims = Claims {
-            sub: 0,
-            iat: 0,
-            nbf: 0,
-            exp: 0,
-        };
+        let claims = Claims::new(0);
         let token = auth.encode_token(claims.clone()).unwrap();
 
         // Decode the token to check the actual claims in the token.
@@ -261,12 +251,7 @@ mod tests {
     fn test_decode_token() {
         let auth = Authorization::new(Algorithm::HS256);
 
-        let claims = Claims {
-            sub: 0,
-            iat: 0,
-            nbf: 0,
-            exp: 0,
-        };
+        let claims = Claims::new(0);
         let tokens = auth.create_tokens(claims).unwrap();
 
         auth.decode_token(tokens.auth_token).unwrap();
@@ -281,12 +266,7 @@ mod tests {
     fn test_validate_auth_token() {
         let auth = Authorization::new(Algorithm::HS256);
 
-        let claims = Claims {
-            sub: 0,
-            iat: 0,
-            nbf: 0,
-            exp: 0,
-        };
+        let claims = Claims::new(0);
         let tokens = auth.create_tokens(claims).unwrap();
 
         auth.validate_auth_token(tokens.auth_token).unwrap();
@@ -300,6 +280,7 @@ mod tests {
                 iat: now,
                 nbf: now,
                 exp: now + AUTH_TOKEN_EXP,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_auth_token(token).unwrap();
@@ -311,6 +292,7 @@ mod tests {
                 iat: 0,
                 nbf: now,
                 exp: now + AUTH_TOKEN_EXP,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_auth_token(token).unwrap_err();
@@ -322,6 +304,7 @@ mod tests {
                 iat: now,
                 nbf: now,
                 exp: now + AUTH_TOKEN_EXP + 1,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_auth_token(token).unwrap_err();
@@ -340,6 +323,7 @@ mod tests {
             iat: 0,
             nbf: 0,
             exp: 0,
+            flags: Flags::new(),
         };
         let tokens = auth.create_tokens(claims).unwrap();
 
@@ -354,6 +338,7 @@ mod tests {
                 iat: now,
                 nbf: now,
                 exp: now + REFRESH_TOKEN_EXP,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_refresh_token(token).unwrap();
@@ -365,6 +350,7 @@ mod tests {
                 iat: 0,
                 nbf: now,
                 exp: now + REFRESH_TOKEN_EXP,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_refresh_token(token).unwrap_err();
@@ -376,6 +362,7 @@ mod tests {
                 iat: now,
                 nbf: now,
                 exp: now + REFRESH_TOKEN_EXP + 1,
+                flags: Flags::new(),
             })
             .unwrap();
         auth.validate_refresh_token(token).unwrap_err();
