@@ -11,7 +11,7 @@ pub async fn route(mut ctx: Context, id: TournamentId) -> Result {
 }
 
 async fn list(ctx: Context, id: TournamentId) -> Result {
-    // ctx.require_authentication(Flags::ADMIN)?;
+    ctx.require_authentication(Flags::ADMIN)?;
 
     let entries = ctx.state.store.log(id).list().await?;
 
