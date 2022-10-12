@@ -19,7 +19,6 @@ use std::task::{self, Poll};
 use std::time::Duration;
 
 use dynamic_tournament_api::auth::Flags;
-use dynamic_tournament_macros::path;
 use futures::future::BoxFuture;
 use futures::Future;
 use hyper::header::{
@@ -40,6 +39,8 @@ use self::etag::Etag;
 
 #[cfg(target_family = "unix")]
 use {std::path::Path, tokio::net::UnixListener};
+
+pub use dynamic_tournament_macros::{method, path};
 
 pub type Result = std::result::Result<Response, Error>;
 

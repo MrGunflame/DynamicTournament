@@ -117,6 +117,14 @@ impl LiveBracket {
             .await?;
         Ok(())
     }
+
+    pub fn tournament_id(&self) -> TournamentId {
+        self.inner.tournament_id
+    }
+
+    pub fn bracket_id(&self) -> BracketId {
+        self.inner.bracket_id
+    }
 }
 
 #[derive(Debug)]

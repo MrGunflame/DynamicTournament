@@ -10,6 +10,7 @@
 //! features to avoid hitting limits are removed.
 mod auth;
 mod config;
+mod event_log;
 mod http;
 mod limits;
 mod logger;
@@ -108,6 +109,15 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         name TEXT NOT NULL,
                         password TEXT NOT NULL
                         )",
+                    prefix
+                ),
+                format!(
+                    "CREATE TABLE IF NOT EXISTS {}log (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    tournament_id BIGINT UNSIGNED NOT NULL,
+                    author BIGINT UNSIGNED NOT NULL,
+                    event BLOB NOT NULL
+                )",
                     prefix
                 ),
             ];

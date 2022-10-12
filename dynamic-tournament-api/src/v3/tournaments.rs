@@ -1,5 +1,6 @@
 pub mod brackets;
 pub mod entrants;
+pub mod log;
 pub mod roles;
 
 use self::{brackets::BracketsClient, entrants::EntrantsClient, roles::RolesClient};

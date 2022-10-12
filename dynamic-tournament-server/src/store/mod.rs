@@ -1,6 +1,7 @@
 use crate::Error;
-use dynamic_tournament_api::v3::id::RoleId;
+use dynamic_tournament_api::v3::id::{LogEntryId, RoleId};
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
+use dynamic_tournament_api::v3::tournaments::log::LogEntry;
 use dynamic_tournament_api::v3::tournaments::roles::Role;
 use dynamic_tournament_api::v3::tournaments::PartialTournament;
 use dynamic_tournament_api::v3::users::User;
@@ -39,6 +40,10 @@ impl Store {
     #[inline]
     pub fn users(&self) -> UsersClient<'_> {
         UsersClient { store: self }
+    }
+
+    pub fn log(&self, id: TournamentId) -> LogClient<'_> {
+        LogClient { store: self, id }
     }
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
@@ -673,6 +678,57 @@ impl<'a> UsersClient<'a> {
         .bind(&user.password)
         .execute(&self.store.pool)
         .await?;
+
+        Ok(())
+    }
+}
+
+pub struct LogClient<'a> {
+    store: &'a Store,
+    id: TournamentId,
+}
+
+impl<'a> LogClient<'a> {
+    pub async fn list(&self) -> Result<Vec<LogEntry>, Error> {
+        let sql = format!(
+            "SELECT id, author, event FROM {}log WHERE tournament_id = ? ORDER BY id DESC",
+            self.store.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(self.id.0).fetch(&self.store.pool);
+
+        let mut entries = Vec::new();
+        while let Some(row) = rows.try_next().await? {
+            let id = row.try_get("id")?;
+            let author = row.try_get("author")?;
+            let event: Vec<u8> = row.try_get("event")?;
+
+            let event = serde_json::from_slice(&event)?;
+
+            entries.push(LogEntry {
+                id: LogEntryId(id),
+                author,
+                event,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    pub async fn insert(&self, entry: &LogEntry) -> Result<(), Error> {
+        let event = serde_json::to_vec(&entry.event)?;
+
+        let sql = format!(
+            "INSERT INTO {}log (tournament_id, author, event) VALUES (?, ?, ?)",
+            self.store.table_prefix
+        );
+
+        sqlx::query(&sql)
+            .bind(&self.id.0)
+            .bind(entry.author)
+            .bind(event)
+            .execute(&self.store.pool)
+            .await?;
 
         Ok(())
     }

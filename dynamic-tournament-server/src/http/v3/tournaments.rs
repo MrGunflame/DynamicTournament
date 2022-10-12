@@ -1,10 +1,12 @@
 mod brackets;
 mod entrants;
+mod log;
 mod roles;
 
 use std::hash::{Hash, Hasher};
 
 use dynamic_tournament_api::auth::Flags;
+use dynamic_tournament_api::v3::tournaments::log::Event;
 use dynamic_tournament_api::v3::tournaments::Tournament;
 use dynamic_tournament_api::v3::{id::TournamentId, tournaments::TournamentOverview};
 use dynamic_tournament_api::Payload;
@@ -36,6 +38,7 @@ pub async fn route(mut ctx: Context) -> Result {
                 "entrants" => entrants::route(ctx, id).await,
                 "brackets" => brackets::route(ctx, id).await,
                 "roles" => roles::route(ctx, id).await,
+                "log" => log::route(ctx, id).await,
                 @ => method!(ctx, {
                     GET => get(ctx, id).await,
                     PATCH => patch(ctx, id).await,
@@ -73,6 +76,20 @@ async fn create(mut ctx: Context) -> Result {
 
     for tournament in tournaments.iter_mut() {
         tournament.id = ctx.state.store.tournaments().insert(tournament).await?;
+
+        ctx.state
+            .eventlog
+            .send(
+                tournament.id,
+                0,
+                Event::CreateTournament {
+                    name: tournament.name.clone(),
+                    description: tournament.description.clone(),
+                    date: tournament.date,
+                    kind: tournament.kind,
+                },
+            )
+            .await;
     }
 
     Ok(Response::created().json(&tournaments))

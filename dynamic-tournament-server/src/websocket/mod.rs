@@ -11,6 +11,7 @@ use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     Decode, ErrorResponse, Request, Response,
 };
 
+use dynamic_tournament_api::v3::tournaments::log::Event;
 use futures::{SinkExt, Stream, StreamExt};
 use hyper::upgrade::Upgraded;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -404,22 +405,55 @@ where
                 let matches = self.bracket.matches();
                 Some(Response::SyncState(matches))
             }
-            Request::UpdateMatch { index, nodes } => {
-                if self.client_user.is_some() {
+            Request::UpdateMatch { index, nodes } => match self.client_user {
+                Some(author) => {
                     self.bracket.update(index, nodes);
+
+                    let eventlog = self.global_state.eventlog.clone();
+                    let tournament_id = self.bracket.tournament_id();
+                    let bracket_id = self.bracket.bracket_id();
+                    tokio::task::spawn(async move {
+                        eventlog
+                            .send(
+                                tournament_id,
+                                author,
+                                Event::UpdateMatch {
+                                    bracket: bracket_id,
+                                    index: index as usize,
+                                    nodes: nodes.into(),
+                                },
+                            )
+                            .await;
+                    });
+
                     None
-                } else {
-                    Some(Response::Error(ErrorResponse::Unauthorized))
                 }
-            }
-            Request::ResetMatch { index } => {
-                if self.client_user.is_some() {
+                None => Some(Response::Error(ErrorResponse::Unauthorized)),
+            },
+            Request::ResetMatch { index } => match self.client_user {
+                Some(author) => {
                     self.bracket.reset(index as usize);
+
+                    let eventlog = self.global_state.eventlog.clone();
+                    let tournament_id = self.bracket.tournament_id();
+                    let bracket_id = self.bracket.bracket_id();
+                    tokio::task::spawn(async move {
+                        eventlog
+                            .send(
+                                tournament_id,
+                                author,
+                                Event::ResetMatch {
+                                    bracket: bracket_id,
+                                    index: index as usize,
+                                },
+                            )
+                            .await;
+                    });
+
                     None
-                } else {
-                    Some(Response::Error(ErrorResponse::Unauthorized))
                 }
-            }
+                None => Some(Response::Error(ErrorResponse::Unauthorized)),
+            },
         }
     }
 

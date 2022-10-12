@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::auth::Authorization;
+use crate::event_log::EventWriter;
 use crate::limits::Limits;
 use crate::signal::ShutdownListener;
 use crate::store::Store;
@@ -47,12 +48,15 @@ impl State {
 
         let live_brackets = LiveBrackets::new(store.clone());
 
+        let eventlog = crate::event_log::spawn(store.clone());
+
         Self(Arc::new(StateInner {
             store,
             config,
             live_brackets,
             shutdown: Shutdown,
             auth,
+            eventlog,
 
             #[cfg(feature = "metrics")]
             metrics: Metrics::default(),
@@ -79,6 +83,7 @@ pub struct StateInner {
     pub live_brackets: LiveBrackets,
     pub shutdown: Shutdown,
     pub auth: Authorization,
+    pub eventlog: EventWriter,
 
     #[cfg(feature = "metrics")]
     pub metrics: Metrics,
