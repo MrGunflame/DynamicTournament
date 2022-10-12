@@ -1,263 +1,316 @@
 //! # Tournament Rendering
 //!
 //! The `render` module provides types to generically render tournament [`System`]s.
-use crate::{Match, Node, System};
+use crate::System;
 
-use std::ops::Range;
+use std::{marker::PhantomData, ops::Deref};
 
 /// A renderer used to render any [`System`].
 pub trait Renderer<T, E, D>
 where
     T: System<Entrant = E, NodeData = D>,
 {
-    fn render(&mut self, input: BracketRounds<'_, T>);
+    fn render(&mut self, root: Container<'_, T>);
 }
 
-/// An [`Iterator`] over all [`BracketRound`]s within a tournament [`System`].
+#[derive(Debug)]
+pub struct Container<'a, T>
+where
+    T: System,
+{
+    pub(crate) inner: ContainerInner<'a, T>,
+}
+
+impl<'a, T> Container<'a, T>
+where
+    T: System,
+{
+    pub fn iter(&self) -> ContainerIter<'_, T> {
+        ContainerIter::new(self)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum ContainerInner<'a, T>
+where
+    T: System,
+{
+    Columns(Vec<Column<'a, T>>),
+    Rows(Vec<Row<'a, T>>),
+    Matches(Vec<Match<'a, T>>),
+}
+
+#[derive(Debug)]
+pub struct Column<'a, T>
+where
+    T: System,
+{
+    pub(crate) inner: Container<'a, T>,
+}
+
+impl<'a, T> Deref for Column<'a, T>
+where
+    T: System,
+{
+    type Target = Container<'a, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+pub struct Row<'a, T>
+where
+    T: System,
+{
+    inner: Container<'a, T>,
+}
+
+impl<'a, T> Deref for Row<'a, T>
+where
+    T: System,
+{
+    type Target = Container<'a, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct BracketRounds<'a, T>
+pub struct Match<'a, T>
 where
     T: System,
 {
-    tournament: &'a T,
-    range: Range<usize>,
+    pub(crate) index: usize,
+    pub(crate) predecessors: Vec<usize>,
+    pub(crate) position: Position,
+    pub(crate) _marker: PhantomData<&'a T>,
 }
 
-impl<'a, T> BracketRounds<'a, T>
+impl<'a, T> Match<'a, T>
 where
     T: System,
 {
-    pub(crate) fn new(tournament: &'a T) -> Self {
-        Self {
-            tournament,
-            range: 0..tournament.matches().len(),
-        }
-    }
-}
-
-impl<'a, T> Iterator for BracketRounds<'a, T>
-where
-    T: System,
-{
-    type Item = BracketRound<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Get the next bracket round between `self.range`.
-        let range = self.tournament.next_bracket_round(self.range.clone());
-
-        log::debug!("Rendering next BracketRound: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next round to be after the current round (`range`).
-            self.range.start = range.end;
-
-            Some(BracketRound::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over all [`Bracket`]s in a `BracketRound`.
-#[derive(Clone, Debug)]
-pub struct BracketRound<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    range: Range<usize>,
-}
-
-impl<'a, T> BracketRound<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self { tournament, range }
-    }
-}
-
-impl<'a, T> Iterator for BracketRound<'a, T>
-where
-    T: System,
-{
-    type Item = Bracket<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Get the next bracket between `self.range`.
-        let range = self.tournament.next_bracket(self.range.clone());
-
-        log::debug!("Rendering next Bracket: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next bracket to be after the current bracket (`range`).
-            self.range.start = range.end;
-
-            Some(Bracket::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over all [`Round`]s in a `Bracket`.
-#[derive(Clone, Debug)]
-pub struct Bracket<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    range: Range<usize>,
-}
-
-impl<'a, T> Bracket<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self { tournament, range }
-    }
-}
-
-impl<'a, T> Iterator for Bracket<'a, T>
-where
-    T: System,
-{
-    type Item = Round<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Get the next round between `self.range`.
-        let range = self.tournament.next_round(self.range.clone());
-
-        log::debug!("Rendering next Round: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next round to be after the current round (`range`).
-            self.range.start = range.end;
-
-            Some(Round::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over [`Match`]es of a `Round`.
-#[derive(Clone, Debug)]
-pub struct Round<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    start: usize,
-    end: usize,
-}
-
-impl<'a, T> Round<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self {
-            tournament,
-            start: range.start,
-            end: range.end,
-        }
-    }
-
-    pub fn indexed(self) -> Indexed<'a, T> {
-        Indexed { iter: self }
-    }
-}
-
-impl<'a, T> Iterator for Round<'a, T>
-where
-    T: System,
-{
-    type Item = (&'a Match<Node<T::NodeData>>, Position);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start >= self.end {
-            None
-        } else {
-            let m = &self.tournament.matches()[self.start];
-            let position = self.tournament.render_match_position(self.start);
-
-            log::debug!("Rendering next Match {} with {:?}", self.start, position);
-
-            self.start += 1;
-
-            Some((m, position))
-        }
-    }
-
+    /// Returns the index of this `Match` within the [`System`].
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.end - self.start, Some(self.end - self.start))
+    pub fn index(&self) -> usize {
+        self.index
     }
-}
 
-impl<'a, T> ExactSizeIterator for Round<'a, T>
-where
-    T: System,
-{
+    /// Returns the hinted [`Position`] at which the [`System`] expectes the match to be rendered.
     #[inline]
-    fn len(&self) -> usize {
-        self.end - self.start
+    pub fn position(&self) -> Position {
+        self.position
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Indexed<'a, T>
-where
-    T: System,
-{
-    iter: Round<'a, T>,
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Predecessor {
+    source_match: usize,
+    /// Destination index within the next match.
+    destination_index: usize,
 }
 
-impl<'a, T> Iterator for Indexed<'a, T>
-where
-    T: System,
-{
-    type Item = (usize, &'a Match<Node<T::NodeData>>, Position);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.iter.start;
-
-        self.iter.next().map(|(m, pos)| (index, m, pos))
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
-impl<'a, T> ExactSizeIterator for Indexed<'a, T>
-where
-    T: System,
-{
-    #[inline]
-    fn len(&self) -> usize {
-        self.iter.len()
-    }
-}
-
-/// The rendering position of a match within a round. The default value is `SpaceAround`.
+/// A `Position` gives the renderer a hint where the [`System`] expects this match to be displayed.
+///
+/// Note that a `Position` is purely a hint, a renderer may decide to ignore it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Position {
+    /// Hints that the match should be rendered at the start of the container.
+    ///
+    /// # Examples
+    ///
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// | | Match[0] | | | Match[4] | | | Match[6] | |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[1] | | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[3] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    Start,
+    End,
     SpaceAround,
-    Bottom(i32),
+    SpaceBetween,
 }
 
-impl Position {
-    pub fn bottom(value: i32) -> Self {
-        Self::Bottom(value)
+#[derive(Debug)]
+pub struct ColumnsIter<'a, T>
+where
+    T: System,
+{
+    inner: &'a ContainerInner<'a, T>,
+    pos: usize,
+}
+
+impl<'a, T> ColumnsIter<'a, T>
+where
+    T: System,
+{
+    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
+        Self {
+            inner: &inner.inner,
+            pos: 0,
+        }
     }
 }
 
-impl Default for Position {
-    fn default() -> Self {
-        Self::SpaceAround
+impl<'a, T> Iterator for ColumnsIter<'a, T>
+where
+    T: System,
+{
+    type Item = &'a Column<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner {
+            ContainerInner::Columns(vec) => {
+                let val = vec.get(self.pos)?;
+                self.pos += 1;
+                Some(val)
+            }
+            _ => {
+                if cfg!(debug_assertions) {
+                    unreachable!()
+                } else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                }
+            }
+        }
     }
+}
+
+#[derive(Debug)]
+pub struct RowsIter<'a, T>
+where
+    T: System,
+{
+    inner: &'a ContainerInner<'a, T>,
+    pos: usize,
+}
+
+impl<'a, T> RowsIter<'a, T>
+where
+    T: System,
+{
+    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
+        Self {
+            inner: &inner.inner,
+            pos: 0,
+        }
+    }
+}
+
+impl<'a, T> Iterator for RowsIter<'a, T>
+where
+    T: System,
+{
+    type Item = &'a Row<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner {
+            ContainerInner::Rows(vec) => {
+                let val = vec.get(self.pos)?;
+                self.pos += 1;
+                Some(val)
+            }
+            _ => {
+                if cfg!(debug_assertions) {
+                    unreachable!()
+                } else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MatchesIter<'a, T>
+where
+    T: System,
+{
+    inner: &'a ContainerInner<'a, T>,
+    pos: usize,
+}
+
+impl<'a, T> MatchesIter<'a, T>
+where
+    T: System,
+{
+    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
+        Self {
+            inner: &inner.inner,
+            pos: 0,
+        }
+    }
+}
+
+impl<'a, T> Iterator for MatchesIter<'a, T>
+where
+    T: System,
+{
+    type Item = &'a Match<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner {
+            ContainerInner::Matches(vec) => {
+                let val = vec.get(self.pos)?;
+                self.pos += 1;
+                Some(val)
+            }
+            _ => {
+                if cfg!(debug_assertions) {
+                    unreachable!()
+                } else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ContainerIter<'a, T>
+where
+    T: System,
+{
+    Columns(ColumnsIter<'a, T>),
+    Rows(RowsIter<'a, T>),
+    Matches(MatchesIter<'a, T>),
+}
+
+impl<'a, T> ContainerIter<'a, T>
+where
+    T: System,
+{
+    fn new(inner: &'a Container<'a, T>) -> Self {
+        unsafe {
+            match &inner.inner {
+                ContainerInner::Columns(_) => Self::Columns(ColumnsIter::new(inner)),
+                ContainerInner::Rows(_) => Self::Rows(RowsIter::new(inner)),
+                ContainerInner::Matches(_) => Self::Matches(MatchesIter::new(inner)),
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct RenderState<'a, T>
+where
+    T: System,
+{
+    pub(crate) inner: Container<'a, T>,
 }

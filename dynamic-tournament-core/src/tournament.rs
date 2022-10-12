@@ -162,38 +162,10 @@ where
         }
     }
 
-    fn next_bracket_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_bracket_round(range),
-            InnerTournament::DoubleElimination(t) => t.next_bracket_round(range),
-        }
-    }
-
-    fn next_bracket(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_bracket(range),
-            InnerTournament::DoubleElimination(t) => t.next_bracket(range),
-        }
-    }
-
-    fn next_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_round(range),
-            InnerTournament::DoubleElimination(t) => t.next_round(range),
-        }
-    }
-
     fn next_matches(&self, index: usize) -> crate::NextMatches {
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.next_matches(index),
             InnerTournament::DoubleElimination(t) => t.next_matches(index),
-        }
-    }
-
-    fn render_match_position(&self, index: usize) -> crate::render::Position {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.render_match_position(index),
-            InnerTournament::DoubleElimination(t) => t.render_match_position(index),
         }
     }
 
@@ -204,6 +176,20 @@ where
         match &mut self.inner {
             InnerTournament::SingleElimination(t) => t.update_match(index, f),
             InnerTournament::DoubleElimination(t) => t.update_match(index, f),
+        }
+    }
+
+    fn start_render(&self) -> crate::render::RenderState<'_, Self> {
+        // Transmute the returned `RenderState<T>` into `RenderState<Self>`. This is safe since a
+        // `RenderState` only contains a reference to the system and all operations will go through
+        // `self`.
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => unsafe {
+                std::mem::transmute(t.start_render())
+            },
+            InnerTournament::DoubleElimination(t) => unsafe {
+                std::mem::transmute(t.start_render())
+            },
         }
     }
 }

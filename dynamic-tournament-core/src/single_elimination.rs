@@ -1,10 +1,10 @@
 use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
-use crate::render::Position;
+use crate::render::{Column, Container, ContainerInner, Position, RenderState};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::marker::PhantomData;
 use std::ptr;
 
 /// A single elimination tournament.
@@ -439,54 +439,38 @@ where
         }
     }
 
-    #[inline]
-    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize> {
-        // `range` is `self.matches().len()..self.matches().len()`. No other bracket rounds follow.
-        if range.is_empty() {
-            range
-        } else {
-            0..self.matches.len()
-        }
-    }
+    fn start_render(&self) -> RenderState<'_, Self> {
+        let mut columns = Vec::new();
 
-    #[inline]
-    fn next_bracket(&self, range: Range<usize>) -> Range<usize> {
-        // `range` is `self.matches().len()..self.matches().len()`. No other brackets follow.
-        if range.is_empty() {
-            range
-        } else {
-            0..self.matches.len()
-        }
-    }
+        // Number of matches per round.
+        let mut num_matches = (Self::calculate_matches(self.entrants.len()) + 1) / 2;
+        let mut index = 0;
 
-    #[inline]
-    fn next_round(&self, range: Range<usize>) -> Range<usize> {
-        // Start from default.
-        if range.start == 0 {
-            match self.entrants.len() {
-                1 => 0..self.entrants().len().next_power_of_two(),
-                n => 0..n.next_power_of_two() / 2,
+        while num_matches > 0 {
+            let mut matches = Vec::new();
+            for i in index..index + num_matches {
+                matches.push(crate::render::Match {
+                    index: i,
+                    predecessors: vec![],
+                    position: Position::SpaceAround,
+                    _marker: PhantomData,
+                });
             }
-        } else {
-            let end = self.entrants().len().next_power_of_two() / 2 + range.start / 2;
 
-            if end == self.matches().len() - 1 && self.options.third_place_match {
-                range.start..end + 1
-            } else {
-                range.start..end
-            }
+            columns.push(Column {
+                inner: Container {
+                    inner: ContainerInner::Matches(matches),
+                },
+            });
+
+            index += num_matches;
+            num_matches /= 2;
         }
-    }
 
-    #[inline]
-    fn render_match_position(&self, index: usize) -> Position {
-        if self.options.third_place_match
-            && self.matches.len() > 2
-            && index == self.matches().len() - 1
-        {
-            Position::bottom(0)
-        } else {
-            Position::default()
+        RenderState {
+            inner: Container {
+                inner: ContainerInner::Columns(columns),
+            },
         }
     }
 }
@@ -522,7 +506,7 @@ impl SingleEliminationOptions {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::TestRenderer;
+    use crate::tests::{TColumn, TContainer, TMatch, TestRenderer};
     use crate::{entrants, option_values};
 
     use super::*;
@@ -1259,24 +1243,41 @@ mod tests {
         let entrants = entrants![0, 1, 2, 3];
         let tournament = SingleElimination::<i32, u32>::new(entrants);
 
-        let mut renderer = TestRenderer::default();
+        let mut renderer = TestRenderer::new();
         tournament.render(&mut renderer);
 
         assert_eq!(
             renderer,
-            vec![vec![vec![
-                vec![
-                    Match::new([
-                        EntrantSpot::Entrant(Node::new(0)),
-                        EntrantSpot::Entrant(Node::new(2))
-                    ]),
-                    Match::new([
-                        EntrantSpot::Entrant(Node::new(1)),
-                        EntrantSpot::Entrant(Node::new(3))
-                    ]),
-                ],
-                vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]
-            ]]]
+            TContainer::Columns(vec![
+                TColumn(TContainer::Matches(vec![
+                    TMatch { index: 0 },
+                    TMatch { index: 1 },
+                ])),
+                TColumn(TContainer::Matches(vec![TMatch { index: 2 }])),
+            ]),
+        );
+
+        let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
+        let tournament = SingleElimination::<i32, u32>::new(entrants);
+
+        let mut renderer = TestRenderer::new();
+        tournament.render(&mut renderer);
+
+        assert_eq!(
+            renderer,
+            TContainer::Columns(vec![
+                TColumn(TContainer::Matches(vec![
+                    TMatch { index: 0 },
+                    TMatch { index: 1 },
+                    TMatch { index: 2 },
+                    TMatch { index: 3 },
+                ])),
+                TColumn(TContainer::Matches(vec![
+                    TMatch { index: 4 },
+                    TMatch { index: 5 },
+                ])),
+                TColumn(TContainer::Matches(vec![TMatch { index: 6 }])),
+            ])
         );
     }
 }

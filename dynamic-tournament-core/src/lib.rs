@@ -31,13 +31,13 @@ mod single_elimination;
 pub mod tournament;
 
 pub use double_elimination::DoubleElimination;
-use render::{BracketRounds, Position, Renderer};
+use render::{RenderState, Renderer};
 pub use single_elimination::SingleElimination;
 
 use thiserror::Error;
 
 use std::borrow::Borrow;
-use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::result;
 use std::vec::IntoIter;
 
@@ -875,35 +875,25 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     where
         F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>);
 
-    /// Returns the next bracket round between `range`. If `range` is empty or no bracket rounds
-    /// are between `range`, `0..0` should be returned.
-    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the next bracket between `range`.
-    fn next_bracket(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the next round between `range`.
-    fn next_round(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the [`Position`] at which to render the match with the given `index`.
-    fn render_match_position(&self, _index: usize) -> Position {
-        Position::default()
-    }
+    fn start_render(&self) -> RenderState<'_, Self>;
 
     /// Renders the tournament using the given [`Renderer`].
     fn render<R>(&self, renderer: &mut R)
     where
         R: Renderer<Self, Self::Entrant, Self::NodeData>,
     {
-        renderer.render(BracketRounds::new(self));
+        renderer.render(self.start_render().inner);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
+    use crate::render::{Column, Container, ContainerIter, Match as RenderMatch, Row};
     use crate::{render::Renderer, EntrantSpot};
 
-    use super::{BracketRounds, EntrantData, Match, Node, System};
+    use super::{EntrantData, Match, Node, System};
 
     #[macro_export]
     macro_rules! entrants {
@@ -924,56 +914,166 @@ mod tests {
         }};
     }
 
+    #[macro_export]
+    macro_rules! r_matches {
+        ($($index:expr, $pos:tt),*$(,)?) => {
+            vec![
+                $(
+                    $crate::render::Match {
+                        index: $index,
+                        position: $crate::render::Position::$pos,
+                        predecessors: vec![],
+                        _marker: ::core::marker::PhantomData,
+                    },
+                )*
+            ]
+        };
+    }
+
+    #[macro_export]
+    macro_rules! r_columns {
+        ($($x:expr),*$(,)?) => {
+            {
+                let vec = vec![
+                    $(
+                        $x,
+                    )*
+                ];
+
+                $crate::render::Container {
+                    inner: $crate::render::ContainerInner::Columns(vec),
+                }
+            }
+        };
+    }
+
     impl EntrantData for u32 {
         fn set_winner(&mut self, _winner: bool) {}
         fn reset(&mut self) {}
     }
 
-    #[derive(Debug, Default)]
-    pub struct TestRenderer {
-        #[allow(clippy::type_complexity)]
-        matches: Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>,
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum TContainer {
+        Columns(Vec<TColumn>),
+        Rows(Vec<TRow>),
+        Matches(Vec<TMatch>),
     }
 
-    impl<T, E, D> Renderer<T, E, D> for TestRenderer
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TColumn(pub TContainer);
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TRow(pub TContainer);
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TMatch {
+        pub index: usize,
+    }
+
+    #[derive(Debug)]
+    pub struct TestRenderer<T> {
+        inner: TContainer,
+        _marker: PhantomData<T>,
+    }
+
+    impl<T> TestRenderer<T>
     where
-        T: System<Entrant = E, NodeData = D>,
+        T: System,
     {
-        fn render(&mut self, input: BracketRounds<'_, T>) {
-            for bracket_round in input {
-                let mut brackets = Vec::new();
+        pub fn new() -> Self {
+            Self {
+                inner: TContainer::Matches(Vec::new()),
+                _marker: PhantomData,
+            }
+        }
 
-                for bracket in bracket_round {
-                    let mut rounds = Vec::new();
-
-                    for round in bracket {
-                        let mut matches = Vec::new();
-
-                        for r#match in round {
-                            let mut indexes = [EntrantSpot::Empty, EntrantSpot::Empty];
-
-                            for (index, entrant) in r#match.0.entrants.iter().enumerate() {
-                                indexes[index] =
-                                    entrant.as_ref().map(|entrant| Node::new(entrant.index));
-                            }
-
-                            matches.push(Match::new(indexes));
-                        }
-
-                        rounds.push(matches);
+        fn render_column(&mut self, root: &Column<'_, T>) -> TColumn {
+            match root.iter() {
+                ContainerIter::Columns(cols) => {
+                    let mut buf = Vec::new();
+                    for col in cols {
+                        buf.push(self.render_column(col));
                     }
 
-                    brackets.push(rounds);
+                    TColumn(TContainer::Columns(buf))
                 }
+                ContainerIter::Rows(rows) => {
+                    let mut buf = Vec::new();
+                    for row in rows {
+                        buf.push(self.render_row(row));
+                    }
 
-                self.matches.push(brackets);
+                    TColumn(TContainer::Rows(buf))
+                }
+                ContainerIter::Matches(matches) => {
+                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
+
+                    TColumn(TContainer::Matches(buf))
+                }
+            }
+        }
+
+        fn render_row(&mut self, root: &Row<'_, T>) -> TRow {
+            match root.iter() {
+                ContainerIter::Columns(cols) => {
+                    let mut buf = Vec::new();
+                    for col in cols {
+                        buf.push(self.render_column(col));
+                    }
+
+                    TRow(TContainer::Columns(buf))
+                }
+                ContainerIter::Rows(rows) => {
+                    let mut buf = Vec::new();
+                    for row in rows {
+                        buf.push(self.render_row(row));
+                    }
+
+                    TRow(TContainer::Rows(buf))
+                }
+                ContainerIter::Matches(matches) => {
+                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
+
+                    TRow(TContainer::Matches(buf))
+                }
             }
         }
     }
 
-    impl PartialEq<Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>> for TestRenderer {
-        fn eq(&self, other: &Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>) -> bool {
-            &self.matches == other
+    impl<T, E, D> Renderer<T, E, D> for TestRenderer<T>
+    where
+        T: System<Entrant = E, NodeData = D>,
+    {
+        fn render(&mut self, root: Container<'_, T>) {
+            self.inner = match root.iter() {
+                ContainerIter::Columns(cols) => {
+                    let mut buf = Vec::new();
+                    for col in cols {
+                        buf.push(self.render_column(col));
+                    }
+
+                    TContainer::Columns(buf)
+                }
+                ContainerIter::Rows(rows) => {
+                    let mut buf = Vec::new();
+                    for row in rows {
+                        buf.push(self.render_row(row));
+                    }
+
+                    TContainer::Rows(buf)
+                }
+                ContainerIter::Matches(matches) => {
+                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
+
+                    TContainer::Matches(buf)
+                }
+            };
+        }
+    }
+
+    impl<T> PartialEq<TContainer> for TestRenderer<T> {
+        fn eq(&self, other: &TContainer) -> bool {
+            &self.inner == other
         }
     }
 }
