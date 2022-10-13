@@ -64,7 +64,7 @@ pub struct Row<'a, T>
 where
     T: System,
 {
-    inner: Container<'a, T>,
+    pub inner: Container<'a, T>,
 }
 
 impl<'a, T> Deref for Row<'a, T>
