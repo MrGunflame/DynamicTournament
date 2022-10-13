@@ -890,10 +890,10 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
 mod tests {
     use std::marker::PhantomData;
 
-    use crate::render::{Column, Container, ContainerIter, Match as RenderMatch, Row};
-    use crate::{render::Renderer, EntrantSpot};
+    use crate::render::Renderer;
+    use crate::render::{Column, Container, ContainerIter, Row};
 
-    use super::{EntrantData, Match, Node, System};
+    use super::{EntrantData, System};
 
     #[macro_export]
     macro_rules! entrants {
@@ -912,39 +912,6 @@ mod tests {
 
             options
         }};
-    }
-
-    #[macro_export]
-    macro_rules! r_matches {
-        ($($index:expr, $pos:tt),*$(,)?) => {
-            vec![
-                $(
-                    $crate::render::Match {
-                        index: $index,
-                        position: $crate::render::Position::$pos,
-                        predecessors: vec![],
-                        _marker: ::core::marker::PhantomData,
-                    },
-                )*
-            ]
-        };
-    }
-
-    #[macro_export]
-    macro_rules! r_columns {
-        ($($x:expr),*$(,)?) => {
-            {
-                let vec = vec![
-                    $(
-                        $x,
-                    )*
-                ];
-
-                $crate::render::Container {
-                    inner: $crate::render::ContainerInner::Columns(vec),
-                }
-            }
-        };
     }
 
     impl EntrantData for u32 {

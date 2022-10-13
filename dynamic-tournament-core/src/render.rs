@@ -104,6 +104,10 @@ where
     pub fn position(&self) -> Position {
         self.position
     }
+
+    pub fn predecessors(&self) -> &[usize] {
+        &self.predecessors
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
