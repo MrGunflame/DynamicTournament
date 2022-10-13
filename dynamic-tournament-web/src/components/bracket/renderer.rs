@@ -2,7 +2,7 @@
 use std::fmt::Display;
 
 use dynamic_tournament_core::render::{
-    self, BracketRound, BracketRounds, Position, Renderer, Round,
+    Column, Container, ContainerIter, MatchesIter, Renderer, Row,
 };
 use dynamic_tournament_core::{EntrantScore, Match, Node, System};
 use yew::{html, Context, Html};
@@ -48,65 +48,64 @@ where
     T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
-    fn render_bracket_round(&self, input: BracketRound<'_, T>) -> Html {
-        let brackets: Html = input.map(|bracket| self.render_bracket(bracket)).collect();
-
-        html! {
-            <div class="dt-bracket-bracket-row">
-                { brackets }
-            </div>
-        }
-    }
-
-    fn render_bracket(&self, input: render::Bracket<'_, T>) -> Html {
-        let rounds: Html = input.map(|round| self.render_round(round)).collect();
-
-        html! {
-            <div class="dt-bracket-bracket">
-                { rounds }
-            </div>
-        }
-    }
-
-    fn render_round(&self, input: Round<'_, T>) -> Html {
-        let round: Html = input
-            .indexed()
-            .enumerate()
-            .map(|(match_index, (index, m, pos))| {
-                html! {
-                    { self.render_match(m, index, match_index.saturating_add(1), pos) }
-                }
-            })
-            .collect();
+    fn render_column(&mut self, column: &Column<'_, T>) -> Html {
+        let inner = match column.iter() {
+            ContainerIter::Columns(cols) => cols.map(|col| self.render_column(col)).collect(),
+            ContainerIter::Rows(rows) => rows.map(|row| self.render_row(row)).collect(),
+            ContainerIter::Matches(matches) => self.render_matches(matches),
+        };
 
         html! {
             <div class="dt-bracket-round">
-                { round }
+                { inner }
             </div>
         }
     }
 
-    fn render_match(
-        &self,
-        input: &Match<Node<EntrantScore<u64>>>,
-        index: usize,
-        match_index: usize,
-        position: Position,
-    ) -> Html {
-        let on_action = self
-            .ctx
-            .link()
-            .callback(move |action| Message::Action { index, action });
-
-        let entrants = input
-            .entrants
-            .map(|e| e.map(|e| e.entrant(&self.tournament.borrow()).unwrap().clone()));
-
-        let nodes = input.entrants.map(|e| e.map(|e| e.data));
+    fn render_row(&mut self, row: &Row<'_, T>) -> Html {
+        let inner = match row.iter() {
+            ContainerIter::Columns(cols) => cols.map(|col| self.render_column(col)).collect(),
+            ContainerIter::Rows(rows) => rows.map(|row| self.render_row(row)).collect(),
+            ContainerIter::Matches(matches) => self.render_matches(matches),
+        };
 
         html! {
-            <BracketMatch<E> {entrants} {nodes} {on_action} number={match_index} {position} />
+            <div class="dt-bracket-brackets">
+                { inner }
+            </div>
         }
+    }
+
+    fn render_matches(&mut self, matches: MatchesIter<'_, T>) -> Html {
+        matches
+            .enumerate()
+            .map(|(i, m)| {
+                // Get the match from the tournament.
+                let match_: &Match<Node<EntrantScore<u64>>> =
+                    unsafe { self.tournament.matches().get_unchecked(m.index()) };
+
+                let entrants = match_.map(|spot| {
+                    spot.map(|node| {
+                        // SAFE
+                        unsafe { self.tournament.entrants().get_unchecked(node.index).clone() }
+                    })
+                });
+
+                let nodes = match_.map(|spot| spot.map(|node| node.data));
+
+                let position = m.position();
+
+                let index = m.index();
+                let on_action = self
+                    .ctx
+                    .link()
+                    .callback(move |action| Message::Action { index, action });
+
+                html! {
+                    <BracketMatch<E> {entrants} {nodes} {on_action} number={i + 1} {position} />
+                }
+            })
+            .collect()
     }
 }
 
@@ -115,9 +114,11 @@ where
     T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
-    fn render(&mut self, input: BracketRounds<'_, T>) {
-        self.output = input
-            .map(|bracket_round| self.render_bracket_round(bracket_round))
-            .collect();
+    fn render(&mut self, input: Container<'_, T>) {
+        self.output = match input.iter() {
+            ContainerIter::Columns(cols) => cols.map(|col| self.render_column(col)).collect(),
+            ContainerIter::Rows(rows) => rows.map(|row| self.render_row(row)).collect(),
+            ContainerIter::Matches(matches) => self.render_matches(matches),
+        };
     }
 }

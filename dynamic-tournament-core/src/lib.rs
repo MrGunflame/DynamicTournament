@@ -411,6 +411,14 @@ impl<T> Match<T> {
         // SAFETY: The caller must guarantee that `index` is in bounds.
         unsafe { self.entrants.get_unchecked_mut(index) }
     }
+
+    pub fn map<U, F>(&self, f: F) -> [U; 2]
+    where
+        T: Clone,
+        F: FnMut(EntrantSpot<T>) -> U,
+    {
+        self.entrants.clone().map(f)
+    }
 }
 
 impl<T> Index<usize> for Match<T> {

@@ -1,6 +1,12 @@
 //! # Tournament Rendering
 //!
 //! The `render` module provides types to generically render tournament [`System`]s.
+//!
+//! The rendering process is built around three components which can be used to build any
+//! tournament tree:
+//! - A [`Column`] is a repeating vertical container element.
+//! - A [`Row`] is a repeating horizontal container element.
+//! - A [`Match`] is a leaf element displaying match at a specific index.
 use crate::System;
 
 use std::{marker::PhantomData, ops::Deref};
@@ -126,6 +132,7 @@ pub enum Position {
     ///
     /// # Examples
     ///
+    /// ```
     /// |     COL0     |     COL1     |     COL2     |
     /// | ------------ | ------------ | ------------ |
     /// |              |              |              |
@@ -145,12 +152,14 @@ pub enum Position {
     /// | | Match[3] | |              |              |
     /// | | -------- | |              |              |
     /// |              |              |              |
+    /// ```
     Start,
     End,
     SpaceAround,
     SpaceBetween,
 }
 
+/// An `Iterator` over a list of [`Column`]s with a defined length.
 #[derive(Debug)]
 pub struct ColumnsIter<'a, T>
 where
@@ -185,6 +194,28 @@ where
                 self.pos += 1;
                 Some(val)
             }
+            _ => {
+                if cfg!(debug_assertions) {
+                    unreachable!()
+                } else {
+                    unsafe { std::hint::unreachable_unchecked() }
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a, T> ExactSizeIterator for ColumnsIter<'a, T>
+where
+    T: System,
+{
+    fn len(&self) -> usize {
+        match self.inner {
+            ContainerInner::Columns(vec) => vec.len() - self.pos,
             _ => {
                 if cfg!(debug_assertions) {
                     unreachable!()
