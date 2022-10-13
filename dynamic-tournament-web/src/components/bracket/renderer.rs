@@ -56,7 +56,7 @@ where
         };
 
         html! {
-            <div class="dt-bracket-round">
+            <div class="dt-bracket-column">
                 { inner }
             </div>
         }
@@ -70,7 +70,7 @@ where
         };
 
         html! {
-            <div class="dt-bracket-brackets">
+            <div class="dt-bracket-row">
                 { inner }
             </div>
         }
