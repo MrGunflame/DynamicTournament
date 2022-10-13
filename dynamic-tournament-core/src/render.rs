@@ -19,18 +19,35 @@ where
     fn render(&mut self, root: Container<'_, T>);
 }
 
+/// A wrapper around a list of elements.
+///
+/// A `Container` can be thought of as a node in a AST representing the tournament tree.
 #[derive(Debug)]
 pub struct Container<'a, T>
 where
     T: System,
 {
     pub(crate) inner: ContainerInner<'a, T>,
+    pub(crate) position: Position,
 }
 
 impl<'a, T> Container<'a, T>
 where
     T: System,
 {
+    pub fn position(&self) -> Position {
+        self.position
+    }
+
+    /// Returns the [`ElementKind`] of the elements this `Container` wraps around.
+    pub fn kind(&self) -> ElementKind {
+        match self.inner {
+            ContainerInner::Columns(_) => ElementKind::Column,
+            ContainerInner::Rows(_) => ElementKind::Row,
+            ContainerInner::Matches(_) => ElementKind::Match,
+        }
+    }
+
     pub fn iter(&self) -> ContainerIter<'_, T> {
         ContainerIter::new(self)
     }
@@ -84,14 +101,15 @@ where
     }
 }
 
+/// A leaf element in the render tree representing a *match* or *heat*.
 #[derive(Clone, Debug)]
 pub struct Match<'a, T>
 where
     T: System,
 {
     pub(crate) index: usize,
-    pub(crate) predecessors: Vec<usize>,
-    pub(crate) position: Position,
+    pub(crate) predecessors: Vec<Predecessor>,
+    pub(crate) position: Option<Position>,
     pub(crate) _marker: PhantomData<&'a T>,
 }
 
@@ -106,29 +124,43 @@ where
     }
 
     /// Returns the hinted [`Position`] at which the [`System`] expectes the match to be rendered.
+    /// A `None` value indicates that the `Match` should be rendered using the hint from the
+    /// parent.
     #[inline]
-    pub fn position(&self) -> Position {
+    pub fn position(&self) -> Option<Position> {
         self.position
     }
 
-    pub fn predecessors(&self) -> &[usize] {
+    /// Returns a non-exhaustive list of [`Predecessor`]s leading to this `Match`. All elements are
+    /// guaranteed to be correct, but there is no guarantee that the list is exhaustive.
+    pub fn predecessors(&self) -> &[Predecessor] {
         &self.predecessors
     }
 }
 
+/// A predecessor hint of a match.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Predecessor {
-    source_match: usize,
+    pub kind: PredecessorKind,
+    /// The index of the match that is the predecessor.
+    pub source_match: usize,
     /// Destination index within the next match.
-    destination_index: usize,
+    pub destination_index: usize,
+    pub(crate) _priv: (),
 }
 
-/// A `Position` gives the renderer a hint where the [`System`] expects this match to be displayed.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PredecessorKind {
+    Winner,
+    Loser,
+}
+
+/// A `Position` gives the renderer a hint how the [`System`] expects this element to be displayed.
 ///
 /// Note that a `Position` is purely a hint, a renderer may decide to ignore it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Position {
-    /// Hints that the match should be rendered at the start of the container.
+    /// Hints that the element should be rendered at the start of the container.
     ///
     /// # Examples
     ///
@@ -154,6 +186,31 @@ pub enum Position {
     /// |              |              |              |
     /// ```
     Start,
+    /// Hints that the element should be rendered at the end of the container.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[0] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[2] | | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// | | Match[3] | | | Match[5] | | | Match[6] | |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// |              |              |              |
+    /// ```
     End,
     SpaceAround,
     SpaceBetween,
@@ -165,20 +222,7 @@ pub struct ColumnsIter<'a, T>
 where
     T: System,
 {
-    inner: &'a ContainerInner<'a, T>,
-    pos: usize,
-}
-
-impl<'a, T> ColumnsIter<'a, T>
-where
-    T: System,
-{
-    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
-        Self {
-            inner: &inner.inner,
-            pos: 0,
-        }
-    }
+    slice: &'a [Column<'a, T>],
 }
 
 impl<'a, T> Iterator for ColumnsIter<'a, T>
@@ -188,20 +232,9 @@ where
     type Item = &'a Column<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner {
-            ContainerInner::Columns(vec) => {
-                let val = vec.get(self.pos)?;
-                self.pos += 1;
-                Some(val)
-            }
-            _ => {
-                if cfg!(debug_assertions) {
-                    unreachable!()
-                } else {
-                    unsafe { std::hint::unreachable_unchecked() }
-                }
-            }
-        }
+        let (elem, rem) = self.slice.split_first()?;
+        self.slice = rem;
+        Some(elem)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -214,16 +247,7 @@ where
     T: System,
 {
     fn len(&self) -> usize {
-        match self.inner {
-            ContainerInner::Columns(vec) => vec.len() - self.pos,
-            _ => {
-                if cfg!(debug_assertions) {
-                    unreachable!()
-                } else {
-                    unsafe { std::hint::unreachable_unchecked() }
-                }
-            }
-        }
+        self.slice.len()
     }
 }
 
@@ -232,20 +256,7 @@ pub struct RowsIter<'a, T>
 where
     T: System,
 {
-    inner: &'a ContainerInner<'a, T>,
-    pos: usize,
-}
-
-impl<'a, T> RowsIter<'a, T>
-where
-    T: System,
-{
-    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
-        Self {
-            inner: &inner.inner,
-            pos: 0,
-        }
-    }
+    slice: &'a [Row<'a, T>],
 }
 
 impl<'a, T> Iterator for RowsIter<'a, T>
@@ -255,20 +266,9 @@ where
     type Item = &'a Row<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner {
-            ContainerInner::Rows(vec) => {
-                let val = vec.get(self.pos)?;
-                self.pos += 1;
-                Some(val)
-            }
-            _ => {
-                if cfg!(debug_assertions) {
-                    unreachable!()
-                } else {
-                    unsafe { std::hint::unreachable_unchecked() }
-                }
-            }
-        }
+        let (elem, rem) = self.slice.split_first()?;
+        self.slice = rem;
+        Some(elem)
     }
 }
 
@@ -277,20 +277,7 @@ pub struct MatchesIter<'a, T>
 where
     T: System,
 {
-    inner: &'a ContainerInner<'a, T>,
-    pos: usize,
-}
-
-impl<'a, T> MatchesIter<'a, T>
-where
-    T: System,
-{
-    unsafe fn new(inner: &'a Container<'a, T>) -> Self {
-        Self {
-            inner: &inner.inner,
-            pos: 0,
-        }
-    }
+    slice: &'a [Match<'a, T>],
 }
 
 impl<'a, T> Iterator for MatchesIter<'a, T>
@@ -300,20 +287,9 @@ where
     type Item = &'a Match<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.inner {
-            ContainerInner::Matches(vec) => {
-                let val = vec.get(self.pos)?;
-                self.pos += 1;
-                Some(val)
-            }
-            _ => {
-                if cfg!(debug_assertions) {
-                    unreachable!()
-                } else {
-                    unsafe { std::hint::unreachable_unchecked() }
-                }
-            }
-        }
+        let (elem, rem) = self.slice.split_first()?;
+        self.slice = rem;
+        Some(elem)
     }
 }
 
@@ -332,12 +308,10 @@ where
     T: System,
 {
     fn new(inner: &'a Container<'a, T>) -> Self {
-        unsafe {
-            match &inner.inner {
-                ContainerInner::Columns(_) => Self::Columns(ColumnsIter::new(inner)),
-                ContainerInner::Rows(_) => Self::Rows(RowsIter::new(inner)),
-                ContainerInner::Matches(_) => Self::Matches(MatchesIter::new(inner)),
-            }
+        match &inner.inner {
+            ContainerInner::Columns(cols) => Self::Columns(ColumnsIter { slice: cols }),
+            ContainerInner::Rows(rows) => Self::Rows(RowsIter { slice: rows }),
+            ContainerInner::Matches(matches) => Self::Matches(MatchesIter { slice: matches }),
         }
     }
 }
@@ -348,4 +322,38 @@ where
     T: System,
 {
     pub(crate) inner: Container<'a, T>,
+}
+
+/// The type of an element.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ElementKind {
+    Column,
+    Row,
+    Match,
+}
+
+impl ElementKind {
+    /// Returns `true` if this `ElementKind` is [`Column`].
+    ///
+    /// [`Column`]: Self::Column
+    #[inline]
+    pub fn is_column(&self) -> bool {
+        matches!(self, Self::Column)
+    }
+
+    /// Returns `true` if this `ElementKind` is [`Row`].
+    ///
+    /// [`Row`]: Self::Row
+    #[inline]
+    pub fn is_row(&self) -> bool {
+        matches!(self, Self::Row)
+    }
+
+    /// Returns `true` if this `ElementKind` is [`Match`].
+    ///
+    /// [`Match`]: Self::Match
+    #[inline]
+    pub fn is_match(&self) -> bool {
+        matches!(self, Self::Match)
+    }
 }

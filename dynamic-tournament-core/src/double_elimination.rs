@@ -33,6 +33,14 @@ where
             entrants.len()
         );
 
+        if entrants.len() == 0 {
+            return Self {
+                entrants: Entrants::new(),
+                matches: Matches::new(),
+                lower_bracket_index: 0,
+            };
+        }
+
         let initial_matches = match entrants.len() {
             1 | 2 => 1,
             n => n.next_power_of_two() / 2,
@@ -582,7 +590,7 @@ where
                     matches.push(crate::render::Match {
                         index: i,
                         predecessors: vec![],
-                        position: Position::SpaceAround,
+                        position: None,
                         _marker: PhantomData,
                     });
                 }
@@ -590,6 +598,7 @@ where
                 cols.push(Column {
                     inner: Container {
                         inner: ContainerInner::Matches(matches),
+                        position: Position::SpaceAround,
                     },
                 });
 
@@ -614,7 +623,7 @@ where
                     matches.push(crate::render::Match {
                         index: i,
                         predecessors: vec![],
-                        position: Position::SpaceAround,
+                        position: None,
                         _marker: PhantomData,
                     });
                 }
@@ -622,6 +631,7 @@ where
                 cols.push(Column {
                     inner: Container {
                         inner: ContainerInner::Matches(matches),
+                        position: Position::SpaceAround,
                     },
                 });
 
@@ -640,14 +650,17 @@ where
                     Row {
                         inner: Container {
                             inner: ContainerInner::Columns(upper),
+                            position: Position::SpaceAround,
                         },
                     },
                     Row {
                         inner: Container {
                             inner: ContainerInner::Columns(lower),
+                            position: Position::SpaceAround,
                         },
                     },
                 ]),
+                position: Position::SpaceAround,
             },
         });
 
@@ -657,15 +670,17 @@ where
                 inner: ContainerInner::Matches(vec![crate::render::Match {
                     index: self.matches.len() - 1,
                     predecessors: vec![],
-                    position: Position::SpaceAround,
+                    position: None,
                     _marker: PhantomData,
                 }]),
+                position: Position::SpaceAround,
             },
         });
 
         RenderState {
             inner: Container {
                 inner: ContainerInner::Columns(columns),
+                position: Position::SpaceAround,
             },
         }
     }

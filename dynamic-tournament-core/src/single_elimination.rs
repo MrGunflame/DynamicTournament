@@ -452,7 +452,7 @@ where
                 matches.push(crate::render::Match {
                     index: i,
                     predecessors: vec![],
-                    position: Position::SpaceAround,
+                    position: None,
                     _marker: PhantomData,
                 });
             }
@@ -460,6 +460,7 @@ where
             columns.push(Column {
                 inner: Container {
                     inner: ContainerInner::Matches(matches),
+                    position: Position::SpaceAround,
                 },
             });
 
@@ -470,6 +471,7 @@ where
         RenderState {
             inner: Container {
                 inner: ContainerInner::Columns(columns),
+                position: Position::SpaceAround,
             },
         }
     }
