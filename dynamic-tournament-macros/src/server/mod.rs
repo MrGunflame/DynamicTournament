@@ -51,13 +51,15 @@ impl MethodRoot {
         quote! {
             method if method == hyper::Method::OPTIONS => {
                 use crate::http::Response;
-                use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS};
+                use hyper::header::{HeaderValue, ALLOW, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_HEADERS};
 
                 let allow = HeaderValue::from_static(#methods);
+                let headers  = HeaderValue::from_static("X-WP-Nonce");
 
                 Ok(Response::no_content()
                     .header(ALLOW, allow.clone())
-                    .header(ACCESS_CONTROL_ALLOW_METHODS, allow))
+                    .header(ACCESS_CONTROL_ALLOW_METHODS, allow)
+                    .header(ACCESS_CONTROL_ALLOW_HEADERS, headers))
             }
         }
     }

@@ -16,6 +16,7 @@ pub struct Config {
     pub api_base: Box<str>,
     pub root: Box<str>,
     pub mountpoint: Box<str>,
+    pub wp_nonce: Box<str>,
 }
 
 impl Config {
@@ -33,6 +34,11 @@ impl Config {
     #[inline]
     pub fn mountpoint(&self) -> &'static str {
         &self.static_ref().mountpoint
+    }
+
+    #[inline]
+    pub fn wp_nonce(&self) -> &'static str {
+        &self.static_ref().wp_nonce
     }
 
     /// Converts a `&Config` reference into a `&'static Config` reference.

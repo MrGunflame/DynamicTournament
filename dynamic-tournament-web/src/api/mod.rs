@@ -26,12 +26,18 @@ pub struct Client {
 impl Client {
     /// Creates a new `Client` with the given `base_url`.
     #[inline]
-    pub fn new<T>(base_url: T) -> Self
+    pub fn new<T>(base_url: T, nonce: &str) -> Self
     where
         T: Into<Cow<'static, str>>,
     {
+        let inner = InnerClient::builder()
+            .base_url(base_url)
+            .nonce(nonce)
+            .build()
+            .unwrap();
+
         let this = Self {
-            inner: InnerClient::new(base_url),
+            inner,
             waker: Rc::new(Notify::new()),
             on_login: Rc::new(Notify::new()),
             on_logout: Rc::new(Notify::new()),

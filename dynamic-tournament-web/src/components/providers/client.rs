@@ -15,7 +15,7 @@ impl Component for ClientProvider {
     type Properties = Properties;
 
     fn create(_ctx: &Context<Self>) -> Self {
-        let client = Client::new(config().api_base());
+        let client = Client::new(config().api_base(), config().wp_nonce());
 
         Self { client }
     }

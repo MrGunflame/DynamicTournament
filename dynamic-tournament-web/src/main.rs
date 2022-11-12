@@ -5,5 +5,7 @@ fn main() {
         api_base: "http://localhost:3030".into(),
         root: "/".into(),
         mountpoint: "main".into(),
+        // Not required in standalone mode.
+        wp_nonce: "".into(),
     });
 }

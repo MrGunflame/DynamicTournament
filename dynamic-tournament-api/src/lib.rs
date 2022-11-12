@@ -38,15 +38,12 @@ impl Client {
     where
         T: Into<Cow<'static, str>>,
     {
-        let inner = ClientInner {
-            base_url: base_url.into(),
-            authorization: Authorization::new(),
-        };
+        Self::builder().base_url(base_url).build().unwrap()
+    }
 
-        Self {
-            inner: Arc::new(RwLock::new(inner)),
-            client: http::Client::new(),
-        }
+    #[inline]
+    pub const fn builder() -> Builder {
+        Builder::new()
     }
 
     pub fn v3(&self) -> v3::Client {
@@ -60,7 +57,13 @@ impl Client {
     pub(crate) fn request(&self) -> RequestBuilder {
         let inner = self.inner.read().unwrap();
 
-        RequestBuilder::new(inner.base_url.to_string(), &inner.authorization)
+        let mut req = RequestBuilder::new(inner.base_url.to_string(), &inner.authorization);
+
+        if let Some(val) = &inner.nonce {
+            req = req.header("X-WP-Nonce", val);
+        }
+
+        req
     }
 
     /// Returns `true` if the `Client` has authentication credentials set.
@@ -100,10 +103,56 @@ impl PartialEq for Client {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Clone, Debug, Default)]
+pub struct Builder {
+    base_url: Option<Cow<'static, str>>,
+    nonce: Option<String>,
+}
+
+impl Builder {
+    pub const fn new() -> Self {
+        Self {
+            base_url: None,
+            nonce: None,
+        }
+    }
+
+    pub fn base_url<T>(mut self, url: T) -> Self
+    where
+        T: Into<Cow<'static, str>>,
+    {
+        self.base_url = Some(url.into());
+        self
+    }
+
+    pub fn nonce<T>(mut self, nonce: T) -> Self
+    where
+        T: ToString,
+    {
+        self.nonce = Some(nonce.to_string());
+        self
+    }
+
+    pub fn build(self) -> Option<Client> {
+        let inner = ClientInner {
+            base_url: self.base_url?,
+            authorization: Authorization::new(),
+            nonce: self.nonce,
+        };
+
+        Some(Client {
+            inner: Arc::new(RwLock::new(inner)),
+            client: http::Client::new(),
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ClientInner {
     base_url: Cow<'static, str>,
     authorization: Authorization,
+    // Wordpress nonce for cookie requests.
+    nonce: Option<String>,
 }
 
 #[derive(Debug, Error)]
