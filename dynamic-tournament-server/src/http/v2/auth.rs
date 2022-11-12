@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::collections::HashMap;
+
 use crate::http::{Context, Response, Result};
 use crate::StatusCodeError;
 
@@ -5,6 +8,7 @@ use dynamic_tournament_api::auth::{Claims, Flags};
 use dynamic_tournament_api::v3::auth::RefreshToken;
 use dynamic_tournament_macros::{method, path};
 use hyper::header::{AUTHORIZATION, COOKIE, HOST};
+use serde::{Deserialize, Serialize};
 
 pub async fn route(mut ctx: Context) -> Result {
     path!(ctx, {
@@ -18,13 +22,7 @@ pub async fn route(mut ctx: Context) -> Result {
 }
 
 async fn login(ctx: Context) -> Result {
-    wp_validate(&ctx).await?;
-
-    let mut claims = Claims::new(0);
-    claims.flags = Flags::ALL;
-
-    let tokens = ctx.state.auth.create_tokens(claims)?;
-    Ok(Response::ok().json(&tokens))
+    wp_validate(&ctx).await
 }
 
 async fn refresh(mut ctx: Context) -> Result {
@@ -48,7 +46,10 @@ async fn refresh(mut ctx: Context) -> Result {
 /// accept the request. If the status code is not 200, it should be a 401 if correctly configured,
 /// we also return 401.
 async fn wp_validate(ctx: &Context) -> Result {
-    let uri = format!("{}/api/wp/v2/users", ctx.state.config.wordpress.upstream);
+    let uri = format!(
+        "{}/api/wp/v2/users/me?context=edit",
+        ctx.state.config.wordpress.upstream
+    );
     log::debug!("Validating using upstream {}", uri);
 
     let uri = match reqwest::Url::parse(&uri) {
@@ -78,7 +79,14 @@ async fn wp_validate(ctx: &Context) -> Result {
         req.headers_mut().append(COOKIE, val.clone());
     }
 
+    // The `X-WP-Nonce` header is required for `Cookie` requests.
+    if let Some(val) = ctx.req.headers().get("X-WP-Nonce") {
+        req.headers_mut().append("X-WP-Nonce", val.clone());
+    }
+
+    // Either a `Authorization` or `Cookie` header is required.
     if req.headers().get(AUTHORIZATION).is_none() && req.headers().get(COOKIE).is_none() {
+        log::debug!("No Cookie or Authorization header, rejecting");
         return Err(StatusCodeError::unauthorized().into());
     }
 
@@ -102,5 +110,57 @@ async fn wp_validate(ctx: &Context) -> Result {
         return Err(StatusCodeError::unauthorized().into());
     }
 
-    Ok(Response::ok())
+    let body = match resp.bytes().await {
+        Ok(body) => body,
+        Err(err) => {
+            log::debug!("Failed to stream body: {}", err);
+            return Err(StatusCodeError::internal_server_error().into());
+        }
+    };
+
+    let user = match serde_json::from_slice::<WpUser>(&body) {
+        Ok(user) => user,
+        Err(err) => {
+            log::debug!("Failed to deserialize response body: {}", err);
+            return Err(StatusCodeError::internal_server_error().into());
+        }
+    };
+
+    let tokens = ctx.state.auth.create_tokens(user.claims())?;
+
+    log::debug!(
+        "Issuing token with sub={:?} and flags={:?}",
+        tokens.auth_token.claims().sub,
+        tokens.auth_token.claims().flags,
+    );
+
+    Ok(Response::ok().json(&tokens))
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct WpUser<'a> {
+    id: u64,
+    username: Cow<'a, str>,
+    name: Cow<'a, str>,
+    capabilities: HashMap<Cow<'a, str>, bool>,
+}
+
+impl<'a> WpUser<'a> {
+    fn claims(&self) -> Claims {
+        let mut claims = Claims::new(self.id);
+
+        if self
+            .capabilities
+            .get("dt_tournaments_edit_scores")
+            .is_some()
+        {
+            claims.flags |= Flags::EDIT_SCORES;
+        }
+
+        if self.capabilities.get("dt_tournaments_admin").is_some() {
+            claims.flags |= Flags::ADMIN;
+        }
+
+        claims
+    }
 }
