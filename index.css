@@ -109,6 +109,25 @@ td {
   color: #e7ad26;
 }
 
+h3.dt-title {
+  padding: 10px;
+  text-align: center;
+}
+
+/* JUST FLEXBOX THINGS */
+
+.dt-flex-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.dt-flex-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* MESSAGE LOG */
 
 .dt-msglog {
@@ -405,7 +424,7 @@ td {
   font-size: 1rem;
 }
 
-.dt-winner-input.active {
+.dt-winner-input.dt-active {
   background-color: #fc9402;
 }
 
