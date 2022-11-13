@@ -311,7 +311,11 @@ h3.dt-title {
 
 .dt-bracket-live {
   position: relative;
+  /* Light transparent background */
+  background: rgba(0, 0, 0, 0.6);
   margin: 10px;
+  padding: 10px;
+  border-radius: 8px;
   z-index: 100;
 }
 
