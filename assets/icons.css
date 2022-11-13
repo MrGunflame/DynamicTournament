@@ -4,6 +4,11 @@
     display: inline-block;
 }
 
+.dt-icon>* {
+    height: 100%;
+    width: 100%;
+}
+
 .dt-icon-size-xs {
     width: 8px;
     height: 8px;
