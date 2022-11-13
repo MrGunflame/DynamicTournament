@@ -81,15 +81,11 @@ impl Component for Entrants {
 
             html! {
                 <table class="dt-table dt-table-center">
-                    <thead>
-                        <tr>
-                            <th>{ "Name" }</th>
-                            <th>{ "Players" }</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        { entrants }
-                    </tbody>
+                    <tr>
+                        <th>{ "Name" }</th>
+                        <th>{ "Players" }</th>
+                    </tr>
+                    { entrants }
                 </table>
             }
         })
