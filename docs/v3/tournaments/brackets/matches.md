@@ -23,7 +23,7 @@ The request contains contains no response body. Instead the server responds with
 ## Websocket protocol
 
 The upgraded websocket connection uses a custom binary protocol. The protocol differenciates
-between *Requests*, which are only sent by the client  and *Response*, which are only sent
+between *Requests*, which are only sent by the client  and *Responses*, which are only sent
 be the server. The protocol is full-duplex: both the client and server can start sending
 data independently from each other.
 
@@ -35,19 +35,19 @@ Requests can be differentiated between read and write queries. Read queries are 
 
 The protocol has support for encoding/decoding the following types:
 
-| Type | Size (Bytes) |
-| ---- | ------------ | 
-| bool | 1            |
-| u8   | 1            |
-| u16  | variable     |
-| u32  | variable     |
-| u64  | variable     |
-| i8   | 1            |
-| i16  | variable     |
-| i32  | variable     |
-| i64  | variable     |
-| [T]  | variable     |
-| str  | variable     |
+| Type | Size (Bytes) | Note                                                                    |
+| ---- | ------------ | ----------------------------------------------------------------------- |
+| bool | 1            | A boolean type representing either `true` or `false`.                   |
+| u8   | 1            | A byte encoded as is.                                                   |
+| u16  | variable     | A varint encoded unsigned integer with a maximum width of 16 bits.      |
+| u32  | variable     | A varint encoded unsigned integer with a maximum width if 32 bits.      |
+| u64  | variable     | A varint encoded unsigned integer with a maximum width of 64 bits.      |
+| i8   | 1            | A zigzag encoded byte.                                                  |
+| i16  | variable     | A zigzag varint encoded signed integer with a maximum width of 16 bits. |
+| i32  | variable     | A zigzag varint encoded signed integer with a maximum width of 32 bits. |
+| i64  | variable     | A zigzag varint encoded signed integer with a maximum width of 64 bits. |
+| [T]  | variable     | A sequence of `T` with a variable length.                               |
+| str  | variable     | A UTF-8 encoded string.                                                 |
 
 #### Integer encoding
 
@@ -65,16 +65,39 @@ The process of decoding an ULEB128 encoded integer is as follows:
 2. Remove every 8th bit (MSB) from the bytes, creating groups of 7-bit
 3. Accumulate all bytes from little-endian
 
-See [leb128.c](leb128.c) for an example encode and decode implementation.
+See [leb128.c](leb128.c) for an example C encode and decode implementation.
 
 Signed integers are converted into their unsigned variant using a zigzag encoding. This 
 encoding stores the sign bit in the LSB.
 
 An signed integer `n` with `k` bits can be encoded using `(n << 1) ^ (n >> k - 1)`.
 
+#### bool
+
+A boolean type that is either `true` or `false`. Encoded as a u8 with a `0` representing 
+`false` and a `1` representing `true`. All other byte values are invalid for this type.
+
+#### Arrays and Strings
+
+Arrays and strings are encoded using the same format. An array first encodes the length of 
+the array, or in other words, the number of elements following. The length is a `u64` using 
+the varint encoding described above. After that every element is encoded.
+
+![Array Def](array-def.svg)
+
+Strings are encoded as a array of bytes (`u8`). Note that the length is **not the number of 
+characters**, but the number of bytes. In the case of ASCII this is the same, but any UTF-8 byte
+sequence is a valid string.
+
+For example the string "Hello" has the length 5 and is encoded as follows:
+
+![Array Example](array-example.svg)
+
 #### General structure
 
-The structure of the protocol is defined as tables in the following sections. The fields of the table are ordered in the order they are shown.
+The structure of the protocol is defined as tables/structs in the following sections, with the fields of the structs being encoded/decoded recursively.
+The fields of the structs are ordered in the order they are shown. The encoded format is not self-describing, the field names are not contained in
+the encoded message themselves.
 
 For example see the definition for the `Entrant Score` struct:
 
@@ -83,16 +106,28 @@ For example see the definition for the `Entrant Score` struct:
 | score  | u64  |
 | winner | bool |
 
-The encoded version will look like this in memory:  
+The process of encoding `Entrant Score` is:
+1. Encode the `u64` value of the `score` field (resulting in 1-8 bytes)
+2. Encode the `bool` value of the `winner` field (resulting in 1 byte)
+
+The accumulated buffer is the encoded message:  
 ![Entrant Score](struct-entrant-score.svg)
 
-Many structs will have other structs in their fields. For example take a look at the `Match` struct:
+Some structs are defined with other structs in their fields. For example the `Match` struct is defined as:
+
 | Name     | Type   |
 | -------- | ------ |
-| entrants | []Node |
+| entrants | [Node] |
 
-The encoded version will look like this in memory:  
+The process of encoding `Match` is:
+1. Encode the `[Node]` value of the `entrants` field:
+     1. Encode the length of the `Node` sequence as a `u64`
+     2. Encode every `Node` using the logic above
+
+The encoded version will look as follows:  
 ![Match](struct-match.svg)
+
+The process of decoding follows the same procedure.
 
 ##### Entrant Score
 
@@ -124,27 +159,6 @@ indexing the `entrants` field returned by the [`/v3/tournaments/:id/brackets` en
 | ----- | --------------- |
 | index | u64             |
 | score | *Entrant Score* |
-
-##### bool
-
-A boolean type that is either `true` or `false`. Encoded as a u8 with a 0 representing 
-`false` and a 1 representing `true`. All other byte values are invalid for this type.
-
-##### Arrays and Strings
-
-Arrays and strings are encoded using the same format. An array first encodes the length of 
-the array, or in other words, the number of elements following. The length is a `u64` using 
-the varint encoding described above. After that every element is encoded.
-
-![Array Def](array-def.svg)
-
-Strings are encoded as a array of bytes (`u8`). Note that the length is **not the number of 
-characters**, but the number of bytes. In the case of ASCII this is the same, but any UTF-8 
-code point is valid.
-
-For example the string "Hello" has the length 5 and encoded as follows:
-
-![Array Example](array-example.svg)
 
 ### Request
 
