@@ -190,8 +190,32 @@ impl PartialEq for Client {
 /// An change action from a [`Client`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
+    /// A `Login` action is triggered when the client is first logged in. Specifically this is
+    /// triggred when [`State`] changes from [`LoggedOut`] to [`LoggedIn`].
+    ///
+    /// [`LoggedOut`]: State::LoggedOut
+    /// [`LoggedIn`]: State::LoggedIn
     Login,
+    /// A `Logout` action is triggered when the client is logged out. Specifically this is triggred
+    /// when [`State`] changes from [`LoggedIn`] to [`LoggedOut`].
+    ///
+    /// [`LoggedIn`]: State::LoggedIn
+    /// [`LoggedOut`]: State::LoggedOut
     Logout,
+}
+
+impl Action {
+    /// Returns `true` if this `Action` is [`Action::Login`].
+    #[inline]
+    pub fn is_login(self) -> bool {
+        matches!(self, Self::Login)
+    }
+
+    /// Returns `true` if this `Action` is [`Action::Logout`].
+    #[inline]
+    pub fn is_logout(self) -> bool {
+        matches!(self, Self::Logout)
+    }
 }
 
 pub struct Changed<'a> {

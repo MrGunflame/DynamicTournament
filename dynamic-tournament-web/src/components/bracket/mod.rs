@@ -36,6 +36,8 @@ use renderer::HtmlRenderer;
 
 pub use live_bracket::LiveBracket;
 
+use super::providers::{ClientProvider, Provider};
+
 pub struct Bracket {
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
@@ -47,6 +49,16 @@ impl Component for Bracket {
     type Properties = Properties;
 
     fn create(ctx: &Context<Self>) -> Self {
+        let client = ClientProvider::get(ctx);
+        let link = ctx.link().clone();
+        ctx.link().send_future_batch(async move {
+            loop {
+                if client.changed().await.is_login() {
+                    link.send_message(Message::Authorize);
+                }
+            }
+        });
+
         Self {
             state: None,
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleResponse)),
@@ -246,6 +258,24 @@ impl Component for Bracket {
 
                 false
             }
+            Message::Authorize => {
+                if let Some(websocket) = &ctx.props().websocket {
+                    // Return early if there is not token set.
+                    let auth = ClientProvider::get(ctx).authorization();
+                    let token = match auth.auth_token().cloned() {
+                        Some(token) => token,
+                        None => return false,
+                    };
+
+                    let mut websocket = websocket.clone();
+                    ctx.link().send_future_batch(async move {
+                        let _ = websocket.send(Request::Authorize(token.to_string())).await;
+                        vec![]
+                    });
+                }
+
+                false
+            }
         }
     }
 
@@ -302,6 +332,8 @@ impl Component for Bracket {
 }
 
 pub enum Message {
+    /// Authorize using the current credentials. This may be sent be multiple times.
+    Authorize,
     HandleResponse(WebSocketMessage),
     Action {
         index: usize,
