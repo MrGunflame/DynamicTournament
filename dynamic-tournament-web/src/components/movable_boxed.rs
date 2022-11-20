@@ -12,6 +12,8 @@ use crate::{
     utils::{document, Rc},
 };
 
+use super::icons::FaExpand;
+
 // Zoom factor for mouse/touch scroll events.
 const ZOOM_FACTOR: f32 = 0.05;
 
@@ -314,7 +316,7 @@ impl Component for MovableBoxed {
                         </Button>
                         {lock_button}
                         <Button onclick={on_fullscreen} title="Fullscreen">
-                            <FaCompress label="Fullscreen" />
+                            <FaExpand label="Fullscreen" />
                         </Button>
                     </div>
                     <div>
