@@ -35,7 +35,7 @@ impl AssetFile {
         }
     }
 
-    pub fn to_str(&mut self) -> Lit {
+    pub fn as_str(&mut self) -> Lit {
         if !self.is_stripped {
             self.strip();
             self.is_stripped = true;
@@ -43,10 +43,11 @@ impl AssetFile {
 
         let string = std::str::from_utf8(&self.buf).unwrap();
 
-        Lit::Verbatim(Literal::string(&string))
+        Lit::Verbatim(Literal::string(string))
     }
 
     fn strip(&mut self) {
+        #[allow(clippy::single_match)]
         match self.format {
             Some(FileFormat::Svg) => {
                 strip_svg(&mut self.buf);
@@ -72,15 +73,14 @@ where
 }
 
 fn strip_svg(buf: &mut Vec<u8>) {
-    let mut s = std::str::from_utf8(&buf).unwrap();
+    let mut s = std::str::from_utf8(buf).unwrap();
 
     // Remove comments
     while let Some(start) = s.find("<!--") {
         let mut end = s.find("-->").unwrap();
         end += b"-->".len();
 
-        drop(s);
         buf.drain(start..end);
-        s = std::str::from_utf8(&buf).unwrap();
+        s = std::str::from_utf8(buf).unwrap();
     }
 }

@@ -61,7 +61,7 @@ impl Parse for AssetPath {
 pub fn include_asset_str(input: TokenStream) -> TokenStream {
     let path = parse_macro_input!(input as AssetPath).path();
 
-    let lit = AssetFile::new(path).to_str();
+    let lit = AssetFile::new(path).as_str();
 
     TokenStream::from(quote! {
         #lit
