@@ -174,10 +174,11 @@ h3.dt-title {
   width: 100vw;
   height: 100vh;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 80;
   display: flex;
   justify-items: center;
   align-items: center;
+  /* Need to be on top even on fullscreen mode (z-index = 9999) */
+  z-index: 10000;
 }
 
 .dt-popup {
