@@ -109,4 +109,5 @@ fa_icon! {
     FaCompress, "/icons/fontawesome/compress.svg",
     FaLock, "/icons/fontawesome/lock.svg",
     FaLockOpen, "/icons/fontawesome/lock-open.svg",
+    FaExpand, "/icons/fontawesome/expand.svg",
 }

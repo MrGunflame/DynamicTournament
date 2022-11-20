@@ -72,7 +72,7 @@ impl Component for BracketUpdate {
             };
 
             let classes = if winner {
-                "dt-winner-input active"
+                "dt-winner-input dt-active"
             } else {
                 "dt-winner-input"
             };
@@ -87,8 +87,8 @@ impl Component for BracketUpdate {
         let on_submit = ctx.link().callback(|_| Msg::Submit);
 
         html! {
-            <div class="flex-col2">
-                <table class="dt-table-striped">
+            <div class="dt-flex-col">
+                <table class="dt-table dt-table-striped">
                     <tr>
                         <th>{ "Team" }</th>
                         <th>{ "Score" }</th>
@@ -96,8 +96,8 @@ impl Component for BracketUpdate {
                     { for entrants.into_iter() }
                 </table>
                 <div class="dt-winner-input-box">
-                    <h3>{ "Declare a winner (optional)"}</h3>
-                    <div class="flex-center dt-winner-input-wrapper">
+                    <h3 class="dt-title">{ "Declare a winner (optional)"}</h3>
+                    <div class="dt-flex-row dt-winner-input-wrapper">
                         { for winners.into_iter() }
                     </div>
                 </div>

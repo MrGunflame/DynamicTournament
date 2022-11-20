@@ -17,6 +17,6 @@ server = []
 web = []
 
 [dependencies]
-syn = "1.0.99"
+syn = "1.0.103"
 quote = "1.0.21"
-proc-macro2 = "1.0.43"
+proc-macro2 = "1.0.47"

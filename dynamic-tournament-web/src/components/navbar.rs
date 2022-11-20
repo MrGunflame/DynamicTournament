@@ -32,6 +32,7 @@ impl Component for Navbar {
         match msg {
             Action::Login => self.state = State::LoggedIn,
             Action::Logout => self.state = State::LoggedOut,
+            Action::Refresh => return false,
         }
 
         true

@@ -12,6 +12,8 @@ use crate::{
     utils::{document, Rc},
 };
 
+use super::icons::FaExpand;
+
 // Zoom factor for mouse/touch scroll events.
 const ZOOM_FACTOR: f32 = 0.05;
 
@@ -270,7 +272,7 @@ impl Component for MovableBoxed {
         });
 
         if self.is_fullscreen.get() {
-            frame_style.push_str("position: absolute; top:0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; border: none;");
+            frame_style.push_str("position: absolute; top:0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; border: none;z-index: 9999;");
         }
 
         let style = format!(
@@ -314,7 +316,7 @@ impl Component for MovableBoxed {
                         </Button>
                         {lock_button}
                         <Button onclick={on_fullscreen} title="Fullscreen">
-                            <FaCompress label="Fullscreen" />
+                            <FaExpand label="Fullscreen" />
                         </Button>
                     </div>
                     <div>
