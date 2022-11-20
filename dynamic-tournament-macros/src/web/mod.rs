@@ -1,8 +1,8 @@
+mod file;
 mod load_asset;
 
 pub use load_asset::load_asset;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::quote;
 
 use std::path::Path;
@@ -11,24 +11,14 @@ use std::process::Command;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, LitStr, Result};
 
+use self::file::AssetFile;
+
 #[derive(Clone, Debug)]
 pub(crate) struct AssetPath {
     path: LitStr,
 }
 
 impl AssetPath {
-    pub fn absolute(&self) -> LitStr {
-        let mut path = self.asset_root();
-
-        path.push_str(&self.path.value());
-
-        if !Path::new(&path).is_file() {
-            panic!("Cannot find asset file: {}", path);
-        }
-
-        LitStr::new(&path, Span::call_site())
-    }
-
     fn asset_root(&self) -> String {
         let mut cmd = Command::new("git")
             .arg("rev-parse")
@@ -52,6 +42,12 @@ impl AssetPath {
 
         path
     }
+
+    pub fn path(&self) -> String {
+        let mut path = self.asset_root();
+        path.push_str(&self.path.value());
+        path
+    }
 }
 
 impl Parse for AssetPath {
@@ -62,10 +58,12 @@ impl Parse for AssetPath {
     }
 }
 
-pub fn include_asset(input: TokenStream) -> TokenStream {
-    let lit = parse_macro_input!(input as AssetPath).absolute();
+pub fn include_asset_str(input: TokenStream) -> TokenStream {
+    let path = parse_macro_input!(input as AssetPath).path();
+
+    let lit = AssetFile::new(path).to_str();
 
     TokenStream::from(quote! {
-        ::core::include_str!(#lit)
+        #lit
     })
 }
