@@ -148,8 +148,7 @@ the winner byte set, causing the other to be treated as the loser.
 
 ##### Match
 
-A match represents a single match (heat) in the bracket. It always contains a sequence of
-two *Node*s.
+A *Match* represents a single match (heat) in the bracket. It always contains a sequence of *Node*s.
 
 | Name     | Type   |
 | -------- | ------ |
@@ -158,7 +157,8 @@ two *Node*s.
 ##### Node
 
 A *Node* describes a single team in a match. It contains the *Entrant Score* of the entrant (see above), and an index used to identify the entrant. The entrant can be resolved by
-indexing the `entrants` field returned by the [`/v3/tournaments/:id/brackets` endpoint](../brackets.md#bracket).
+indexing the `entrants` field returned by the [`/v3/tournaments/:id/brackets` endpoint](../brackets.md#bracket). The index can be considered stable for the
+bracket.
 
 | Name  | Type            |
 | ----- | --------------- |
@@ -258,8 +258,8 @@ being returned. After that follows the event body, if any.
 | Reserved    | 0  | No   | Reserved for future use. This can safely be ignored.                  |
 | Error       | 1  | Yes  | An error message.                                                     |
 | SyncState   | 2  | Yes  | Contains the complete state of the bracket.                           |
-| UpdateMatch | 3  | Yes  | Update the match at a specified index.                                |
-| ResetMatch  | 4  | Yes  | Reset the match at a specified index.                                 |
+| UpdateMatch | 3  | Yes  | Update the match at a specified index.                                 |
+| ResetMatch  | 4  | Yes  | Reset the match at a specified index.                                  |
 
 Note that there may be more events added in the future. They can be safely ignored.
 
@@ -295,13 +295,13 @@ A `Match` contains:
 (red/blue team). |
 
 An `EntrantSpot` describes a position in a match. The position be `Empty` (displayed as *BYE* on the frontend), `TBD` (displayed as *TBD* on the frontend) or it contain a reference to an entrant. An `EntrantSpot` is encoded as a single byte representing the variant of the position. If the variant contains an entrant it is encoded afterwards.
-| Name    | Byte |
-| ------- | ---- |
-| Empty   | 0    |
-| TBD     | 1    |
-| Entrant | 2    |
+| Name    | Byte | Description                                                                         |
+| ------- | ---- | ----------------------------------------------------------------------------------- |
+| Empty   | 0    | The spot is empty and will never be occupied.                                       |
+| TBD     | 1    | The spot is currently empty and will be occupied as the bracket state continues.    |
+| Entrant | 2    | The spot is occupied by an entrant. The entrant follows in form of a *Node* struct. |
 
-If the `EntrantSpot` is an `Entrant` variant, it contains a `Node`. A `Node` contains a reference (index) to an entrant and the state (score/winner):
+If and only if the `EntrantSpot` is an `Entrant` variant, it is followed by a `Node`. A `Node` contains a reference (index) to an entrant and the state (score/winner):
 | Name  | Type        | Description               |
 | ----- | ----------- | ------------------------- |
 | index | Type        | The index of the entrant. |
@@ -357,3 +357,13 @@ Note: The body has the same format as the `ResetMatch` request.
 
 Reset the match at index `1`.  
 ![request-reset-match](request-reset-match.svg)
+
+### Connection flow
+
+The connection is first initiated by the client. There is not additional handshake or informational exchange required. Once the connection is
+established both parties can start sending data. There is one exception to this: If the client needs to sent write requests, it needs to sent `Authorize`
+before sending any write requests.
+
+If the client requires the complete state of the bracket (by sending a `SyncState` request) it should discard any recevied 
+`UpdateMatch`/`ResetMatch` messages until it receives the `SyncState` response. The same behavoir applies when sending additional `SyncState` requests
+while the connection is established.
