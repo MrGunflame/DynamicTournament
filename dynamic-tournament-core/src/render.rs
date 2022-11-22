@@ -1,12 +1,20 @@
-//! # Tournament Rendering
+//! The generic tournament rendering system.
 //!
-//! The `render` module provides types to generically render tournament [`System`]s.
+//! This module contains all the required types to drive a generic [`System`] renderer. The render
+//! process is organized as a recursive tree using [`Element`]s as nodes.
 //!
-//! The rendering process is built around three components which can be used to build any
-//! tournament tree:
-//! - A [`Column`] is a repeating vertical container element.
-//! - A [`Row`] is a repeating horizontal container element.
-//! - A [`Match`] is a leaf element displaying match at a specific index.
+//! # Structure
+//!
+//! The rendering process is structured as a tree with [`Element`]s used as nodes. A [`Element`]
+//! can represent three different values:
+//! - A [`Row`] is a node with its children organized horizontally.
+//! - A [`Column`] is a node with its children organized vertically.
+//! - A [`Match`] is a leaf element that represents a specific match in a [`System`].
+//!
+//! The entrypoint of a [`Renderer`] is a [`Element`]. If a [`System`] wants to display more than
+//! a single [`Match`] (which is all, really) it is commonly a [`Row`] enclosing all following
+//! [`Element`]s.
+//!
 use crate::System;
 
 use std::borrow::Cow;
@@ -18,6 +26,7 @@ pub trait Renderer<T, E, D>
 where
     T: System<Entrant = E, NodeData = D>,
 {
+    /// Renders a graph using the provided root [`Element`].
     fn render(&mut self, root: Element<'_, T>);
 }
 
@@ -31,13 +40,17 @@ impl<'a> Label<'a> {
     }
 }
 
+/// A node in the render graph.
 #[derive(Debug)]
 pub enum Element<'a, T>
 where
     T: System,
 {
+    /// A horizontally ordered list node.
     Row(Row<'a, T>),
+    /// A vertically ordered list node.
     Column(Column<'a, T>),
+    /// A leaf node representing a specific match in a [`System`].
     Match(Match<'a, T>),
 }
 
@@ -52,6 +65,8 @@ where
         inner.into()
     }
 
+    /// Returns the [`ElementKind`] of this `Element`.
+    #[inline]
     pub fn kind(&self) -> ElementKind {
         match self {
             Self::Row(_) => ElementKind::Row,
@@ -86,6 +101,7 @@ impl<'a, T> From<Row<'a, T>> for Element<'a, T>
 where
     T: System,
 {
+    #[inline]
     fn from(row: Row<'a, T>) -> Self {
         Self::Row(row)
     }
@@ -95,6 +111,7 @@ impl<'a, T> From<Column<'a, T>> for Element<'a, T>
 where
     T: System,
 {
+    #[inline]
     fn from(col: Column<'a, T>) -> Self {
         Self::Column(col)
     }
@@ -104,52 +121,21 @@ impl<'a, T> From<Match<'a, T>> for Element<'a, T>
 where
     T: System,
 {
+    #[inline]
     fn from(m: Match<'a, T>) -> Self {
         Self::Match(m)
     }
 }
 
-/// A direct wrapper around another [`Element`].
-///
-/// `Container` purely exists to wrap another [`Element`] while providing additional information.
-#[derive(Debug)]
-pub struct Container<'a, T>
-where
-    T: System,
-{
-    children: Box<Element<'a, T>>,
-}
-
-impl<'a, T> Container<'a, T>
-where
-    T: System,
-{
-    pub fn new(children: Element<'a, T>) -> Self {
-        Self {
-            children: Box::new(children),
-        }
-    }
-
-    pub fn into_inner(self) -> Box<Element<'a, T>> {
-        self.children
-    }
-}
-
-impl<'a, T> AsRef<Element<'a, T>> for Container<'a, T>
-where
-    T: System,
-{
-    fn as_ref(&self) -> &Element<'a, T> {
-        &self.children
-    }
-}
-
+/// A horizontal row of [`Element`]s.
 #[derive(Debug)]
 pub struct Row<'a, T>
 where
     T: System,
 {
+    /// An optional [`Label`] for this `Row`.
     pub label: Option<Label<'a>>,
+    /// An optional [`Position`] hint on how to render this `Row`.
     pub position: Option<Position>,
     pub(crate) children: IntoIter<Element<'a, T>>,
 }
@@ -176,29 +162,34 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.children.next()
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
 }
 
+impl<'a, T> ExactSizeIterator for Row<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        self.children.len()
+    }
+}
+
+/// A vertical column of [`Element`]s.
 #[derive(Debug)]
 pub struct Column<'a, T>
 where
     T: System,
 {
+    /// An optional [`Label`] for this `Column`.
     pub label: Option<Label<'a>>,
+    /// An optional [`Position`] hint on how to render this `Column`.
     pub position: Option<Position>,
     pub(crate) children: IntoIter<Element<'a, T>>,
-}
-
-impl<'a, T> Column<'a, T>
-where
-    T: System,
-{
-    pub fn new(children: Vec<Element<'a, T>>) -> Self {
-        Self {
-            label: None,
-            position: None,
-            children: children.into_iter(),
-        }
-    }
 }
 
 impl<'a, T> Iterator for Column<'a, T>
@@ -209,6 +200,21 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.children.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Column<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        self.children.len()
     }
 }
 
