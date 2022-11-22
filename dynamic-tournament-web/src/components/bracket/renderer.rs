@@ -1,7 +1,7 @@
 //! HTML renderer
 use std::fmt::Display;
 
-use dynamic_tournament_core::render::{Element, ElementKind, Position, Renderer};
+use dynamic_tournament_core::render::{self, Column, Element, Position, Renderer, Row};
 use dynamic_tournament_core::{EntrantScore, Match, Node, System};
 use yew::{html, Context, Html};
 
@@ -47,21 +47,14 @@ where
     E: Clone + Display + 'static,
 {
     fn render_element<'b>(&mut self, elem: Element<'b, T>) -> Html {
-        match elem.kind() {
-            ElementKind::Container => self.render_container(elem),
-            ElementKind::Row => self.render_row(elem),
-            ElementKind::Column => self.render_column(elem),
-            ElementKind::Match => self.render_match(elem, 0),
+        match elem {
+            Element::Row(elem) => self.render_row(elem),
+            Element::Column(elem) => self.render_column(elem),
+            Element::Match(elem) => self.render_match(elem, 0),
         }
     }
 
-    fn render_container<'b>(&mut self, elem: Element<'b, T>) -> Html {
-        let inner = elem.inner.unwrap_container();
-        self.render_element(*inner.into_inner())
-    }
-
-    fn render_column<'b>(&mut self, column: Element<'b, T>) -> Html {
-        let column = column.inner.unwrap_column();
+    fn render_column<'b>(&mut self, column: Column<'b, T>) -> Html {
         let inner = self.render_iter(column);
 
         html! {
@@ -71,8 +64,8 @@ where
         }
     }
 
-    fn render_row<'b>(&mut self, row: Element<'b, T>) -> Html {
-        let inner = self.render_iter(row.inner.unwrap_row());
+    fn render_row<'b>(&mut self, row: Row<'b, T>) -> Html {
+        let inner = self.render_iter(row);
 
         html! {
             <div class="dt-bracket-row">
@@ -87,21 +80,18 @@ where
         T: 'b,
     {
         iter.enumerate()
-            .map(|(index, elem)| match elem.kind() {
-                ElementKind::Container => self.render_container(elem),
-                ElementKind::Row => self.render_row(elem),
-                ElementKind::Column => self.render_column(elem),
-                ElementKind::Match => self.render_match(elem, index),
+            .map(|(index, elem)| match elem {
+                Element::Row(elem) => self.render_row(elem),
+                Element::Column(elem) => self.render_column(elem),
+                Element::Match(elem) => self.render_match(elem, index),
             })
             .collect()
     }
 
-    fn render_match(&self, m: Element<'_, T>, round_index: usize) -> Html {
-        let inner = m.inner.unwrap_match();
-
+    fn render_match(&self, m: render::Match<'_, T>, round_index: usize) -> Html {
         // Get the match from the tournament.
         let match_: &Match<Node<EntrantScore<u64>>> =
-            unsafe { self.tournament.matches().get_unchecked(inner.index()) };
+            unsafe { self.tournament.matches().get_unchecked(m.index()) };
 
         let entrants = match_.map(|spot| {
             spot.map(|node| {
@@ -114,7 +104,7 @@ where
 
         let position = m.position.unwrap_or(Position::SpaceAround);
 
-        let index = inner.index();
+        let index = m.index();
         let on_action = self
             .ctx
             .link()

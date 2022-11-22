@@ -1,5 +1,5 @@
 use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
-use crate::render::{Column, Element, ElementInner, Position, RenderState, Row};
+use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
@@ -453,14 +453,16 @@ where
                     index: i,
                     predecessors: vec![],
                     _marker: PhantomData,
+                    label: None,
+                    position: None,
                 }));
             }
 
-            columns.push(Element {
+            columns.push(Element::new(Column {
                 label: None,
                 position: Some(Position::SpaceAround),
-                inner: ElementInner::Column(Column::new(matches)),
-            });
+                children: matches.into_iter(),
+            }));
 
             index += num_matches;
             num_matches /= 2;

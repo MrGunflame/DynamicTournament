@@ -1,5 +1,5 @@
+use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::{
-    render::{Column, Element, ElementInner, Position, RenderState, Row},
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
     Result, System,
 };
@@ -591,14 +591,16 @@ where
                         index: i,
                         predecessors: vec![],
                         _marker: PhantomData,
+                        label: None,
+                        position: None,
                     }));
                 }
 
-                cols.push(Element {
+                cols.push(Element::Column(Column {
                     label: None,
                     position: Some(Position::SpaceAround),
-                    inner: ElementInner::Column(Column::new(matches)),
-                });
+                    children: matches.into_iter(),
+                }));
 
                 index += num_matches;
                 num_matches /= 2;
@@ -622,14 +624,16 @@ where
                         index: i,
                         predecessors: vec![],
                         _marker: PhantomData,
+                        position: None,
+                        label: None,
                     }));
                 }
 
-                cols.push(Element {
+                cols.push(Element::Column(Column {
                     label: None,
                     position: Some(Position::SpaceAround),
-                    inner: ElementInner::Column(Column::new(matches)),
-                });
+                    children: matches.into_iter(),
+                }));
 
                 index += num_matches;
                 if round_index % 2 == 0 {
@@ -640,37 +644,37 @@ where
             cols
         };
 
-        columns.push(Element {
+        columns.push(Element::Column(Column {
             position: Some(Position::SpaceAround),
-            inner: ElementInner::Column(Column::new(vec![
-                Element {
-                    position: Some(Position::SpaceAround),
-                    inner: ElementInner::Row(Row::new(upper)),
+            children: vec![
+                Element::Row(Row {
                     label: None,
-                },
-                Element {
                     position: Some(Position::SpaceAround),
-                    inner: ElementInner::Row(Row::new(lower)),
+                    children: upper.into_iter(),
+                }),
+                Element::Row(Row {
                     label: None,
-                },
-            ])),
+                    position: Some(Position::SpaceAround),
+                    children: lower.into_iter(),
+                }),
+            ]
+            .into_iter(),
             label: None,
-        });
+        }));
 
         // Final match
-        columns.push(Element {
+        columns.push(Element::Column(Column {
             label: None,
             position: Some(Position::SpaceAround),
-            inner: ElementInner::Column(Column::new(vec![Element {
+            children: vec![Element::Match(crate::render::Match {
                 label: None,
                 position: None,
-                inner: ElementInner::Match(crate::render::Match {
-                    index: self.matches.len() - 1,
-                    predecessors: vec![],
-                    _marker: PhantomData,
-                }),
-            }])),
-        });
+                index: self.matches.len() - 1,
+                predecessors: vec![],
+                _marker: PhantomData,
+            })]
+            .into_iter(),
+        }));
 
         RenderState {
             root: Element::new(Row::new(columns)),

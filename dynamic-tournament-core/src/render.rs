@@ -21,14 +21,24 @@ where
     fn render(&mut self, root: Element<'_, T>);
 }
 
+/// An textual label attached to an [`Element`].
+#[derive(Clone, Debug)]
+pub struct Label<'a>(Cow<'a, str>);
+
+impl<'a> Label<'a> {
+    pub fn as_str(&'a self) -> &'a str {
+        &self.0
+    }
+}
+
 #[derive(Debug)]
-pub struct Element<'a, T>
+pub enum Element<'a, T>
 where
     T: System,
 {
-    pub label: Option<Cow<'a, str>>,
-    pub position: Option<Position>,
-    pub inner: ElementInner<'a, T>,
+    Row(Row<'a, T>),
+    Column(Column<'a, T>),
+    Match(Match<'a, T>),
 }
 
 impl<'a, T> Element<'a, T>
@@ -37,48 +47,16 @@ where
 {
     pub(crate) fn new<E>(inner: E) -> Self
     where
-        E: Into<ElementInner<'a, T>>,
+        E: Into<Element<'a, T>>,
     {
-        Self {
-            label: None,
-            position: None,
-            inner: inner.into(),
-        }
+        inner.into()
     }
 
-    pub fn kind(&self) -> ElementKind {
-        self.inner.kind()
-    }
-}
-
-#[derive(Debug)]
-pub enum ElementInner<'a, T>
-where
-    T: System,
-{
-    Container(Container<'a, T>),
-    Row(Row<'a, T>),
-    Column(Column<'a, T>),
-    Match(Match<'a, T>),
-}
-
-impl<'a, T> ElementInner<'a, T>
-where
-    T: System,
-{
     pub fn kind(&self) -> ElementKind {
         match self {
-            Self::Container(_) => ElementKind::Container,
             Self::Row(_) => ElementKind::Row,
             Self::Column(_) => ElementKind::Column,
             Self::Match(_) => ElementKind::Match,
-        }
-    }
-
-    pub fn unwrap_container(self) -> Container<'a, T> {
-        match self {
-            Self::Container(val) => val,
-            _ => panic!("called `unwrap_container` on an invalid ElementInner value"),
         }
     }
 
@@ -104,16 +82,7 @@ where
     }
 }
 
-impl<'a, T> From<Container<'a, T>> for ElementInner<'a, T>
-where
-    T: System,
-{
-    fn from(b: Container<'a, T>) -> Self {
-        Self::Container(b)
-    }
-}
-
-impl<'a, T> From<Row<'a, T>> for ElementInner<'a, T>
+impl<'a, T> From<Row<'a, T>> for Element<'a, T>
 where
     T: System,
 {
@@ -122,7 +91,7 @@ where
     }
 }
 
-impl<'a, T> From<Column<'a, T>> for ElementInner<'a, T>
+impl<'a, T> From<Column<'a, T>> for Element<'a, T>
 where
     T: System,
 {
@@ -131,7 +100,7 @@ where
     }
 }
 
-impl<'a, T> From<Match<'a, T>> for ElementInner<'a, T>
+impl<'a, T> From<Match<'a, T>> for Element<'a, T>
 where
     T: System,
 {
@@ -180,7 +149,9 @@ pub struct Row<'a, T>
 where
     T: System,
 {
-    children: IntoIter<Element<'a, T>>,
+    pub label: Option<Label<'a>>,
+    pub position: Option<Position>,
+    pub(crate) children: IntoIter<Element<'a, T>>,
 }
 
 impl<'a, T> Row<'a, T>
@@ -189,6 +160,8 @@ where
 {
     pub(crate) fn new(children: Vec<Element<'a, T>>) -> Self {
         Self {
+            label: None,
+            position: None,
             children: children.into_iter(),
         }
     }
@@ -210,7 +183,9 @@ pub struct Column<'a, T>
 where
     T: System,
 {
-    children: IntoIter<Element<'a, T>>,
+    pub label: Option<Label<'a>>,
+    pub position: Option<Position>,
+    pub(crate) children: IntoIter<Element<'a, T>>,
 }
 
 impl<'a, T> Column<'a, T>
@@ -219,6 +194,8 @@ where
 {
     pub fn new(children: Vec<Element<'a, T>>) -> Self {
         Self {
+            label: None,
+            position: None,
             children: children.into_iter(),
         }
     }
@@ -241,6 +218,8 @@ pub struct Match<'a, T>
 where
     T: System,
 {
+    pub label: Option<Label<'a>>,
+    pub position: Option<Position>,
     pub(crate) index: usize,
     pub(crate) predecessors: Vec<Predecessor>,
     pub(crate) _marker: PhantomData<&'a T>,
@@ -341,83 +320,6 @@ pub enum Position {
     SpaceBetween,
 }
 
-/// An `Iterator` over a list of [`Column`]s with a defined length.
-#[derive(Debug)]
-pub struct ColumnsIter<'a, T>
-where
-    T: System,
-{
-    slice: &'a [Column<'a, T>],
-}
-
-impl<'a, T> Iterator for ColumnsIter<'a, T>
-where
-    T: System,
-{
-    type Item = &'a Column<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (elem, rem) = self.slice.split_first()?;
-        self.slice = rem;
-        Some(elem)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
-    }
-}
-
-impl<'a, T> ExactSizeIterator for ColumnsIter<'a, T>
-where
-    T: System,
-{
-    fn len(&self) -> usize {
-        self.slice.len()
-    }
-}
-
-#[derive(Debug)]
-pub struct RowsIter<'a, T>
-where
-    T: System,
-{
-    slice: &'a [Row<'a, T>],
-}
-
-impl<'a, T> Iterator for RowsIter<'a, T>
-where
-    T: System,
-{
-    type Item = &'a Row<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (elem, rem) = self.slice.split_first()?;
-        self.slice = rem;
-        Some(elem)
-    }
-}
-
-#[derive(Debug)]
-pub struct MatchesIter<'a, T>
-where
-    T: System,
-{
-    slice: &'a [Match<'a, T>],
-}
-
-impl<'a, T> Iterator for MatchesIter<'a, T>
-where
-    T: System,
-{
-    type Item = &'a Match<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (elem, rem) = self.slice.split_first()?;
-        self.slice = rem;
-        Some(elem)
-    }
-}
-
 #[derive(Debug)]
 pub struct RenderState<'a, T>
 where
@@ -429,7 +331,6 @@ where
 /// The type of an element.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ElementKind {
-    Container,
     Column,
     Row,
     Match,

@@ -898,8 +898,7 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
 mod tests {
     use std::marker::PhantomData;
 
-    use crate::render::{Column, Container, Element, Match, Row};
-    use crate::render::{ElementInner, Renderer};
+    use crate::render::{Column, Element, Match, Renderer, Row};
 
     use super::{EntrantData, System};
 
@@ -929,14 +928,10 @@ mod tests {
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub enum TElement {
-        Container(TContainer),
         Row(TRow),
         Column(TColumn),
         Match(TMatch),
     }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct TContainer(pub Box<TElement>);
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct TColumn(pub Vec<TElement>);
@@ -967,16 +962,11 @@ mod tests {
         }
 
         fn render_element(&self, elem: Element<'_, T>) -> TElement {
-            match elem.inner {
-                ElementInner::Container(elem) => TElement::Container(self.render_container(elem)),
-                ElementInner::Row(row) => TElement::Row(self.render_row(row)),
-                ElementInner::Column(col) => TElement::Column(self.render_column(col)),
-                ElementInner::Match(m) => TElement::Match(self.render_match(m)),
+            match elem {
+                Element::Row(row) => TElement::Row(self.render_row(row)),
+                Element::Column(col) => TElement::Column(self.render_column(col)),
+                Element::Match(m) => TElement::Match(self.render_match(m)),
             }
-        }
-
-        fn render_container(&self, elem: Container<'_, T>) -> TContainer {
-            TContainer(Box::new(self.render_element(*elem.into_inner())))
         }
 
         fn render_column(&self, iter: Column<'_, T>) -> TColumn {
