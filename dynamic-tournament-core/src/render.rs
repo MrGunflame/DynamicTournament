@@ -45,6 +45,10 @@ where
             inner: inner.into(),
         }
     }
+
+    pub fn kind(&self) -> ElementKind {
+        self.inner.kind()
+    }
 }
 
 #[derive(Debug)]
@@ -56,6 +60,48 @@ where
     Row(Row<'a, T>),
     Column(Column<'a, T>),
     Match(Match<'a, T>),
+}
+
+impl<'a, T> ElementInner<'a, T>
+where
+    T: System,
+{
+    pub fn kind(&self) -> ElementKind {
+        match self {
+            Self::Container(_) => ElementKind::Container,
+            Self::Row(_) => ElementKind::Row,
+            Self::Column(_) => ElementKind::Column,
+            Self::Match(_) => ElementKind::Match,
+        }
+    }
+
+    pub fn unwrap_container(self) -> Container<'a, T> {
+        match self {
+            Self::Container(val) => val,
+            _ => panic!("called `unwrap_container` on an invalid ElementInner value"),
+        }
+    }
+
+    pub fn unwrap_row(self) -> Row<'a, T> {
+        match self {
+            Self::Row(val) => val,
+            _ => panic!("called `unwrap_row` on an invalid ElementInner value"),
+        }
+    }
+
+    pub fn unwrap_column(self) -> Column<'a, T> {
+        match self {
+            Self::Column(val) => val,
+            _ => panic!("called `unwrap_column` on an invalid ElementInner value"),
+        }
+    }
+
+    pub fn unwrap_match(self) -> Match<'a, T> {
+        match self {
+            Self::Match(val) => val,
+            _ => panic!("called `unwrap_match`on an invalid ElementInner value"),
+        }
+    }
 }
 
 impl<'a, T> From<Container<'a, T>> for ElementInner<'a, T>
@@ -383,6 +429,7 @@ where
 /// The type of an element.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ElementKind {
+    Container,
     Column,
     Row,
     Match,
