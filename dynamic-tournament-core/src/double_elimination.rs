@@ -1,5 +1,5 @@
 use crate::{
-    render::{Column, Container, ContainerInner, Position, RenderState, Row},
+    render::{Column, Element, ElementInner, Position, RenderState, Row},
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
     Result, System,
 };
@@ -587,19 +587,17 @@ where
             while num_matches > 0 {
                 let mut matches = Vec::new();
                 for i in index..index + num_matches {
-                    matches.push(crate::render::Match {
+                    matches.push(Element::new(crate::render::Match {
                         index: i,
                         predecessors: vec![],
-                        position: None,
                         _marker: PhantomData,
-                    });
+                    }));
                 }
 
-                cols.push(Column {
-                    inner: Container {
-                        inner: ContainerInner::Matches(matches),
-                        position: Position::SpaceAround,
-                    },
+                cols.push(Element {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    inner: ElementInner::Column(Column::new(matches)),
                 });
 
                 index += num_matches;
@@ -620,19 +618,17 @@ where
 
                 let mut matches = Vec::new();
                 for i in index..index + num_matches {
-                    matches.push(crate::render::Match {
+                    matches.push(Element::new(crate::render::Match {
                         index: i,
                         predecessors: vec![],
-                        position: None,
                         _marker: PhantomData,
-                    });
+                    }));
                 }
 
-                cols.push(Column {
-                    inner: Container {
-                        inner: ContainerInner::Matches(matches),
-                        position: Position::SpaceAround,
-                    },
+                cols.push(Element {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    inner: ElementInner::Column(Column::new(matches)),
                 });
 
                 index += num_matches;
@@ -644,44 +640,40 @@ where
             cols
         };
 
-        columns.push(Column {
-            inner: Container {
-                inner: ContainerInner::Rows(vec![
-                    Row {
-                        inner: Container {
-                            inner: ContainerInner::Columns(upper),
-                            position: Position::SpaceAround,
-                        },
-                    },
-                    Row {
-                        inner: Container {
-                            inner: ContainerInner::Columns(lower),
-                            position: Position::SpaceAround,
-                        },
-                    },
-                ]),
-                position: Position::SpaceAround,
-            },
+        columns.push(Element {
+            position: Some(Position::SpaceAround),
+            inner: ElementInner::Column(Column::new(vec![
+                Element {
+                    position: Some(Position::SpaceAround),
+                    inner: ElementInner::Row(Row::new(upper)),
+                    label: None,
+                },
+                Element {
+                    position: Some(Position::SpaceAround),
+                    inner: ElementInner::Row(Row::new(lower)),
+                    label: None,
+                },
+            ])),
+            label: None,
         });
 
         // Final match
-        columns.push(Column {
-            inner: Container {
-                inner: ContainerInner::Matches(vec![crate::render::Match {
+        columns.push(Element {
+            label: None,
+            position: Some(Position::SpaceAround),
+            inner: ElementInner::Column(Column::new(vec![Element {
+                label: None,
+                position: None,
+                inner: ElementInner::Match(crate::render::Match {
                     index: self.matches.len() - 1,
                     predecessors: vec![],
-                    position: None,
                     _marker: PhantomData,
-                }]),
-                position: Position::SpaceAround,
-            },
+                }),
+            }])),
         });
 
         RenderState {
-            inner: Container {
-                inner: ContainerInner::Columns(columns),
-                position: Position::SpaceAround,
-            },
+            root: Element::new(Row::new(columns)),
         }
     }
 }
@@ -708,7 +700,7 @@ where
 mod tests {
     use crate::{
         entrants,
-        tests::{TColumn, TContainer, TMatch, TRow, TestRenderer},
+        tests::{TColumn, TElement, TMatch, TRow, TestRenderer},
     };
 
     use super::*;
@@ -1096,22 +1088,22 @@ mod tests {
 
         assert_eq!(
             renderer,
-            TContainer::Columns(vec![
-                TColumn(TContainer::Rows(vec![
-                    TRow(TContainer::Columns(vec![
-                        TColumn(TContainer::Matches(vec![
-                            TMatch { index: 0 },
-                            TMatch { index: 1 },
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 0 }),
+                            TElement::Match(TMatch { index: 1 }),
                         ])),
-                        TColumn(TContainer::Matches(vec![TMatch { index: 2 }])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 2 })])),
                     ]),),
-                    TRow(TContainer::Columns(vec![
-                        TColumn(TContainer::Matches(vec![TMatch { index: 3 }])),
-                        TColumn(TContainer::Matches(vec![TMatch { index: 4 }])),
-                    ]))
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 3 })])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 4 })])),
+                    ])),
                 ])),
-                TColumn(TContainer::Matches(vec![TMatch { index: 5 }])),
-            ])
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 5 }),]))
+            ]))
         );
 
         let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
@@ -1122,36 +1114,36 @@ mod tests {
 
         assert_eq!(
             renderer,
-            TContainer::Columns(vec![
-                TColumn(TContainer::Rows(vec![
-                    TRow(TContainer::Columns(vec![
-                        TColumn(TContainer::Matches(vec![
-                            TMatch { index: 0 },
-                            TMatch { index: 1 },
-                            TMatch { index: 2 },
-                            TMatch { index: 3 },
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 0 }),
+                            TElement::Match(TMatch { index: 1 }),
+                            TElement::Match(TMatch { index: 2 }),
+                            TElement::Match(TMatch { index: 3 }),
                         ])),
-                        TColumn(TContainer::Matches(vec![
-                            TMatch { index: 4 },
-                            TMatch { index: 5 },
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 4 }),
+                            TElement::Match(TMatch { index: 5 }),
                         ])),
-                        TColumn(TContainer::Matches(vec![TMatch { index: 6 },]))
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 6 }),])),
                     ])),
-                    TRow(TContainer::Columns(vec![
-                        TColumn(TContainer::Matches(vec![
-                            TMatch { index: 7 },
-                            TMatch { index: 8 },
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 7 }),
+                            TElement::Match(TMatch { index: 8 }),
                         ])),
-                        TColumn(TContainer::Matches(vec![
-                            TMatch { index: 9 },
-                            TMatch { index: 10 },
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 9 }),
+                            TElement::Match(TMatch { index: 10 }),
                         ])),
-                        TColumn(TContainer::Matches(vec![TMatch { index: 11 }])),
-                        TColumn(TContainer::Matches(vec![TMatch { index: 12 }])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 11 })])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 12 })])),
                     ]))
                 ])),
-                TColumn(TContainer::Matches(vec![TMatch { index: 13 }])),
-            ])
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 13 }),])),
+            ]))
         );
     }
 }

@@ -1,5 +1,5 @@
 use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
-use crate::render::{Column, Container, ContainerInner, Position, RenderState};
+use crate::render::{Column, Element, ElementInner, Position, RenderState, Row};
 use crate::{EntrantData, Entrants, Match, Matches, NextMatches, System};
 use crate::{EntrantSpot, Error, MatchResult, Node, Result};
 
@@ -449,19 +449,17 @@ where
         while num_matches > 0 {
             let mut matches = Vec::new();
             for i in index..index + num_matches {
-                matches.push(crate::render::Match {
+                matches.push(Element::new(crate::render::Match {
                     index: i,
                     predecessors: vec![],
-                    position: None,
                     _marker: PhantomData,
-                });
+                }));
             }
 
-            columns.push(Column {
-                inner: Container {
-                    inner: ContainerInner::Matches(matches),
-                    position: Position::SpaceAround,
-                },
+            columns.push(Element {
+                label: None,
+                position: Some(Position::SpaceAround),
+                inner: ElementInner::Column(Column::new(matches)),
             });
 
             index += num_matches;
@@ -469,10 +467,7 @@ where
         }
 
         RenderState {
-            inner: Container {
-                inner: ContainerInner::Columns(columns),
-                position: Position::SpaceAround,
-            },
+            root: Element::new(Row::new(columns)),
         }
     }
 }
@@ -508,7 +503,7 @@ impl SingleEliminationOptions {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::{TColumn, TContainer, TMatch, TestRenderer};
+    use crate::tests::{TColumn, TElement, TMatch, TRow, TestRenderer};
     use crate::{entrants, option_values};
 
     use super::*;
@@ -1250,13 +1245,13 @@ mod tests {
 
         assert_eq!(
             renderer,
-            TContainer::Columns(vec![
-                TColumn(TContainer::Matches(vec![
-                    TMatch { index: 0 },
-                    TMatch { index: 1 },
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Match(TMatch { index: 0 }),
+                    TElement::Match(TMatch { index: 1 }),
                 ])),
-                TColumn(TContainer::Matches(vec![TMatch { index: 2 }])),
-            ]),
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 2 })])),
+            ])),
         );
 
         let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
@@ -1267,19 +1262,19 @@ mod tests {
 
         assert_eq!(
             renderer,
-            TContainer::Columns(vec![
-                TColumn(TContainer::Matches(vec![
-                    TMatch { index: 0 },
-                    TMatch { index: 1 },
-                    TMatch { index: 2 },
-                    TMatch { index: 3 },
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Match(TMatch { index: 0 }),
+                    TElement::Match(TMatch { index: 1 }),
+                    TElement::Match(TMatch { index: 2 }),
+                    TElement::Match(TMatch { index: 3 }),
                 ])),
-                TColumn(TContainer::Matches(vec![
-                    TMatch { index: 4 },
-                    TMatch { index: 5 },
+                TElement::Column(TColumn(vec![
+                    TElement::Match(TMatch { index: 4 }),
+                    TElement::Match(TMatch { index: 5 }),
                 ])),
-                TColumn(TContainer::Matches(vec![TMatch { index: 6 }])),
-            ])
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 6 })]))
+            ]))
         );
     }
 }

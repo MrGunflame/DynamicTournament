@@ -890,7 +890,7 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     where
         R: Renderer<Self, Self::Entrant, Self::NodeData>,
     {
-        renderer.render(self.start_render().inner);
+        renderer.render(self.start_render().root);
     }
 }
 
@@ -898,8 +898,8 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
 mod tests {
     use std::marker::PhantomData;
 
-    use crate::render::Renderer;
-    use crate::render::{Column, Container, ContainerIter, Row};
+    use crate::render::{Column, Container, Element, Match, Row};
+    use crate::render::{ElementInner, Renderer};
 
     use super::{EntrantData, System};
 
@@ -928,17 +928,21 @@ mod tests {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub enum TContainer {
-        Columns(Vec<TColumn>),
-        Rows(Vec<TRow>),
-        Matches(Vec<TMatch>),
+    pub enum TElement {
+        Container(TContainer),
+        Row(TRow),
+        Column(TColumn),
+        Match(TMatch),
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct TColumn(pub TContainer);
+    pub struct TContainer(pub Box<TElement>);
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    pub struct TRow(pub TContainer);
+    pub struct TColumn(pub Vec<TElement>);
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TRow(pub Vec<TElement>);
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct TMatch {
@@ -947,7 +951,7 @@ mod tests {
 
     #[derive(Debug)]
     pub struct TestRenderer<T> {
-        inner: TContainer,
+        root: Option<TElement>,
         _marker: PhantomData<T>,
     }
 
@@ -957,61 +961,36 @@ mod tests {
     {
         pub fn new() -> Self {
             Self {
-                inner: TContainer::Matches(Vec::new()),
+                root: None,
                 _marker: PhantomData,
             }
         }
 
-        fn render_column(&mut self, root: &Column<'_, T>) -> TColumn {
-            match root.iter() {
-                ContainerIter::Columns(cols) => {
-                    let mut buf = Vec::new();
-                    for col in cols {
-                        buf.push(self.render_column(col));
-                    }
-
-                    TColumn(TContainer::Columns(buf))
-                }
-                ContainerIter::Rows(rows) => {
-                    let mut buf = Vec::new();
-                    for row in rows {
-                        buf.push(self.render_row(row));
-                    }
-
-                    TColumn(TContainer::Rows(buf))
-                }
-                ContainerIter::Matches(matches) => {
-                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
-
-                    TColumn(TContainer::Matches(buf))
-                }
+        fn render_element(&self, elem: Element<'_, T>) -> TElement {
+            match elem.inner {
+                ElementInner::Container(elem) => TElement::Container(self.render_container(elem)),
+                ElementInner::Row(row) => TElement::Row(self.render_row(row)),
+                ElementInner::Column(col) => TElement::Column(self.render_column(col)),
+                ElementInner::Match(m) => TElement::Match(self.render_match(m)),
             }
         }
 
-        fn render_row(&mut self, root: &Row<'_, T>) -> TRow {
-            match root.iter() {
-                ContainerIter::Columns(cols) => {
-                    let mut buf = Vec::new();
-                    for col in cols {
-                        buf.push(self.render_column(col));
-                    }
+        fn render_container(&self, elem: Container<'_, T>) -> TContainer {
+            TContainer(Box::new(self.render_element(*elem.into_inner())))
+        }
 
-                    TRow(TContainer::Columns(buf))
-                }
-                ContainerIter::Rows(rows) => {
-                    let mut buf = Vec::new();
-                    for row in rows {
-                        buf.push(self.render_row(row));
-                    }
+        fn render_column(&self, iter: Column<'_, T>) -> TColumn {
+            let children = iter.map(|elem| self.render_element(elem)).collect();
+            TColumn(children)
+        }
 
-                    TRow(TContainer::Rows(buf))
-                }
-                ContainerIter::Matches(matches) => {
-                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
+        fn render_row(&self, iter: Row<'_, T>) -> TRow {
+            let children = iter.map(|elem| self.render_element(elem)).collect();
+            TRow(children)
+        }
 
-                    TRow(TContainer::Matches(buf))
-                }
-            }
+        fn render_match(&self, m: Match<'_, T>) -> TMatch {
+            TMatch { index: m.index }
         }
     }
 
@@ -1019,36 +998,17 @@ mod tests {
     where
         T: System<Entrant = E, NodeData = D>,
     {
-        fn render(&mut self, root: Container<'_, T>) {
-            self.inner = match root.iter() {
-                ContainerIter::Columns(cols) => {
-                    let mut buf = Vec::new();
-                    for col in cols {
-                        buf.push(self.render_column(col));
-                    }
-
-                    TContainer::Columns(buf)
-                }
-                ContainerIter::Rows(rows) => {
-                    let mut buf = Vec::new();
-                    for row in rows {
-                        buf.push(self.render_row(row));
-                    }
-
-                    TContainer::Rows(buf)
-                }
-                ContainerIter::Matches(matches) => {
-                    let buf = matches.map(|m| TMatch { index: m.index() }).collect();
-
-                    TContainer::Matches(buf)
-                }
-            };
+        fn render(&mut self, root: Element<'_, T>) {
+            self.root = Some(self.render_element(root));
         }
     }
 
-    impl<T> PartialEq<TContainer> for TestRenderer<T> {
-        fn eq(&self, other: &TContainer) -> bool {
-            &self.inner == other
+    impl<T> PartialEq<TElement> for TestRenderer<T> {
+        fn eq(&self, other: &TElement) -> bool {
+            match &self.root {
+                Some(this) => this == other,
+                None => false,
+            }
         }
     }
 }

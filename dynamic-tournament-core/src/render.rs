@@ -9,76 +9,123 @@
 //! - A [`Match`] is a leaf element displaying match at a specific index.
 use crate::System;
 
-use std::{marker::PhantomData, ops::Deref};
+use std::borrow::Cow;
+use std::marker::PhantomData;
+use std::vec::IntoIter;
 
 /// A renderer used to render any [`System`].
 pub trait Renderer<T, E, D>
 where
     T: System<Entrant = E, NodeData = D>,
 {
-    fn render(&mut self, root: Container<'_, T>);
+    fn render(&mut self, root: Element<'_, T>);
 }
 
-/// A wrapper around a list of elements.
+#[derive(Debug)]
+pub struct Element<'a, T>
+where
+    T: System,
+{
+    pub label: Option<Cow<'a, str>>,
+    pub position: Option<Position>,
+    pub inner: ElementInner<'a, T>,
+}
+
+impl<'a, T> Element<'a, T>
+where
+    T: System,
+{
+    pub(crate) fn new<E>(inner: E) -> Self
+    where
+        E: Into<ElementInner<'a, T>>,
+    {
+        Self {
+            label: None,
+            position: None,
+            inner: inner.into(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ElementInner<'a, T>
+where
+    T: System,
+{
+    Container(Container<'a, T>),
+    Row(Row<'a, T>),
+    Column(Column<'a, T>),
+    Match(Match<'a, T>),
+}
+
+impl<'a, T> From<Container<'a, T>> for ElementInner<'a, T>
+where
+    T: System,
+{
+    fn from(b: Container<'a, T>) -> Self {
+        Self::Container(b)
+    }
+}
+
+impl<'a, T> From<Row<'a, T>> for ElementInner<'a, T>
+where
+    T: System,
+{
+    fn from(row: Row<'a, T>) -> Self {
+        Self::Row(row)
+    }
+}
+
+impl<'a, T> From<Column<'a, T>> for ElementInner<'a, T>
+where
+    T: System,
+{
+    fn from(col: Column<'a, T>) -> Self {
+        Self::Column(col)
+    }
+}
+
+impl<'a, T> From<Match<'a, T>> for ElementInner<'a, T>
+where
+    T: System,
+{
+    fn from(m: Match<'a, T>) -> Self {
+        Self::Match(m)
+    }
+}
+
+/// A direct wrapper around another [`Element`].
 ///
-/// A `Container` can be thought of as a node in a AST representing the tournament tree.
+/// `Container` purely exists to wrap another [`Element`] while providing additional information.
 #[derive(Debug)]
 pub struct Container<'a, T>
 where
     T: System,
 {
-    pub(crate) inner: ContainerInner<'a, T>,
-    pub(crate) position: Position,
+    children: Box<Element<'a, T>>,
 }
 
 impl<'a, T> Container<'a, T>
 where
     T: System,
 {
-    pub fn position(&self) -> Position {
-        self.position
-    }
-
-    /// Returns the [`ElementKind`] of the elements this `Container` wraps around.
-    pub fn kind(&self) -> ElementKind {
-        match self.inner {
-            ContainerInner::Columns(_) => ElementKind::Column,
-            ContainerInner::Rows(_) => ElementKind::Row,
-            ContainerInner::Matches(_) => ElementKind::Match,
+    pub fn new(children: Element<'a, T>) -> Self {
+        Self {
+            children: Box::new(children),
         }
     }
 
-    pub fn iter(&self) -> ContainerIter<'_, T> {
-        ContainerIter::new(self)
+    pub fn into_inner(self) -> Box<Element<'a, T>> {
+        self.children
     }
 }
 
-#[derive(Debug)]
-pub(crate) enum ContainerInner<'a, T>
+impl<'a, T> AsRef<Element<'a, T>> for Container<'a, T>
 where
     T: System,
 {
-    Columns(Vec<Column<'a, T>>),
-    Rows(Vec<Row<'a, T>>),
-    Matches(Vec<Match<'a, T>>),
-}
-
-#[derive(Debug)]
-pub struct Column<'a, T>
-where
-    T: System,
-{
-    pub(crate) inner: Container<'a, T>,
-}
-
-impl<'a, T> Deref for Column<'a, T>
-where
-    T: System,
-{
-    type Target = Container<'a, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    fn as_ref(&self) -> &Element<'a, T> {
+        &self.children
     }
 }
 
@@ -87,17 +134,58 @@ pub struct Row<'a, T>
 where
     T: System,
 {
-    pub inner: Container<'a, T>,
+    children: IntoIter<Element<'a, T>>,
 }
 
-impl<'a, T> Deref for Row<'a, T>
+impl<'a, T> Row<'a, T>
 where
     T: System,
 {
-    type Target = Container<'a, T>;
+    pub(crate) fn new(children: Vec<Element<'a, T>>) -> Self {
+        Self {
+            children: children.into_iter(),
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+impl<'a, T> Iterator for Row<'a, T>
+where
+    T: System,
+{
+    type Item = Element<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.children.next()
+    }
+}
+
+#[derive(Debug)]
+pub struct Column<'a, T>
+where
+    T: System,
+{
+    children: IntoIter<Element<'a, T>>,
+}
+
+impl<'a, T> Column<'a, T>
+where
+    T: System,
+{
+    pub fn new(children: Vec<Element<'a, T>>) -> Self {
+        Self {
+            children: children.into_iter(),
+        }
+    }
+}
+
+impl<'a, T> Iterator for Column<'a, T>
+where
+    T: System,
+{
+    type Item = Element<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.children.next()
     }
 }
 
@@ -109,7 +197,6 @@ where
 {
     pub(crate) index: usize,
     pub(crate) predecessors: Vec<Predecessor>,
-    pub(crate) position: Option<Position>,
     pub(crate) _marker: PhantomData<&'a T>,
 }
 
@@ -121,14 +208,6 @@ where
     #[inline]
     pub fn index(&self) -> usize {
         self.index
-    }
-
-    /// Returns the hinted [`Position`] at which the [`System`] expectes the match to be rendered.
-    /// A `None` value indicates that the `Match` should be rendered using the hint from the
-    /// parent.
-    #[inline]
-    pub fn position(&self) -> Option<Position> {
-        self.position
     }
 
     /// Returns a non-exhaustive list of [`Predecessor`]s leading to this `Match`. All elements are
@@ -164,7 +243,7 @@ pub enum Position {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```text
     /// |     COL0     |     COL1     |     COL2     |
     /// | ------------ | ------------ | ------------ |
     /// |              |              |              |
@@ -190,7 +269,7 @@ pub enum Position {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```text
     /// |     COL0     |     COL1     |     COL2     |
     /// | ------------ | ------------ | ------------ |
     /// |              |              |              |
@@ -294,34 +373,11 @@ where
 }
 
 #[derive(Debug)]
-pub enum ContainerIter<'a, T>
-where
-    T: System,
-{
-    Columns(ColumnsIter<'a, T>),
-    Rows(RowsIter<'a, T>),
-    Matches(MatchesIter<'a, T>),
-}
-
-impl<'a, T> ContainerIter<'a, T>
-where
-    T: System,
-{
-    fn new(inner: &'a Container<'a, T>) -> Self {
-        match &inner.inner {
-            ContainerInner::Columns(cols) => Self::Columns(ColumnsIter { slice: cols }),
-            ContainerInner::Rows(rows) => Self::Rows(RowsIter { slice: rows }),
-            ContainerInner::Matches(matches) => Self::Matches(MatchesIter { slice: matches }),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct RenderState<'a, T>
 where
     T: System,
 {
-    pub(crate) inner: Container<'a, T>,
+    pub(crate) root: Element<'a, T>,
 }
 
 /// The type of an element.
