@@ -15,6 +15,10 @@
 //! a single [`Match`] (which is all, really) it is commonly a [`Row`] enclosing all following
 //! [`Element`]s.
 //!
+//! It is also noteworthy that a rendered [`System`] never changes its form. This means it is
+//! almost never required to rerender a tournament when a match changes. Instead it is possible
+//! to only rerender all matches in place.
+//!
 use crate::System;
 
 use std::borrow::Cow;
@@ -35,8 +39,17 @@ where
 pub struct Label<'a>(Cow<'a, str>);
 
 impl<'a> Label<'a> {
+    /// Returns a `str` slice containing the `Label`.
+    #[inline]
     pub fn as_str(&'a self) -> &'a str {
         &self.0
+    }
+}
+
+impl<'a> AsRef<str> for Label<'a> {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -322,7 +335,57 @@ pub enum Position {
     /// |              |              |              |
     /// ```
     End,
+    /// Hints that the element should be placed with even space around.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[0] | |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              | | -------- | |
+    /// |              |              | | Match[6] | |
+    /// | | -------- | |              | | -------- | |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[3] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// ```
     SpaceAround,
+    /// Hints that the element should be placed with even space between.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[0] | | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              | | -------- | |
+    /// |              |              | | Match[6] | |
+    /// | | -------- | |              | | -------- | |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[3] | | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// ```
     SpaceBetween,
 }
 
