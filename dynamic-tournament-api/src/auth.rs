@@ -1,3 +1,5 @@
+use base64::alphabet::STANDARD;
+use base64::engine::fast_portable::{FastPortable, NO_PAD};
 use serde::de::{self, Deserializer, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
@@ -6,6 +8,8 @@ use std::fmt::{self, Display, Formatter};
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 use crate::Error;
+
+const ENGINE: FastPortable = FastPortable::from(&STANDARD, NO_PAD);
 
 /// A single JWT token.
 #[derive(Clone, Debug)]
@@ -28,7 +32,7 @@ impl Token {
 
         let claims = token.split('.').nth(1).ok_or(Error::InvalidToken)?;
 
-        let claims = serde_json::from_slice(&base64::decode(claims)?)?;
+        let claims = serde_json::from_slice(&base64::decode_engine(claims, &ENGINE)?)?;
 
         Ok(Self {
             token: token.into_owned(),

@@ -75,7 +75,7 @@ impl Component for Settings {
                 false
             }
             Message::UpdateTime(time) => {
-                let date = self.datetime.date().naive_local();
+                let date = self.datetime.date_naive();
 
                 let datetime = NaiveDateTime::new(date, time);
 
