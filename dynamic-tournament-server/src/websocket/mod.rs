@@ -11,11 +11,12 @@ use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     Decode, ErrorResponse, Request, Response,
 };
 
-use futures::{SinkExt, Stream, StreamExt};
+use futures::{Sink, Stream};
 use hyper::upgrade::Upgraded;
+use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::select;
 use tokio::time::{Interval, MissedTickBehavior, Sleep};
+use tokio::{select, time};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Role};
 use tokio_tungstenite::WebSocketStream;
@@ -26,6 +27,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use live_bracket::LiveBracket;
+
+pub type Result<T> = std::result::Result<T, tokio_tungstenite::tungstenite::Error>;
 
 #[cfg(feature = "metrics")]
 use crate::metrics::GaugeGuard;
@@ -65,9 +68,12 @@ pub async fn handle(
         _ = &mut conn => {}
         _ = shutdown => {
             log::debug!("Server shutdown, closing websocket connection");
-            conn.close().await;
+            let _ = conn.close(None);
+            let _ = conn.await;
         }
     }
+
+    log::trace!("WebSocketStream closed");
 }
 
 /// A websocket connection.
@@ -85,21 +91,25 @@ pub async fn handle(
 /// [`poll_write`]: Self::poll_write
 /// [`poll_tick`]: Self::poll_tick
 #[derive(Debug)]
+#[pin_project]
 pub struct Connection<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + 'static,
 {
+    #[pin]
     stream: WebSocketStream<S>,
 
     // The ConnectionState must outlive self.stream.
-    state: ConnectionState<'static, WebSocketStream<S>>,
+    state: ConnectionState,
     ping_interval: Interval,
+    pong_timeout: Option<Sleep>,
 
     // Has the server initialized a close event.
-    close_state: Option<CloseState>,
+    close_frame: Option<Option<CloseFrame<'static>>>,
 
     global_state: State,
     bracket: LiveBracket,
+    #[pin]
     changed: EventStream<'static>,
 
     /// Id of the connected user. This is `None` if the user didn't authenticate yet.
@@ -123,9 +133,10 @@ where
 
         Self {
             stream,
-            state: ConnectionState::Init,
+            state: ConnectionState::Read,
             ping_interval,
-            close_state: None,
+            pong_timeout: None,
+            close_frame: None,
             global_state: state,
             bracket,
             changed,
@@ -133,203 +144,187 @@ where
         }
     }
 
-    /// Initiates a graceful shutdown of the `Connection`. The connection should be continued to
-    /// be polled until it completes.
+    /// Transition the `Connection` into a closing state. Returns `Poll::Ready(())` immediately.
     #[inline]
-    fn close(&mut self) -> Close<'_, S> {
-        Close { conn: self }
+    fn close(&mut self, frame: Option<CloseFrame<'static>>) -> Poll<Result<()>> {
+        self.state = ConnectionState::Close(Message::Close(frame));
+        Poll::Ready(Ok(()))
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        // If there is a message in the buffer, complete it.
-        if let ConnectionState::Write(_) = self.state {
-            return self.poll_write(cx);
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        log::trace!("Connection.poll_close");
+
+        #[cfg(debug_assertions)]
+        assert!(matches!(self.state, ConnectionState::Close(_)));
+
+        let mut this = self.project();
+
+        match this.stream.as_mut().poll_ready(cx) {
+            Poll::Ready(Ok(())) => (),
+            Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+            Poll::Pending => return Poll::Pending,
         }
 
-        self.init_write_close(None);
-        self.poll_write_close(cx)
+        let msg = match this.state {
+            ConnectionState::Close(msg) => msg.clone(),
+            _ => unreachable!(),
+        };
+
+        this.stream.start_send(msg)?;
+
+        *this.state = ConnectionState::Closed;
+        Poll::Ready(Ok(()))
     }
 
     /// Poll the reading half of the stream. This method returns `Poll::Ready` once the remote
     /// sender is closed.
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+    ///
+    /// `poll_read` always follows these steps in order:
+    /// 1. Read incoming frames from the remote peer.
+    /// 2. Check if the connection is timed out (and close it necessary).
+    /// 3. Check for bracket state changes.
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         log::trace!("Connection.poll_read");
 
         #[cfg(debug_assertions)]
-        assert!(matches!(self.state, ConnectionState::Read(_)));
+        assert!(matches!(self.state, ConnectionState::Read));
 
-        // If we initialized a close handshake and the client didn't respond
-        // in time we forcefully close the connection.
-        if let Some(close_state) = &mut self.close_state {
-            if close_state.poll_deadline(cx).is_ready() {
-                return Poll::Ready(());
-            }
-        }
+        let mut this = self.as_mut().project();
 
-        loop {
-            let fut = match &mut self.state {
-                ConnectionState::Init => unreachable!(),
-                ConnectionState::Read(fut) => Pin::new(fut),
-                ConnectionState::Write(_) => unreachable!(),
-                ConnectionState::WriteClose(_) => unreachable!(),
-                ConnectionState::Closed => unreachable!(),
+        if let Poll::Ready(msg) = this.stream.as_mut().poll_next(cx) {
+            let msg = match msg {
+                Some(Ok(msg)) => msg,
+                Some(Err(err)) => return Poll::Ready(Err(err)),
+                // The remote peer closed the stream.
+                None => return self.close(None),
             };
 
-            match fut.poll(cx) {
-                Poll::Ready(msg) => {
-                    if let Some(msg) = msg {
-                        match msg {
-                            Ok(Message::Text(_)) => {
-                                log::debug!("Received a text frame from client, that's illegal!");
-                            }
-                            Ok(Message::Binary(buf)) => {
-                                log::debug!("Received a binary frame from client");
-                                log::debug!("Reading websocket frame: {:?}", buf);
+            match msg {
+                Message::Text(_) => {
+                    log::debug!("Received a text frame from client, that's illegal!");
+                }
+                Message::Binary(buf) => {
+                    log::debug!("Received a binary frame from client");
+                    log::debug!("Reading websocket frame: {:?}", buf);
 
-                                let mut buf = Cursor::new(buf);
-                                let req = match Request::decode(&mut buf) {
-                                    Ok(req) => req,
-                                    Err(err) => {
-                                        log::debug!("Failed to decode request: {}", err);
+                    let mut buf = Cursor::new(buf);
+                    let req = match Request::decode(&mut buf) {
+                        Ok(req) => req,
+                        Err(err) => {
+                            log::debug!("Failed to decode request: {}", err);
 
-                                        let resp = Response::Error(ErrorResponse::Proto);
-                                        self.init_write(Message::Binary(resp.to_bytes()));
-                                        return self.poll_write(cx);
-                                    }
-                                };
-
-                                if let Some(resp) = self.handle_request(req) {
-                                    let buf = resp.to_bytes();
-
-                                    self.init_write(Message::Binary(buf));
-                                    return self.poll_write(cx);
-                                }
-                            }
-                            Ok(Message::Ping(buf)) => {
-                                self.init_write(Message::Pong(buf));
-                                return self.poll_write(cx);
-                            }
-                            // Ignore pongs.
-                            Ok(Message::Pong(buf)) => {
-                                log::debug!("Received pong with payload: {:?}", buf);
-                                continue;
-                            }
-                            Ok(Message::Close(frame)) => {
-                                // Server-side close.
-                                if let Some(close_state) = &self.close_state {
-                                    // Client confirmed server close frame.
-                                    if close_state.frame.as_ref() == frame.as_ref() {
-                                        return Poll::Ready(());
-                                    }
-                                }
-
-                                // Client-side close. We respond with the same close frame.
-                                self.init_write_close(frame);
-                                return self.poll_write_close(cx);
-                            }
-                            // Cannot receive a raw frame.
-                            Ok(Message::Frame(_)) => unreachable!(),
-                            Err(err) => {
-                                log::debug!("Failed to read from stream: {}", err);
-                                return Poll::Ready(());
-                            }
+                            let resp = Response::Error(ErrorResponse::Proto);
+                            self.init_write(Message::Binary(resp.to_bytes()));
+                            return self.poll_write(cx);
                         }
+                    };
 
-                        // Next item
-                        self.init_read();
-                    } else {
-                        return Poll::Ready(());
+                    if let Some(resp) = self.handle_request(req) {
+                        let buf = resp.to_bytes();
+
+                        self.init_write(Message::Binary(buf));
+                        return self.poll_write(cx);
                     }
                 }
-                Poll::Pending => return Poll::Pending,
+                Message::Ping(buf) => {
+                    self.init_write(Message::Pong(buf));
+                    return self.poll_write(cx);
+                }
+                // Ignore pongs.
+                Message::Pong(buf) => {
+                    self.pong_timeout = None;
+                    log::debug!("Received pong with payload: {:?}", buf);
+                }
+                Message::Close(frame) => {
+                    // Server-side close.
+                    if let Some(close_frame) = &self.close_frame {
+                        // Client confirmed server close frame.
+                        if close_frame.as_ref() == frame.as_ref() {
+                            self.state = ConnectionState::Closed;
+                            return Poll::Ready(Ok(()));
+                        }
+                    }
+
+                    // Client-side close. We respond with the same close frame.
+                    return self.close(frame);
+                }
+                // Cannot receive a raw frame.
+                Message::Frame(_) => unreachable!(),
+            }
+
+            return Poll::Ready(Ok(()));
+        }
+
+        if let Some(timeout) = &mut this.pong_timeout {
+            let timeout = unsafe { Pin::new_unchecked(timeout) };
+
+            if timeout.poll(cx).is_ready() {
+                log::debug!("Connection timed out");
+                return self.close(None);
             }
         }
+
+        if self.as_mut().poll_tick(cx).is_ready() {
+            return Poll::Ready(Ok(()));
+        }
+
+        let this = self.as_mut().project();
+        if let Poll::Ready(res) = this.changed.poll_next(cx) {
+            let buf = match res {
+                Some(Ok(event)) => Response::from(event).to_bytes(),
+                // Lagged
+                Some(Err(_)) => Response::Error(ErrorResponse::Lagged).to_bytes(),
+                None => unreachable!(),
+            };
+
+            self.init_write(Message::Binary(buf));
+            return self.poll_write(cx);
+        }
+
+        Poll::Pending
     }
 
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         log::trace!("Connection.poll_write");
 
         #[cfg(debug_assertions)]
         assert!(matches!(self.state, ConnectionState::Write(_)));
 
-        let fut = match &mut self.state {
-            ConnectionState::Init => unreachable!(),
-            ConnectionState::Read(_) => unreachable!(),
-            ConnectionState::Write(fut) => Pin::new(fut),
-            ConnectionState::WriteClose(_) => unreachable!(),
-            ConnectionState::Closed => unreachable!(),
-        };
+        let mut this = self.as_mut().project();
 
-        match fut.poll(cx) {
-            Poll::Ready(_) => {
-                // Switch back to read mode.
-                self.init_read();
-                self.poll_read(cx)
-            }
-            Poll::Pending => Poll::Pending,
+        match this.stream.as_mut().poll_ready(cx) {
+            Poll::Ready(Ok(())) => (),
+            Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+            Poll::Pending => return Poll::Pending,
         }
-    }
 
-    fn poll_write_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        log::trace!("Connection.poll_write_close");
-
-        #[cfg(debug_assertions)]
-        assert!(matches!(self.state, ConnectionState::WriteClose(_)));
-
-        let fut = match &mut self.state {
-            ConnectionState::WriteClose(fut) => Pin::new(fut),
+        let msg = match &this.state {
+            ConnectionState::Write(msg) => msg.clone(),
             _ => unreachable!(),
         };
 
-        match fut.poll(cx) {
-            Poll::Ready(res) => {
-                if let Err(err) = res {
-                    log::debug!("Failed to write close message: {}", err);
-                }
-
-                self.init_read();
-                self.poll_read(cx)
-            }
-            Poll::Pending => Poll::Pending,
+        if let Err(err) = this.stream.start_send(msg) {
+            log::debug!("Failed to write to sink: {}", err);
+            return self.close(None);
         }
+
+        self.init_read();
+        Poll::Ready(Ok(()))
     }
 
     fn poll_tick(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
         log::trace!("Connection.poll_tick");
 
         #[cfg(debug_assertions)]
-        assert!(matches!(self.state, ConnectionState::Read(_)));
+        assert!(matches!(self.state, ConnectionState::Read));
 
         match self.ping_interval.poll_tick(cx) {
             Poll::Ready(_) => {
+                // Peer must respond within 15s.
+                self.pong_timeout = Some(time::sleep(Duration::from_secs(15)));
+
                 self.init_write(Message::Ping(vec![0]));
-
-                self.poll_write(cx)
-            }
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    /// Poll for changes from the live bracket.
-    fn poll_changed(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        log::trace!("Connection.poll_changed");
-
-        #[cfg(debug_assertions)]
-        assert!(matches!(self.state, ConnectionState::Read(_)));
-
-        let changed = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.changed) };
-
-        match changed.poll_next(cx) {
-            Poll::Ready(res) => {
-                let buf = match res {
-                    Some(Ok(change)) => Response::from(change).to_bytes(),
-                    // Lagged
-                    Some(Err(_)) => Response::Error(ErrorResponse::Lagged).to_bytes(),
-                    None => unreachable!(),
-                };
-
-                self.init_write(Message::Binary(buf));
-                self.poll_write(cx)
+                Poll::Ready(())
             }
             Poll::Pending => Poll::Pending,
         }
@@ -338,14 +333,7 @@ where
     fn init_read(&mut self) {
         let prev = self.state_str();
 
-        let fut = self.stream.next();
-
-        // Extend Next<'a> into Next<'static>.
-        // SAFETY: This is safe since the Next<'static> is only held for as long
-        // as the  stream.
-        let fut = unsafe { mem::transmute(fut) };
-
-        self.state = ConnectionState::Read(fut);
+        self.state = ConnectionState::Read;
 
         log::trace!("Connection.state {} -> {}", prev, self.state_str());
     }
@@ -353,31 +341,7 @@ where
     fn init_write(&mut self, msg: Message) {
         let prev = self.state_str();
 
-        let fut = self.stream.send(msg);
-
-        // Extend Send<'a> into Send<'static>.
-        // SAFETY: This is safe since the Send<'static> is only held for as long
-        // as the  stream.
-        let fut = unsafe { mem::transmute(fut) };
-
-        self.state = ConnectionState::Write(fut);
-
-        log::trace!("Connection.state {} -> {}", prev, self.state_str());
-    }
-
-    fn init_write_close(&mut self, frame: Option<CloseFrame<'static>>) {
-        let prev = self.state_str();
-
-        self.close_state = Some(CloseState::new(frame.clone()));
-
-        let fut = self.stream.send(Message::Close(frame));
-
-        // Extend Send<'a> into Send<'static>.
-        // SAFETY: This is safe since the Send<'static> is only held for as long
-        // as the  stream.
-        let fut = unsafe { mem::transmute(fut) };
-
-        self.state = ConnectionState::WriteClose(fut);
+        self.state = ConnectionState::Write(msg);
 
         log::trace!("Connection.state {} -> {}", prev, self.state_str());
     }
@@ -425,10 +389,9 @@ where
 
     fn state_str(&self) -> &'static str {
         match self.state {
-            ConnectionState::Init => "Init",
-            ConnectionState::Read(_) => "Read",
+            ConnectionState::Read => "Read",
             ConnectionState::Write(_) => "Write",
-            ConnectionState::WriteClose(_) => "WriteClose",
+            ConnectionState::Close(_) => "Close",
             ConnectionState::Closed => "Closed",
         }
     }
@@ -436,12 +399,12 @@ where
 
 /// Await state of the connection.
 #[derive(Debug)]
-enum ConnectionState<'a, S> {
-    Init,
+enum ConnectionState {
     /// Waiting for incoming messages.
-    Read(futures::stream::Next<'a, S>),
-    Write(futures::sink::Send<'a, S, Message>),
-    WriteClose(futures::sink::Send<'a, S, Message>),
+    Read,
+    /// Waiting the sink to be ready.
+    Write(Message),
+    Close(Message),
     Closed,
 }
 
@@ -449,43 +412,28 @@ impl<S> Future for Connection<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    type Output = ();
+    type Output = Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         log::trace!("Connection.poll");
 
         loop {
-            match self.as_mut().state {
-                // First call to poll, initialize the reader.
-                ConnectionState::Init => {
-                    self.init_read();
-                    continue;
-                }
-                // Try to read, check for bracket updates and then tick.
-                ConnectionState::Read(_) => match self.as_mut().poll_read(cx) {
-                    // When `poll_read` returns `Poll::Ready` the connection is done.
-                    Poll::Ready(()) => {
-                        let prev = self.state_str();
-                        self.state = ConnectionState::Closed;
-                        log::trace!("Connection.state {} -> {}", prev, self.state_str());
+            let this = self.as_mut();
 
-                        return Poll::Ready(());
-                    }
-                    Poll::Pending => match self.as_mut().poll_changed(cx) {
-                        Poll::Ready(()) => {}
-                        Poll::Pending => return self.as_mut().poll_tick(cx),
-                    },
-                },
-                // Finish the write request, then call poll_read again.
-                ConnectionState::Write(_) => match self.as_mut().poll_write(cx) {
-                    // Buffer written, return to reading.
-                    Poll::Ready(()) => {
-                        continue;
-                    }
+            match this.state {
+                ConnectionState::Read => match this.poll_read(cx)? {
+                    Poll::Ready(()) => continue,
                     Poll::Pending => return Poll::Pending,
                 },
-                ConnectionState::WriteClose(_) => return self.poll_write_close(cx),
-                ConnectionState::Closed => return Poll::Ready(()),
+                ConnectionState::Write(_) => match this.poll_write(cx)? {
+                    Poll::Ready(()) => continue,
+                    Poll::Pending => return Poll::Pending,
+                },
+                ConnectionState::Close(_) => match this.poll_close(cx)? {
+                    Poll::Ready(()) => continue,
+                    Poll::Pending => return Poll::Pending,
+                },
+                ConnectionState::Closed => return Poll::Ready(Ok(())),
             }
         }
     }
@@ -495,46 +443,3 @@ unsafe impl<S> Send for Connection<S> where S: AsyncRead + AsyncWrite + Unpin + 
 
 // Both `TcpStream` and `UnixStream` are Sync, unlike Upgraded for some reason.
 unsafe impl<S> Sync for Connection<S> where S: AsyncRead + AsyncWrite + Unpin {}
-
-#[derive(Debug)]
-pub struct Close<'a, S>
-where
-    S: AsyncRead + AsyncWrite + Unpin + 'static,
-{
-    conn: &'a mut Connection<S>,
-}
-
-impl<'a, S> Future for Close<'a, S>
-where
-    S: AsyncRead + AsyncWrite + Unpin + 'static,
-{
-    type Output = ();
-
-    #[inline]
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let conn = unsafe { self.map_unchecked_mut(|this| this.conn) };
-        conn.poll_close(cx)
-    }
-}
-
-/// The progress in the closing handshake. This is only necessary when the server closes
-/// the connection.
-#[derive(Debug)]
-struct CloseState {
-    frame: Option<CloseFrame<'static>>,
-    /// The client must have responded to the close within this deadline.
-    deadline: Pin<Box<Sleep>>,
-}
-
-impl CloseState {
-    fn new(frame: Option<CloseFrame<'static>>) -> Self {
-        Self {
-            frame,
-            deadline: Box::pin(tokio::time::sleep(Duration::new(5, 0))),
-        }
-    }
-
-    fn poll_deadline(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        self.deadline.as_mut().poll(cx)
-    }
-}
