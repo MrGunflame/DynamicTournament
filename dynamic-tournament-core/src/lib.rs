@@ -27,11 +27,13 @@ pub mod options;
 pub mod render;
 
 mod double_elimination;
+mod round_robin;
 mod single_elimination;
 pub mod tournament;
 
 pub use double_elimination::DoubleElimination;
 use render::{BracketRounds, Position, Renderer};
+pub use round_robin::RoundRobin;
 pub use single_elimination::SingleElimination;
 
 use thiserror::Error;
