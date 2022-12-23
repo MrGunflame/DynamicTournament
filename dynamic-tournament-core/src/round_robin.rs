@@ -1,4 +1,10 @@
-use crate::{EntrantData, EntrantSpot, Entrants, Match, Matches, Node, System};
+use std::borrow::Borrow;
+
+use crate::render::{Element, Position, RenderState, Row};
+use crate::{
+    EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
+    Result, System,
+};
 
 #[derive(Clone, Debug)]
 pub struct RoundRobin<T, D>
@@ -89,6 +95,52 @@ where
         Self { entrants, matches }
     }
 
+    pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
+        log::debug!(
+            "Trying to resume RoundRobin bracket with {} entrants and {} matches",
+            entrants.len(),
+            matches.len()
+        );
+
+        let expected = match entrants.len() {
+            0 => 0,
+            n => (n / 2) * (n - 1),
+        };
+
+        if matches.len() != expected {
+            return Err(Error::InvalidNumberOfMatches {
+                expected,
+                found: matches.len(),
+            });
+        }
+
+        for m in matches.iter() {
+            for entrant in m.entrants.iter() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    if entrant.index >= entrants.len() {
+                        return Err(Error::InvalidEntrant {
+                            index: entrant.index,
+                            length: entrants.len(),
+                        });
+                    }
+                }
+            }
+        }
+
+        unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
+    }
+
+    #[inline]
+    pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
+        log::debug!(
+            "Resuming RoundRobin bracket with {} entrants and {} matches",
+            entrants.len(),
+            matches.len()
+        );
+
+        Self { entrants, matches }
+    }
+
     /// Returns the output index of the circle given the input `index` of a tournament with
     /// `n` entrants at `round`.
     // #[inline]
@@ -122,6 +174,17 @@ where
 
                 res as usize
             }
+        }
+    }
+
+    #[inline]
+    fn entrants_even(&self) -> usize {
+        let len = self.entrants.len();
+
+        if len % 2 == 0 {
+            len
+        } else {
+            len + 1
         }
     }
 }
@@ -162,11 +225,82 @@ where
     fn into_matches(self) -> Matches<Self::NodeData> {
         self.matches
     }
+
+    fn next_matches(&self, _: usize) -> NextMatches {
+        unimplemented!()
+    }
+
+    fn update_match<F>(&mut self, index: usize, f: F)
+    where
+        F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>),
+    {
+        let Some(match_) = self.matches.get_mut(index) else {
+            return;
+        };
+
+        let mut res = MatchResult::default();
+
+        f(match_, &mut res);
+    }
+
+    fn start_render(&self) -> RenderState<'_, Self> {
+        let mut rounds = Vec::new();
+
+        let matches_per_round = self.entrants_even() / 2;
+
+        let mut index = 0;
+        while index < self.matches.len() {
+            let mut round = Vec::new();
+
+            for _ in 0..matches_per_round {
+                round.push(Element::new(crate::render::Match {
+                    index,
+                    predecessors: vec![],
+                    _marker: std::marker::PhantomData,
+                    label: None,
+                    position: None,
+                }));
+
+                index += 1;
+            }
+
+            rounds.push(Element::new(Row {
+                label: None,
+                position: Some(Position::Start),
+                children: round.into_iter(),
+            }));
+        }
+
+        RenderState {
+            root: Element::new(Row::new(rounds)),
+        }
+    }
+}
+
+impl<T, D> Borrow<Entrants<T>> for RoundRobin<T, D>
+where
+    D: EntrantData,
+{
+    #[inline]
+    fn borrow(&self) -> &Entrants<T> {
+        &self.entrants
+    }
+}
+
+impl<T, D> Borrow<Matches<D>> for RoundRobin<T, D>
+where
+    D: EntrantData,
+{
+    #[inline]
+    fn borrow(&self) -> &Matches<D> {
+        &self.matches
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{entrants, EntrantSpot, Match, Node};
+    use crate::tests::{TElement, TMatch, TRow, TestRenderer};
+    use crate::{entrants, EntrantSpot, Match, Node, System};
 
     use super::RoundRobin;
 
@@ -349,6 +483,33 @@ mod tests {
                     EntrantSpot::Entrant(Node::new(3)),
                 ]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_round_robin_render() {
+        let entrants = entrants![0, 1, 2, 3];
+        let tournament = RoundRobin::<i32, u32>::new(entrants);
+
+        let mut renderer = TestRenderer::new();
+        tournament.render(&mut renderer);
+
+        assert_eq!(
+            renderer,
+            TElement::Row(TRow(vec![
+                TElement::Row(TRow(vec![
+                    TElement::Match(TMatch { index: 0 }),
+                    TElement::Match(TMatch { index: 1 }),
+                ])),
+                TElement::Row(TRow(vec![
+                    TElement::Match(TMatch { index: 2 }),
+                    TElement::Match(TMatch { index: 3 }),
+                ])),
+                TElement::Row(TRow(vec![
+                    TElement::Match(TMatch { index: 4 }),
+                    TElement::Match(TMatch { index: 5 }),
+                ])),
+            ]))
         );
     }
 }
