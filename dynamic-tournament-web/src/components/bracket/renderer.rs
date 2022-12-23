@@ -46,7 +46,7 @@ where
     T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
-    fn render_element<'b>(&mut self, elem: Element<'b, T>) -> Html {
+    fn render_element(&mut self, elem: Element<'_, T>) -> Html {
         match elem {
             Element::Row(elem) => self.render_row(elem),
             Element::Column(elem) => self.render_column(elem),
@@ -54,7 +54,7 @@ where
         }
     }
 
-    fn render_column<'b>(&mut self, column: Column<'b, T>) -> Html {
+    fn render_column(&mut self, column: Column<'_, T>) -> Html {
         let inner = self.render_iter(column);
 
         html! {
@@ -64,7 +64,7 @@ where
         }
     }
 
-    fn render_row<'b>(&mut self, row: Row<'b, T>) -> Html {
+    fn render_row(&mut self, row: Row<'_, T>) -> Html {
         let inner = self.render_iter(row);
 
         html! {
