@@ -1,263 +1,432 @@
-//! # Tournament Rendering
+//! The generic tournament rendering system.
 //!
-//! The `render` module provides types to generically render tournament [`System`]s.
-use crate::{Match, Node, System};
+//! This module contains all the required types to drive a generic [`System`] renderer. The render
+//! process is organized as a recursive tree using [`Element`]s as nodes.
+//!
+//! # Structure
+//!
+//! The rendering process is structured as a tree with [`Element`]s used as nodes. A [`Element`]
+//! can represent three different values:
+//! - A [`Row`] is a node with its children organized horizontally.
+//! - A [`Column`] is a node with its children organized vertically.
+//! - A [`Match`] is a leaf element that represents a specific match in a [`System`].
+//!
+//! The entrypoint of a [`Renderer`] is a [`Element`]. If a [`System`] wants to display more than
+//! a single [`Match`] (which is all, really) it is commonly a [`Row`] enclosing all following
+//! [`Element`]s.
+//!
+//! It is also noteworthy that a rendered [`System`] never changes its form. This means it is
+//! almost never required to rerender a tournament when a match changes. Instead it is possible
+//! to only rerender all matches in place.
+//!
+use crate::System;
 
-use std::ops::Range;
+use std::borrow::Cow;
+use std::marker::PhantomData;
+use std::vec::IntoIter;
 
 /// A renderer used to render any [`System`].
 pub trait Renderer<T, E, D>
 where
     T: System<Entrant = E, NodeData = D>,
 {
-    fn render(&mut self, input: BracketRounds<'_, T>);
+    /// Renders a graph using the provided root [`Element`].
+    fn render(&mut self, root: Element<'_, T>);
 }
 
-/// An [`Iterator`] over all [`BracketRound`]s within a tournament [`System`].
+/// An textual label attached to an [`Element`].
 #[derive(Clone, Debug)]
-pub struct BracketRounds<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    range: Range<usize>,
+pub struct Label<'a>(Cow<'a, str>);
+
+impl<'a> Label<'a> {
+    /// Returns a `str` slice containing the `Label`.
+    #[inline]
+    pub fn as_str(&'a self) -> &'a str {
+        &self.0
+    }
 }
 
-impl<'a, T> BracketRounds<'a, T>
+impl<'a> AsRef<str> for Label<'a> {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+/// A node in the render graph.
+#[derive(Debug)]
+pub enum Element<'a, T>
 where
     T: System,
 {
-    pub(crate) fn new(tournament: &'a T) -> Self {
+    /// A horizontally ordered list node.
+    Row(Row<'a, T>),
+    /// A vertically ordered list node.
+    Column(Column<'a, T>),
+    /// A leaf node representing a specific match in a [`System`].
+    Match(Match<'a, T>),
+}
+
+impl<'a, T> Element<'a, T>
+where
+    T: System,
+{
+    pub(crate) fn new<E>(inner: E) -> Self
+    where
+        E: Into<Element<'a, T>>,
+    {
+        inner.into()
+    }
+
+    /// Returns the [`ElementKind`] of this `Element`.
+    #[inline]
+    pub fn kind(&self) -> ElementKind {
+        match self {
+            Self::Row(_) => ElementKind::Row,
+            Self::Column(_) => ElementKind::Column,
+            Self::Match(_) => ElementKind::Match,
+        }
+    }
+
+    pub fn unwrap_row(self) -> Row<'a, T> {
+        match self {
+            Self::Row(val) => val,
+            _ => panic!("called `unwrap_row` on an invalid ElementInner value"),
+        }
+    }
+
+    pub fn unwrap_column(self) -> Column<'a, T> {
+        match self {
+            Self::Column(val) => val,
+            _ => panic!("called `unwrap_column` on an invalid ElementInner value"),
+        }
+    }
+
+    pub fn unwrap_match(self) -> Match<'a, T> {
+        match self {
+            Self::Match(val) => val,
+            _ => panic!("called `unwrap_match`on an invalid ElementInner value"),
+        }
+    }
+}
+
+impl<'a, T> From<Row<'a, T>> for Element<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn from(row: Row<'a, T>) -> Self {
+        Self::Row(row)
+    }
+}
+
+impl<'a, T> From<Column<'a, T>> for Element<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn from(col: Column<'a, T>) -> Self {
+        Self::Column(col)
+    }
+}
+
+impl<'a, T> From<Match<'a, T>> for Element<'a, T>
+where
+    T: System,
+{
+    #[inline]
+    fn from(m: Match<'a, T>) -> Self {
+        Self::Match(m)
+    }
+}
+
+/// A horizontal row of [`Element`]s.
+#[derive(Debug)]
+pub struct Row<'a, T>
+where
+    T: System,
+{
+    /// An optional [`Label`] for this `Row`.
+    pub label: Option<Label<'a>>,
+    /// An optional [`Position`] hint on how to render this `Row`.
+    pub position: Option<Position>,
+    pub(crate) children: IntoIter<Element<'a, T>>,
+}
+
+impl<'a, T> Row<'a, T>
+where
+    T: System,
+{
+    pub(crate) fn new(children: Vec<Element<'a, T>>) -> Self {
         Self {
-            tournament,
-            range: 0..tournament.matches().len(),
+            label: None,
+            position: None,
+            children: children.into_iter(),
         }
     }
 }
 
-impl<'a, T> Iterator for BracketRounds<'a, T>
+impl<'a, T> Iterator for Row<'a, T>
 where
     T: System,
 {
-    type Item = BracketRound<'a, T>;
+    type Item = Element<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Get the next bracket round between `self.range`.
-        let range = self.tournament.next_bracket_round(self.range.clone());
-
-        log::debug!("Rendering next BracketRound: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next round to be after the current round (`range`).
-            self.range.start = range.end;
-
-            Some(BracketRound::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over all [`Bracket`]s in a `BracketRound`.
-#[derive(Clone, Debug)]
-pub struct BracketRound<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    range: Range<usize>,
-}
-
-impl<'a, T> BracketRound<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self { tournament, range }
-    }
-}
-
-impl<'a, T> Iterator for BracketRound<'a, T>
-where
-    T: System,
-{
-    type Item = Bracket<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Get the next bracket between `self.range`.
-        let range = self.tournament.next_bracket(self.range.clone());
-
-        log::debug!("Rendering next Bracket: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next bracket to be after the current bracket (`range`).
-            self.range.start = range.end;
-
-            Some(Bracket::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over all [`Round`]s in a `Bracket`.
-#[derive(Clone, Debug)]
-pub struct Bracket<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    range: Range<usize>,
-}
-
-impl<'a, T> Bracket<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self { tournament, range }
-    }
-}
-
-impl<'a, T> Iterator for Bracket<'a, T>
-where
-    T: System,
-{
-    type Item = Round<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Get the next round between `self.range`.
-        let range = self.tournament.next_round(self.range.clone());
-
-        log::debug!("Rendering next Round: {:?}", range);
-
-        if range.is_empty() {
-            None
-        } else {
-            // Set the next round to be after the current round (`range`).
-            self.range.start = range.end;
-
-            Some(Round::new(self.tournament, range))
-        }
-    }
-}
-
-/// An [`Iterator`] over [`Match`]es of a `Round`.
-#[derive(Clone, Debug)]
-pub struct Round<'a, T>
-where
-    T: System,
-{
-    tournament: &'a T,
-    start: usize,
-    end: usize,
-}
-
-impl<'a, T> Round<'a, T>
-where
-    T: System,
-{
-    fn new(tournament: &'a T, range: Range<usize>) -> Self {
-        Self {
-            tournament,
-            start: range.start,
-            end: range.end,
-        }
-    }
-
-    pub fn indexed(self) -> Indexed<'a, T> {
-        Indexed { iter: self }
-    }
-}
-
-impl<'a, T> Iterator for Round<'a, T>
-where
-    T: System,
-{
-    type Item = (&'a Match<Node<T::NodeData>>, Position);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start >= self.end {
-            None
-        } else {
-            let m = &self.tournament.matches()[self.start];
-            let position = self.tournament.render_match_position(self.start);
-
-            log::debug!("Rendering next Match {} with {:?}", self.start, position);
-
-            self.start += 1;
-
-            Some((m, position))
-        }
+        self.children.next()
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.end - self.start, Some(self.end - self.start))
+        (self.len(), Some(self.len()))
     }
 }
 
-impl<'a, T> ExactSizeIterator for Round<'a, T>
+impl<'a, T> ExactSizeIterator for Row<'a, T>
 where
     T: System,
 {
     #[inline]
     fn len(&self) -> usize {
-        self.end - self.start
+        self.children.len()
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Indexed<'a, T>
+/// A vertical column of [`Element`]s.
+#[derive(Debug)]
+pub struct Column<'a, T>
 where
     T: System,
 {
-    iter: Round<'a, T>,
+    /// An optional [`Label`] for this `Column`.
+    pub label: Option<Label<'a>>,
+    /// An optional [`Position`] hint on how to render this `Column`.
+    pub position: Option<Position>,
+    pub(crate) children: IntoIter<Element<'a, T>>,
 }
 
-impl<'a, T> Iterator for Indexed<'a, T>
+impl<'a, T> Iterator for Column<'a, T>
 where
     T: System,
 {
-    type Item = (usize, &'a Match<Node<T::NodeData>>, Position);
+    type Item = Element<'a, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let index = self.iter.start;
-
-        self.iter.next().map(|(m, pos)| (index, m, pos))
+        self.children.next()
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
+        (self.len(), Some(self.len()))
     }
 }
 
-impl<'a, T> ExactSizeIterator for Indexed<'a, T>
+impl<'a, T> ExactSizeIterator for Column<'a, T>
 where
     T: System,
 {
     #[inline]
     fn len(&self) -> usize {
-        self.iter.len()
+        self.children.len()
     }
 }
 
-/// The rendering position of a match within a round. The default value is `SpaceAround`.
+/// A leaf element in the render tree representing a *match* or *heat*.
+#[derive(Clone, Debug)]
+pub struct Match<'a, T>
+where
+    T: System,
+{
+    pub label: Option<Label<'a>>,
+    pub position: Option<Position>,
+    pub(crate) index: usize,
+    pub(crate) predecessors: Vec<Predecessor>,
+    pub(crate) _marker: PhantomData<&'a T>,
+}
+
+impl<'a, T> Match<'a, T>
+where
+    T: System,
+{
+    /// Returns the index of this `Match` within the [`System`].
+    #[inline]
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Returns a non-exhaustive list of [`Predecessor`]s leading to this `Match`. All elements are
+    /// guaranteed to be correct, but there is no guarantee that the list is exhaustive.
+    pub fn predecessors(&self) -> &[Predecessor] {
+        &self.predecessors
+    }
+}
+
+/// A predecessor hint of a match.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Predecessor {
+    pub kind: PredecessorKind,
+    /// The index of the match that is the predecessor.
+    pub source_match: usize,
+    /// Destination index within the next match.
+    pub destination_index: usize,
+    pub(crate) _priv: (),
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PredecessorKind {
+    Winner,
+    Loser,
+}
+
+/// A `Position` gives the renderer a hint how the [`System`] expects this element to be displayed.
+///
+/// Note that a `Position` is purely a hint, a renderer may decide to ignore it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Position {
+    /// Hints that the element should be rendered at the start of the container.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// | | Match[0] | | | Match[4] | | | Match[6] | |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[1] | | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[3] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// ```
+    Start,
+    /// Hints that the element should be rendered at the end of the container.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[0] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[2] | | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// | | Match[3] | | | Match[5] | | | Match[6] | |
+    /// | | -------- | | | -------- | | | -------- | |
+    /// |              |              |              |
+    /// ```
+    End,
+    /// Hints that the element should be placed with even space around.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[0] | |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              | | -------- | |
+    /// |              |              | | Match[6] | |
+    /// | | -------- | |              | | -------- | |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[3] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// ```
     SpaceAround,
-    Bottom(i32),
+    /// Hints that the element should be placed with even space between.
+    ///
+    /// # Examples
+    ///
+    /// ```text
+    /// |     COL0     |     COL1     |     COL2     |
+    /// | ------------ | ------------ | ------------ |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[0] | | | Match[4] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// | | -------- | |              |              |
+    /// | | Match[1] | |              |              |
+    /// | | -------- | |              | | -------- | |
+    /// |              |              | | Match[6] | |
+    /// | | -------- | |              | | -------- | |
+    /// | | Match[2] | |              |              |
+    /// | | -------- | |              |              |
+    /// |              |              |              |
+    /// | | -------- | | | -------- | |              |
+    /// | | Match[3] | | | Match[5] | |              |
+    /// | | -------- | | | -------- | |              |
+    /// |              |              |              |
+    /// ```
+    SpaceBetween,
 }
 
-impl Position {
-    pub fn bottom(value: i32) -> Self {
-        Self::Bottom(value)
+#[derive(Debug)]
+pub struct RenderState<'a, T>
+where
+    T: System,
+{
+    pub(crate) root: Element<'a, T>,
+}
+
+/// The type of an element.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ElementKind {
+    Column,
+    Row,
+    Match,
+}
+
+impl ElementKind {
+    /// Returns `true` if this `ElementKind` is [`Column`].
+    ///
+    /// [`Column`]: Self::Column
+    #[inline]
+    pub fn is_column(&self) -> bool {
+        matches!(self, Self::Column)
     }
-}
 
-impl Default for Position {
-    fn default() -> Self {
-        Self::SpaceAround
+    /// Returns `true` if this `ElementKind` is [`Row`].
+    ///
+    /// [`Row`]: Self::Row
+    #[inline]
+    pub fn is_row(&self) -> bool {
+        matches!(self, Self::Row)
+    }
+
+    /// Returns `true` if this `ElementKind` is [`Match`].
+    ///
+    /// [`Match`]: Self::Match
+    #[inline]
+    pub fn is_match(&self) -> bool {
+        matches!(self, Self::Match)
     }
 }

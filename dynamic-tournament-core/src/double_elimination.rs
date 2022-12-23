@@ -1,9 +1,10 @@
+use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::{
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
     Result, System,
 };
 
-use std::{borrow::Borrow, ops::Range};
+use std::{borrow::Borrow, marker::PhantomData};
 
 /// A double elimination tournament.
 #[derive(Clone, Debug)]
@@ -31,6 +32,14 @@ where
             "Creating a new DoubleElimination bracket with {} entrants",
             entrants.len()
         );
+
+        if entrants.len() == 0 {
+            return Self {
+                entrants: Entrants::new(),
+                matches: Matches::new(),
+                lower_bracket_index: 0,
+            };
+        }
 
         let initial_matches = match entrants.len() {
             1 | 2 => 1,
@@ -564,58 +573,112 @@ where
         }
     }
 
-    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize> {
-        // Start with upper + lower bracket round.
-        if range.start == 0 {
-            0..self.final_bracket_index()
-        } else {
-            range
-        }
-    }
+    fn start_render(&self) -> RenderState<'_, Self> {
+        let initial_matches = self.entrants.len().next_power_of_two() / 2;
 
-    fn next_bracket(&self, range: Range<usize>) -> Range<usize> {
-        // Return the final bracket.
-        if range.start >= self.final_bracket_index() {
-            return range;
-        }
-
-        // Return the lower bracket.
-        if range.start >= self.lower_bracket_index {
-            return self.lower_bracket_index..self.final_bracket_index();
-        }
-
-        // Return the upper bracket.
-        0..self.lower_bracket_index
-    }
-
-    fn next_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        // Return the only round from the final bracket. This also catches ranges that exceed
-        // self.matches().len().
-        if range.start >= self.final_bracket_index() || range.is_empty() {
-            return range;
-        }
-
-        // Return a round from the lower bracket.
-        if range.start >= self.lower_bracket_index {
-            // Calculate the index of the current round.
+        let mut columns = Vec::new();
+        // Upper and lower brackets
+        // Upper bracket (same impl as single elims)
+        let upper = {
+            let mut cols = Vec::new();
+            let mut num_matches = initial_matches;
             let mut index = 0;
-            let mut counter = 0;
-            // Number of matches per round (halves every 2 rounds)
-            let mut num_matches = self.entrants().len().next_power_of_two() / 4;
-            while range.start > counter + self.lower_bracket_index {
-                counter += num_matches;
-                index += 1;
 
-                if index % 2 == 0 {
+            while num_matches > 0 {
+                let mut matches = Vec::new();
+                for i in index..index + num_matches {
+                    matches.push(Element::new(crate::render::Match {
+                        index: i,
+                        predecessors: vec![],
+                        _marker: PhantomData,
+                        label: None,
+                        position: None,
+                    }));
+                }
+
+                cols.push(Element::Column(Column {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    children: matches.into_iter(),
+                }));
+
+                index += num_matches;
+                num_matches /= 2;
+            }
+
+            cols
+        };
+
+        let lower = {
+            let mut cols = Vec::new();
+            let mut num_matches = initial_matches / 2;
+            let mut index = self.lower_bracket_index;
+            let mut round_index = 0;
+
+            while num_matches > 0 {
+                round_index += 1;
+
+                let mut matches = Vec::new();
+                for i in index..index + num_matches {
+                    matches.push(Element::new(crate::render::Match {
+                        index: i,
+                        predecessors: vec![],
+                        _marker: PhantomData,
+                        position: None,
+                        label: None,
+                    }));
+                }
+
+                cols.push(Element::Column(Column {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    children: matches.into_iter(),
+                }));
+
+                index += num_matches;
+                if round_index % 2 == 0 {
                     num_matches /= 2;
                 }
             }
 
-            return range.start..range.start + num_matches;
-        }
+            cols
+        };
 
-        // Return a round from the upper bracket. (same as SingleElimination)
-        range.start..self.entrants().len().next_power_of_two() / 2 + range.start / 2
+        columns.push(Element::Column(Column {
+            position: Some(Position::SpaceAround),
+            children: vec![
+                Element::Row(Row {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    children: upper.into_iter(),
+                }),
+                Element::Row(Row {
+                    label: None,
+                    position: Some(Position::SpaceAround),
+                    children: lower.into_iter(),
+                }),
+            ]
+            .into_iter(),
+            label: None,
+        }));
+
+        // Final match
+        columns.push(Element::Column(Column {
+            label: None,
+            position: Some(Position::SpaceAround),
+            children: vec![Element::Match(crate::render::Match {
+                label: None,
+                position: None,
+                index: self.matches.len() - 1,
+                predecessors: vec![],
+                _marker: PhantomData,
+            })]
+            .into_iter(),
+        }));
+
+        RenderState {
+            root: Element::new(Row::new(columns)),
+        }
     }
 }
 
@@ -639,7 +702,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{entrants, tests::TestRenderer};
+    use crate::{
+        entrants,
+        tests::{TColumn, TElement, TMatch, TRow, TestRenderer},
+    };
 
     use super::*;
 
@@ -1017,73 +1083,71 @@ mod tests {
     }
 
     #[test]
-    fn test_double_elimination_next_bracket_round() {
-        let entrants = entrants![0, 1, 2, 3];
-        let tournament = DoubleElimination::<i32, u32>::new(entrants);
-
-        assert_eq!(tournament.next_bracket_round(0..6), 0..5);
-        assert_eq!(tournament.next_bracket_round(5..6), 5..6);
-        assert_eq!(tournament.next_bracket_round(6..6), 6..6);
-    }
-
-    #[test]
-    fn test_double_elimination_next_bracket() {
-        let entrants = entrants![0, 1, 2, 3];
-        let tournament = DoubleElimination::<i32, u32>::new(entrants);
-
-        assert_eq!(tournament.next_bracket(0..5), 0..3);
-        assert_eq!(tournament.next_bracket(3..5), 3..5);
-        assert_eq!(tournament.next_bracket(5..5), 5..5);
-        assert_eq!(tournament.next_bracket(5..6), 5..6);
-        assert_eq!(tournament.next_bracket(6..6), 6..6);
-    }
-
-    #[test]
-    fn test_double_elimination_next_round() {
-        let entrants = entrants![0, 1, 2, 3];
-        let tournament = DoubleElimination::<i32, u32>::new(entrants);
-
-        assert_eq!(tournament.next_round(0..3), 0..2);
-        assert_eq!(tournament.next_round(2..3), 2..3);
-        assert_eq!(tournament.next_round(3..5), 3..4);
-        assert_eq!(tournament.next_round(4..5), 4..5);
-        assert_eq!(tournament.next_round(5..5), 5..5);
-        assert_eq!(tournament.next_round(5..6), 5..6);
-        assert_eq!(tournament.next_round(6..6), 6..6);
-    }
-
-    #[test]
     fn test_double_elimination_render() {
         let entrants = entrants![0, 1, 2, 3];
         let tournament = DoubleElimination::<i32, u32>::new(entrants);
 
-        let mut renderer = TestRenderer::default();
+        let mut renderer = TestRenderer::new();
         tournament.render(&mut renderer);
 
         assert_eq!(
             renderer,
-            vec![
-                vec![
-                    vec![
-                        vec![
-                            Match::new([
-                                EntrantSpot::Entrant(Node::new(0)),
-                                EntrantSpot::Entrant(Node::new(2))
-                            ]),
-                            Match::new([
-                                EntrantSpot::Entrant(Node::new(1)),
-                                EntrantSpot::Entrant(Node::new(3))
-                            ]),
-                        ],
-                        vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD]),]
-                    ],
-                    vec![
-                        vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])],
-                        vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])],
-                    ]
-                ],
-                vec![vec![vec![Match::new([EntrantSpot::TBD, EntrantSpot::TBD])]]],
-            ]
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 0 }),
+                            TElement::Match(TMatch { index: 1 }),
+                        ])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 2 })])),
+                    ]),),
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 3 })])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 4 })])),
+                    ])),
+                ])),
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 5 }),]))
+            ]))
+        );
+
+        let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
+        let tournament = DoubleElimination::<i32, u32>::new(entrants);
+
+        let mut renderer = TestRenderer::new();
+        tournament.render(&mut renderer);
+
+        assert_eq!(
+            renderer,
+            TElement::Row(TRow(vec![
+                TElement::Column(TColumn(vec![
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 0 }),
+                            TElement::Match(TMatch { index: 1 }),
+                            TElement::Match(TMatch { index: 2 }),
+                            TElement::Match(TMatch { index: 3 }),
+                        ])),
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 4 }),
+                            TElement::Match(TMatch { index: 5 }),
+                        ])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 6 }),])),
+                    ])),
+                    TElement::Row(TRow(vec![
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 7 }),
+                            TElement::Match(TMatch { index: 8 }),
+                        ])),
+                        TElement::Column(TColumn(vec![
+                            TElement::Match(TMatch { index: 9 }),
+                            TElement::Match(TMatch { index: 10 }),
+                        ])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 11 })])),
+                        TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 12 })])),
+                    ]))
+                ])),
+                TElement::Column(TColumn(vec![TElement::Match(TMatch { index: 13 }),])),
+            ]))
         );
     }
 }
