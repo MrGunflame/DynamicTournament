@@ -446,24 +446,19 @@ h3.dt-title {
   flex-direction: row;
 }
 
-.dt-bracket-bracket-row {
-  display: flex;
-  flex-direction: column;
-}
-
-.dt-bracket-bracket {
-  height: 100%;
+.dt-bracket-row {
   display: flex;
   flex-direction: row;
   padding: 3px;
-  margin: 20px;
+  margin: 10px;
 }
 
-.dt-bracket-round {
+.dt-bracket-column {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  padding: 3px;
   margin: 10px;
+  justify-content: space-around;
 }
 
 /* IDS */

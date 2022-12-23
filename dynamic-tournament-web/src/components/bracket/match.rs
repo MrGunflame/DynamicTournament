@@ -101,13 +101,8 @@ where
 
         let number = ctx.props().number;
 
-        let style = match ctx.props().position.unwrap_or_default() {
-            Position::SpaceAround => String::from(""),
-            Position::Bottom(value) => format!("position:absolute;bottom:{}%;", value),
-        };
-
         html! {
-            <div class="dt-bracket-match" {style}>
+            <div class="dt-bracket-match">
                 <span>{ number }</span>
                 <div>
                     <div class="dt-bracket-match-teams">
@@ -126,7 +121,7 @@ pub struct Props<T> {
     pub nodes: [EntrantSpot<EntrantScore<u64>>; 2],
     pub on_action: Callback<Action>,
     pub number: usize,
-    pub position: Option<Position>,
+    pub position: Position,
 }
 
 impl<T> PartialEq for Props<T> {

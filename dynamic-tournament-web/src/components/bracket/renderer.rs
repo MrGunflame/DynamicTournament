@@ -1,9 +1,7 @@
 //! HTML renderer
 use std::fmt::Display;
 
-use dynamic_tournament_core::render::{
-    self, BracketRound, BracketRounds, Position, Renderer, Round,
-};
+use dynamic_tournament_core::render::{self, Column, Element, Position, Renderer, Row};
 use dynamic_tournament_core::{EntrantScore, Match, Node, System};
 use yew::{html, Context, Html};
 
@@ -48,64 +46,72 @@ where
     T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
 {
-    fn render_bracket_round(&self, input: BracketRound<'_, T>) -> Html {
-        let brackets: Html = input.map(|bracket| self.render_bracket(bracket)).collect();
+    fn render_element(&mut self, elem: Element<'_, T>) -> Html {
+        match elem {
+            Element::Row(elem) => self.render_row(elem),
+            Element::Column(elem) => self.render_column(elem),
+            Element::Match(elem) => self.render_match(elem, 0),
+        }
+    }
+
+    fn render_column(&mut self, column: Column<'_, T>) -> Html {
+        let inner = self.render_iter(column);
 
         html! {
-            <div class="dt-bracket-bracket-row">
-                { brackets }
+            <div class="dt-bracket-column">
+                { inner }
             </div>
         }
     }
 
-    fn render_bracket(&self, input: render::Bracket<'_, T>) -> Html {
-        let rounds: Html = input.map(|round| self.render_round(round)).collect();
+    fn render_row(&mut self, row: Row<'_, T>) -> Html {
+        let inner = self.render_iter(row);
 
         html! {
-            <div class="dt-bracket-bracket">
-                { rounds }
+            <div class="dt-bracket-row">
+                { inner }
             </div>
         }
     }
 
-    fn render_round(&self, input: Round<'_, T>) -> Html {
-        let round: Html = input
-            .indexed()
-            .enumerate()
-            .map(|(match_index, (index, m, pos))| {
-                html! {
-                    { self.render_match(m, index, match_index.saturating_add(1), pos) }
-                }
+    fn render_iter<'b, I>(&mut self, iter: I) -> Html
+    where
+        I: Iterator<Item = Element<'b, T>>,
+        T: 'b,
+    {
+        iter.enumerate()
+            .map(|(index, elem)| match elem {
+                Element::Row(elem) => self.render_row(elem),
+                Element::Column(elem) => self.render_column(elem),
+                Element::Match(elem) => self.render_match(elem, index),
             })
-            .collect();
-
-        html! {
-            <div class="dt-bracket-round">
-                { round }
-            </div>
-        }
+            .collect()
     }
 
-    fn render_match(
-        &self,
-        input: &Match<Node<EntrantScore<u64>>>,
-        index: usize,
-        match_index: usize,
-        position: Position,
-    ) -> Html {
+    fn render_match(&self, m: render::Match<'_, T>, round_index: usize) -> Html {
+        // Get the match from the tournament.
+        let match_: &Match<Node<EntrantScore<u64>>> =
+            unsafe { self.tournament.matches().get_unchecked(m.index()) };
+
+        let entrants = match_.map(|spot| {
+            spot.map(|node| {
+                // SAFE
+                unsafe { self.tournament.entrants().get_unchecked(node.index).clone() }
+            })
+        });
+
+        let nodes = match_.map(|spot| spot.map(|node| node.data));
+
+        let position = m.position.unwrap_or(Position::SpaceAround);
+
+        let index = m.index();
         let on_action = self
             .ctx
             .link()
             .callback(move |action| Message::Action { index, action });
 
-        let entrants = input
-            .entrants
-            .map(|e| e.map(|e| e.entrant(&self.tournament.borrow()).unwrap().clone()));
-
-        let nodes = input.entrants.map(|e| e.map(|e| e.data));
-
         html! {
-            <BracketMatch<E> {entrants} {nodes} {on_action} number={match_index} {position} />
+            <BracketMatch<E> {entrants} {nodes} {on_action} number={round_index + 1} {position} />
         }
     }
 }
@@ -114,10 +120,9 @@ impl<'a, T, E> Renderer<T, E, EntrantScore<u64>> for HtmlRenderer<'a, T, E>
 where
     T: System<Entrant = E, NodeData = EntrantScore<u64>>,
     E: Clone + Display + 'static,
+    Self: 'a,
 {
-    fn render(&mut self, input: BracketRounds<'_, T>) {
-        self.output = input
-            .map(|bracket_round| self.render_bracket_round(bracket_round))
-            .collect();
+    fn render(&mut self, input: Element<'_, T>) {
+        self.output = self.render_element(input);
     }
 }
