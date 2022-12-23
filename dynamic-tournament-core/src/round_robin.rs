@@ -76,13 +76,13 @@ where
                 let second = Self::circle_entrant(entrants_even, round, entrants_even - index - 1);
 
                 // TODO: These if cases should best not be in this hot loop.
-                let first = if first <= entrants.len() - 1 {
+                let first = if first < entrants.len() {
                     EntrantSpot::Entrant(Node::new(first))
                 } else {
                     EntrantSpot::Empty
                 };
 
-                let second = if second <= entrants.len() - 1 {
+                let second = if second < entrants.len() {
                     EntrantSpot::Entrant(Node::new(second))
                 } else {
                     EntrantSpot::Empty
@@ -168,7 +168,7 @@ where
         }
 
         match index as isize - round as isize {
-            res if res <= 0 => n - (res.abs() as usize) - 1,
+            res if res <= 0 => n - res.unsigned_abs() - 1,
             res => {
                 debug_assert!(res > 0);
 
