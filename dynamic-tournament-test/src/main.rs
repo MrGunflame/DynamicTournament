@@ -1,6 +1,4 @@
-mod lib;
-
-use lib::TournamentGenerator;
+use dynamic_tournament_test::TournamentGenerator;
 
 use dynamic_tournament_api::Client;
 

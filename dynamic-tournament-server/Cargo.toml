@@ -10,36 +10,41 @@ publish = false
 
 [features]
 default = ["metrics", "limits"]
+
+# Enable metrics gathering and the `/metrics` endpoint.
 metrics = []
+
+# Enable checks for OS limits (e.g. open file descriptors).
 limits = []
 
 [dependencies]
 dynamic-tournament-api = { version = "0.6.0", path = "../dynamic-tournament-api", features = ["server"] }
 dynamic-tournament-core = { version = "0.6.0", path = "../dynamic-tournament-core", features = ["serde"] }
 dynamic-tournament-macros = { version = "0.6.0", path = "../dynamic-tournament-macros", features = ["server"] }
-tokio = { version = "1.21.2", features = ["full"] }
-sqlx = { version = "0.5.11", features = ["runtime-tokio-rustls", "mysql", "json", "chrono"] }
-serde = "1.0.136"
-serde_json = "1.0.79"
-thiserror = "1.0.30"
-futures = "0.3.21"
-toml = "0.5.8"
-hyper = { version = "0.14.18", features = ["server", "tcp", "http1", "http2"] }
-tokio-tungstenite = "0.17.1"
-log = { version = "0.4.16", features = ["serde"] }
-parking_lot = "0.12.0"
-snowflaked = { version = "0.1.2", features = ["sync"] }
-tokio-stream = { version = "0.1.9", features = ["sync"] }
-nix = { version = "0.25.0", features = ["resource", "signal"] }
+tokio = { version = "1.23.0", features = ["full"] }
+sqlx = { version = "0.6.2", features = ["runtime-tokio-rustls", "mysql", "json", "chrono"] }
+serde = "1.0.151"
+serde_json = "1.0.90"
+thiserror = "1.0.38"
+futures = "0.3.25"
+toml = "0.5.10"
+hyper = { version = "0.14.23", features = ["server", "tcp", "http1", "http2"] }
+tokio-tungstenite = "0.18.0"
+log = { version = "0.4.17", features = ["serde"] }
+parking_lot = "0.12.1"
+snowflaked = { version = "0.1.8", features = ["sync"] }
+tokio-stream = { version = "0.1.11", features = ["sync"] }
+nix = { version = "0.26.1", features = ["resource", "signal"] }
 
-chrono = "0.4.19, < 0.4.20"
-base64 = "0.13.0"
-sha1 = "0.10.1"
-jsonwebtoken = "8.1.0"
-clap = { version = "3.1.18", features = ["derive"] }
-sha2 = "0.10.2"
+chrono = "0.4.23"
+base64 = "0.20.0"
+sha1 = "0.10.5"
+jsonwebtoken = "8.2.0"
+clap = { version = "4.0.29", features = ["derive"] }
+sha2 = "0.10.6"
 hex = "0.4.3"
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }
+pin-project = "1.0.12"
 
 [build-dependencies]
 rand = { version = "0.8.5", default-features = false, features = ["getrandom"] }

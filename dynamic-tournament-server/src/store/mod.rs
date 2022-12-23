@@ -616,7 +616,7 @@ impl<'a> RolesClient<'a> {
             self.store.table_prefix
         ))
         .bind(&role.name)
-        .bind(&self.id.0)
+        .bind(self.id.0)
         .execute(&self.store.pool)
         .await?;
 
