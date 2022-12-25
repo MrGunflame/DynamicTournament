@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::render::{Element, Position, RenderState, Row};
+use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::{
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
     Result, System,
@@ -272,7 +272,7 @@ where
         }
 
         RenderState {
-            root: Element::new(Row::new(rounds)),
+            root: Element::new(Column::new(rounds)),
         }
     }
 }
