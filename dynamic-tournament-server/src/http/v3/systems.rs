@@ -30,6 +30,10 @@ async fn list(_ctx: Context) -> Result {
             id: SystemId(2),
             name: "Double Elimination".into(),
         },
+        SystemOverview {
+            id: SystemId(3),
+            name: "Round Robin".into(),
+        },
     ];
 
     Ok(Response::ok().json(&systems))
@@ -45,6 +49,11 @@ async fn get(_ctx: Context, id: SystemId) -> Result {
         2 => Some(System {
             id: SystemId(2),
             name: "Double Elimination".into(),
+            options: TournamentOptions::default(),
+        }),
+        3 => Some(System {
+            id: SystemId(3),
+            name: "Round Robin".into(),
             options: TournamentOptions::default(),
         }),
         _ => None,

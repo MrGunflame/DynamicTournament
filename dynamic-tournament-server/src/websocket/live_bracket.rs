@@ -201,6 +201,7 @@ impl LiveBrackets {
         let kind = match bracket.system {
             SystemId(1) => TournamentKind::SingleElimination,
             SystemId(2) => TournamentKind::DoubleElimination,
+            SystemId(3) => TournamentKind::RoundRobin,
             _ => unreachable!(),
         };
 
