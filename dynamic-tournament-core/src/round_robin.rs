@@ -311,7 +311,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::{TElement, TMatch, TRow, TestRenderer};
+    use crate::tests::{TColumn, TElement, TMatch, TRow, TestRenderer};
     use crate::{entrants, EntrantSpot, Match, Node, System};
 
     use super::RoundRobin;
@@ -508,7 +508,7 @@ mod tests {
 
         assert_eq!(
             renderer,
-            TElement::Row(TRow(vec![
+            TElement::Column(TColumn(vec![
                 TElement::Row(TRow(vec![
                     TElement::Match(TMatch { index: 0 }),
                     TElement::Match(TMatch { index: 1 }),
