@@ -6,6 +6,7 @@ use crate::{
     Result, System,
 };
 
+/// A round robin tournament.
 #[derive(Clone, Debug)]
 pub struct RoundRobin<T, D>
 where
@@ -19,6 +20,7 @@ impl<T, D> RoundRobin<T, D>
 where
     D: EntrantData,
 {
+    /// Creates a new `RoundRobin` tournament with the given `entrants`.
     pub fn new<I>(entrants: I) -> Self
     where
         I: Iterator<Item = T>,
@@ -95,6 +97,12 @@ where
         Self { entrants, matches }
     }
 
+    /// Resumes the bracket from existing matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or
+    /// a [`Node`] in `matches` points to a value that is out-of-bounds.
     pub fn resume(entrants: Entrants<T>, matches: Matches<D>) -> Result<Self> {
         log::debug!(
             "Trying to resume RoundRobin bracket with {} entrants and {} matches",
@@ -130,6 +138,13 @@ where
         unsafe { Ok(Self::resume_unchecked(entrants, matches)) }
     }
 
+    /// Resumes the bracket from existing matches without validating the length of `matches`.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function with a number of `matches` that is not valid for the length of
+    /// `entrants` or a [`Node`] points a value in `entrants` that is out-of-bounds may cause
+    /// undefined behavoir if the returned [`RoundRobin`] tournament is used afterwards.
     #[inline]
     pub unsafe fn resume_unchecked(entrants: Entrants<T>, matches: Matches<D>) -> Self {
         log::debug!(
