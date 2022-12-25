@@ -52,9 +52,6 @@ where
 
         let mut matches = Matches::with_capacity(num_rounds * matches_per_round);
 
-        dbg!(num_rounds);
-        dbg!(matches_per_round);
-
         // Start by creating two rows: 0..=n/2 and n/2+1..=n.
         // Pin entrant 0 to match 0 for every round.
         // For every round rotate the upper row once to the right,
