@@ -156,6 +156,7 @@ impl Component for Bracket {
                         let system_kind = match ctx.props().bracket.system {
                             SystemId(1) => TournamentKind::SingleElimination,
                             SystemId(2) => TournamentKind::DoubleElimination,
+                            SystemId(3) => TournamentKind::RoundRobin,
                             _ => unimplemented!(),
                         };
 
@@ -168,6 +169,7 @@ impl Component for Bracket {
                                 .merge(SingleElimination::<u8, EntrantScore<u8>>::options())
                                 .unwrap(),
                             TournamentKind::DoubleElimination => TournamentOptionValues::default(),
+                            TournamentKind::RoundRobin => TournamentOptionValues::default(),
                         };
 
                         let entrants = ctx

@@ -80,7 +80,8 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
         let options = match bracket.system {
             SystemId(1) => SingleElimination::<u8, EntrantScore<u8>>::options(),
             SystemId(2) => TournamentOptions::default(),
-            _ => unreachable!(),
+            SystemId(3) => TournamentOptions::default(),
+            _ => return Err(StatusCodeError::bad_request().into()),
         };
 
         bracket.options = match bracket.options.clone().merge(options) {

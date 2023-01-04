@@ -205,6 +205,19 @@ where
     pub(crate) children: IntoIter<Element<'a, T>>,
 }
 
+impl<'a, T> Column<'a, T>
+where
+    T: System,
+{
+    pub(crate) fn new(children: Vec<Element<'a, T>>) -> Self {
+        Self {
+            label: None,
+            position: None,
+            children: children.into_iter(),
+        }
+    }
+}
+
 impl<'a, T> Iterator for Column<'a, T>
 where
     T: System,
