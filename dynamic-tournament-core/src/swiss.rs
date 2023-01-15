@@ -1,8 +1,10 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 
 use crate::options::{TournamentOptionValues, TournamentOptions};
 use crate::render::{Column, Element, Position, RenderState, Row};
+use crate::standings::Standings;
 use crate::utils::NumExt;
 use crate::{
     EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
@@ -260,6 +262,13 @@ where
         }
     }
 
+    fn round(&self, round: usize) -> &[Match<Node<D>>] {
+        let start = self.matches_per_round() * round;
+        let end = start + self.matches_per_round();
+
+        self.matches.get(start..end).unwrap()
+    }
+
     fn round_mut(&mut self, round: usize) -> &mut [Match<Node<D>>] {
         let start = self.matches_per_round() * round;
         let end = start + self.matches_per_round();
@@ -430,6 +439,104 @@ where
         RenderState {
             root: Element::new(Column::new(rounds)),
         }
+    }
+
+    fn standings(&self) -> Standings {
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+        struct Score {
+            wins: u64,
+            loses: u64,
+            byes: u64,
+            score: u64,
+            buchholz: u64,
+        }
+
+        impl PartialOrd for Score {
+            #[inline]
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for Score {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.score
+                    .cmp(&other.score)
+                    .then_with(|| self.buchholz.cmp(&other.buchholz))
+                    .reverse()
+            }
+        }
+
+        let mut scores = HashMap::new();
+        // Make sure every entrant has an entry.
+        for index in 0..self.entrants().len() {
+            if !scores.contains_key(&index) {
+                scores.insert(index, Score::default());
+            }
+        }
+
+        let rounds = self.matches.len() / self.matches_per_round();
+        for round in 0..rounds {
+            let round = self.round(round);
+
+            let mut round_entrants = HashSet::new();
+            for index in 0..self.entrants.len() {
+                round_entrants.insert(index);
+            }
+
+            for match_ in round {
+                // Skip matches that are not complete.
+                if !match_.is_concluded() {
+                    continue;
+                }
+
+                for entrant in &match_.entrants {
+                    let node = entrant.unwrap_ref();
+
+                    round_entrants.remove(&node.index);
+                    let mut score = scores.get_mut(&node.index).unwrap();
+
+                    if node.data.winner() {
+                        score.wins += 1;
+                    } else {
+                        score.loses += 1;
+                    }
+                }
+            }
+
+            // One entrant may have a bye.
+            if let Some(index) = round_entrants.into_iter().next() {
+                scores.get_mut(&index).unwrap().byes += 1;
+            }
+        }
+
+        for cell in &self.scores {
+            let mut scores = scores.get_mut(&cell.index).unwrap();
+            scores.score += cell.score as u64;
+        }
+
+        // Sort the entries by wins and losses (reversed).
+        let mut entries: Vec<_> = scores.into_iter().collect();
+        entries.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+        let mut builder = Standings::builder();
+        builder.key("Wins");
+        builder.key("Losses");
+        builder.key("Byes");
+        builder.key("Score");
+        builder.key("Buchholz");
+
+        for (index, score) in entries {
+            builder.entry(index, |builder| {
+                builder.value(score.wins);
+                builder.value(score.loses);
+                builder.value(score.byes);
+                builder.value(score.score);
+                builder.value(score.buchholz);
+            });
+        }
+
+        builder.build()
     }
 }
 
