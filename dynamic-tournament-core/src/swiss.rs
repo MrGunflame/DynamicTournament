@@ -1,16 +1,21 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 
+use crate::options::TournamentOptionValues;
 use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::utils::NumExt;
 use crate::{
-    EntrantData, EntrantSpot, Entrants, Match, MatchResult, Matches, NextMatches, Node, System,
+    EntrantData, EntrantSpot, Entrants, Error, Match, MatchResult, Matches, NextMatches, Node,
+    Result, System,
 };
 
 // Implementation based on the Monrad sytem:
 // The inital round is based on each opponent played against the next, i.e. #1 v #2, #3 v #4, etc
 // For all other rounds the entrants are sorted based on their score with first priority, and their
 // initial position with second priority.
+// If the number of entrants is odd, we only have entrants - 1 matches per round and the last
+// entrant (lowest score/starting position) is excluded for the round. They then receive a point
+// to prevent being excluded in the next round again.
 // Tie-breaking is based on the Buchholz system:
 #[derive(Clone, Debug)]
 pub struct Swiss<T, D> {
@@ -31,7 +36,16 @@ where
     where
         I: Iterator<Item = T>,
     {
+        Self::new_with_options(entrants, TournamentOptionValues::default())
+    }
+
+    pub fn new_with_options<I, O>(entrants: I, options: O) -> Self
+    where
+        I: Iterator<Item = T>,
+        O: Into<TournamentOptionValues>,
+    {
         let entrants: Entrants<T> = entrants.collect();
+        let options = SwissOptions::new(options.into());
 
         let num_rounds = match entrants.len() {
             0 => 0,
@@ -47,7 +61,7 @@ where
 
         // Build the first round.
         let mut index = 0;
-        while index < entrants.len() {
+        for _ in 0..num_matches {
             let first = EntrantSpot::Entrant(Node::new(index));
             let second = EntrantSpot::Entrant(Node::new(index + 1));
 
@@ -72,13 +86,107 @@ where
             });
         }
 
+        // Odd number of entrants, the excluded entrant gets a point.
+        if entrants.len() % 2 != 0 {
+            scores.last_mut().unwrap().score += options.score_bye;
+        }
+
         Self {
             matches_done_vec: vec![false; matches.len()],
             matches_done: 0,
             entrants,
             matches,
             scores,
-            options: SwissOptions::default(),
+            options,
+        }
+    }
+
+    pub fn resume<O>(entrants: Entrants<T>, matches: Matches<D>, options: O) -> Result<Self>
+    where
+        O: Into<TournamentOptionValues>,
+    {
+        let options = options.into();
+
+        let num_rounds = match entrants.len() {
+            0 => 0,
+            n => n.ilog2_ceil(),
+        };
+
+        let num_matches = match entrants.len() % 2 {
+            0 => entrants.len(),
+            _ => entrants.len() - 1,
+        } / 2;
+
+        let expected = num_matches * num_rounds;
+
+        let found = matches.len();
+
+        if found != expected {
+            return Err(Error::InvalidNumberOfMatches { expected, found });
+        }
+
+        for match_ in matches.iter() {
+            for entrant in match_.entrants.iter() {
+                if let EntrantSpot::Entrant(entrant) = entrant {
+                    if entrant.index >= entrants.len() {
+                        return Err(Error::InvalidEntrant {
+                            index: entrant.index,
+                            length: entrants.len(),
+                        });
+                    }
+                }
+            }
+        }
+
+        unsafe { Ok(Self::resume_unchecked(entrants, matches, options)) }
+    }
+
+    pub unsafe fn resume_unchecked<O>(
+        entrants: Entrants<T>,
+        matches: Matches<D>,
+        options: O,
+    ) -> Self
+    where
+        O: Into<TournamentOptionValues>,
+    {
+        let options = SwissOptions::new(options.into());
+
+        // Rebuild scores.
+        let mut scores = Vec::with_capacity(entrants.len());
+        for index in 0..entrants.len() {
+            scores.push(Cell {
+                index,
+                score: 0,
+                initial_position: index,
+            });
+        }
+
+        let mut matches_done_vec = vec![false; matches.len()];
+
+        for (i, match_) in matches.iter().enumerate() {
+            for spot in &match_.entrants {
+                if let EntrantSpot::Entrant(node) = spot {
+                    if node.data.winner() {
+                        let cell = scores
+                            .iter_mut()
+                            .find(|cell| cell.index == node.index)
+                            .unwrap();
+
+                        cell.score += 1;
+
+                        matches_done_vec[i] = true;
+                    }
+                }
+            }
+        }
+
+        Self {
+            entrants,
+            matches,
+            options,
+            matches_done: matches_done_vec.iter().filter(|b| **b).count(),
+            matches_done_vec,
+            scores,
         }
     }
 
@@ -105,6 +213,11 @@ where
 
             index += 2;
         }
+
+        // Odd number of entrants, the excluded entrant gets a point.
+        if self.scores.len() % 2 != 0 {
+            self.scores.last_mut().unwrap().score += self.options.score_bye;
+        }
     }
 
     fn round_mut(&mut self, round: usize) -> &mut [Match<Node<D>>] {
@@ -127,6 +240,26 @@ struct SwissOptions {
     score_win: usize,
     score_loss: usize,
     score_bye: usize,
+}
+
+impl SwissOptions {
+    pub fn new(mut options: TournamentOptionValues) -> Self {
+        let mut this = Self::default();
+
+        if let Some(val) = options.take("score_win") {
+            this.score_win = val.unwrap_u64_or(1) as usize;
+        }
+
+        if let Some(val) = options.take("score_loss") {
+            this.score_loss = val.unwrap_u64_or(0) as usize;
+        }
+
+        if let Some(val) = options.take("score_bye") {
+            this.score_bye = val.unwrap_u64_or(1) as usize;
+        }
+
+        this
+    }
 }
 
 impl Default for SwissOptions {
@@ -176,7 +309,7 @@ where
         self.matches
     }
 
-    fn next_matches(&self, index: usize) -> NextMatches {
+    fn next_matches(&self, _index: usize) -> NextMatches {
         NextMatches::default()
     }
 
@@ -300,7 +433,11 @@ impl Ord for Cell {
 
 #[cfg(test)]
 mod tests {
-    use crate::{entrants, EntrantSpot, Match, Node, System};
+    use crate::options::TournamentOptionValues;
+    use crate::tests::{TColumn, TElement, TMatch, TRow, TestRenderer};
+    use crate::{
+        entrants, EntrantScore, EntrantSpot, Entrants, Error, Match, Matches, Node, System,
+    };
 
     use super::{Cell, Swiss};
 
@@ -311,6 +448,59 @@ mod tests {
 
         assert_eq!(tournament.entrants, []);
         assert_eq!(tournament.matches, []);
+
+        let entrants = entrants![0];
+        let tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, [0]);
+        assert_eq!(tournament.matches, []);
+
+        let entrants = entrants![0, 1];
+        let tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, [0, 1]);
+        assert_eq!(
+            tournament.matches,
+            [Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(1)),
+            ])]
+        );
+
+        let entrants = entrants![0, 1, 2];
+        let tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, [0, 1, 2]);
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::tbd(),
+            ]
+        );
+
+        let entrants = entrants![0, 1, 2, 3];
+        let tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, [0, 1, 2, 3]);
+        assert_eq!(
+            tournament.matches,
+            [
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
 
         let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
         let tournament = Swiss::<i32, u32>::new(entrants);
@@ -585,6 +775,333 @@ mod tests {
                     EntrantSpot::Entrant(Node::new(7)),
                 ]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_swiss_resume() {
+        let entrants = Entrants::from(vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        let matches = Matches::from(vec![
+            // Round 0
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(1)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(2)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(4)),
+                EntrantSpot::Entrant(Node::new(5)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(6)),
+                EntrantSpot::Entrant(Node::new(7)),
+            ]),
+            // Round 1
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+            // Round 2
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+        ]);
+
+        let mut tournament =
+            Swiss::<i32, u32>::resume(entrants, matches, TournamentOptionValues::default())
+                .unwrap();
+
+        for index in 0..4 {
+            tournament.update_match(index, |m, res| {
+                res.winner_default(&m[0]);
+                res.loser_default(&m[1]);
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+
+        for index in 4..8 {
+            tournament.update_match(index, |m, res| {
+                res.winner_default(&m[0]);
+                res.loser_default(&m[1]);
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(3)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_swiss_resume_score() {
+        let entrants = Entrants::from(vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        let matches = Matches::from(vec![
+            // Round 0
+            Match::new([
+                EntrantSpot::Entrant(Node::new_with_data(
+                    0,
+                    EntrantScore {
+                        score: 1,
+                        winner: true,
+                    },
+                )),
+                EntrantSpot::Entrant(Node::new(1)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new_with_data(
+                    2,
+                    EntrantScore {
+                        score: 1,
+                        winner: true,
+                    },
+                )),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new_with_data(
+                    4,
+                    EntrantScore {
+                        score: 1,
+                        winner: true,
+                    },
+                )),
+                EntrantSpot::Entrant(Node::new(5)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new_with_data(
+                    6,
+                    EntrantScore {
+                        score: 1,
+                        winner: true,
+                    },
+                )),
+                EntrantSpot::Entrant(Node::new(7)),
+            ]),
+            // Round 1
+            Match::new([
+                EntrantSpot::Entrant(Node::new(0)),
+                EntrantSpot::Entrant(Node::new(2)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(4)),
+                EntrantSpot::Entrant(Node::new(6)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(1)),
+                EntrantSpot::Entrant(Node::new(3)),
+            ]),
+            Match::new([
+                EntrantSpot::Entrant(Node::new(5)),
+                EntrantSpot::Entrant(Node::new(7)),
+            ]),
+            // Round 2
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+            Match::tbd(),
+        ]);
+        let options = TournamentOptionValues::default();
+
+        let tournament =
+            Swiss::<u32, EntrantScore<u32>>::resume(entrants, matches, options).unwrap();
+
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_swiss_resume_invalid() {
+        let entrants = Entrants::from(vec![0, 1, 2, 3]);
+        let matches = Matches::new();
+        let options = TournamentOptionValues::default();
+
+        assert_eq!(
+            Swiss::<i32, u32>::resume(entrants, matches, options).unwrap_err(),
+            Error::InvalidNumberOfMatches {
+                expected: 4,
+                found: 0,
+            }
+        );
+
+        let entrants = Entrants::from(vec![0, 1]);
+        let matches = Matches::from(vec![Match::new([
+            EntrantSpot::Entrant(Node::new(0)),
+            EntrantSpot::Entrant(Node::new(2)),
+        ])]);
+        let options = TournamentOptionValues::default();
+
+        assert_eq!(
+            Swiss::<i32, u32>::resume(entrants, matches, options).unwrap_err(),
+            Error::InvalidEntrant {
+                index: 2,
+                length: 2
+            }
+        );
+    }
+
+    #[test]
+    fn test_swiss_render() {
+        let entrants = entrants![0, 1, 2, 3];
+        let tournament = Swiss::<i32, u32>::new(entrants);
+
+        let mut renderer = TestRenderer::new();
+        tournament.render(&mut renderer);
+
+        assert_eq!(
+            renderer,
+            TElement::Column(TColumn(vec![
+                TElement::Row(TRow(vec![
+                    TElement::Match(TMatch { index: 0 }),
+                    TElement::Match(TMatch { index: 1 }),
+                ])),
+                TElement::Row(TRow(vec![
+                    TElement::Match(TMatch { index: 2 }),
+                    TElement::Match(TMatch { index: 3 }),
+                ])),
+            ]))
         );
     }
 }
