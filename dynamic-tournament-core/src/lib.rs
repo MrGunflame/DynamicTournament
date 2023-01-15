@@ -256,7 +256,7 @@ impl<'a, T> Iterator for MatchesIter<'a, T> {
 ///
 /// `OccupiedMatchesIter` is created by [`occupied`].
 ///
-/// [`MatchesIter::occupied`]
+/// [`occupied`]: MatchesIter::occupied
 #[derive(Clone, Debug)]
 pub struct OccupiedMatchesIter<'a, T> {
     iter: std::slice::Iter<'a, Match<Node<T>>>,
