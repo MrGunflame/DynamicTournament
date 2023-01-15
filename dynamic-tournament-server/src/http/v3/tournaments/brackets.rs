@@ -8,7 +8,7 @@ use dynamic_tournament_api::{
     },
     Payload,
 };
-use dynamic_tournament_core::{options::TournamentOptions, EntrantScore, SingleElimination};
+use dynamic_tournament_core::{options::TournamentOptions, EntrantScore, SingleElimination, Swiss};
 use dynamic_tournament_macros::{method, path};
 
 use crate::{
@@ -81,6 +81,7 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
             SystemId(1) => SingleElimination::<u8, EntrantScore<u8>>::options(),
             SystemId(2) => TournamentOptions::default(),
             SystemId(3) => TournamentOptions::default(),
+            SystemId(4) => Swiss::<u8, EntrantScore<u8>>::options(),
             _ => return Err(StatusCodeError::bad_request().into()),
         };
 
