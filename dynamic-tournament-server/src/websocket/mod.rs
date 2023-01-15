@@ -349,7 +349,7 @@ where
     fn handle_request(&mut self, req: Request) -> Option<Response> {
         match req {
             Request::Reserved => None,
-            Request::Authorize(token) => match self.global_state.auth.validate_auth_token(&token) {
+            Request::Authorize(token) => match self.global_state.auth.validate_auth_token(token) {
                 // The token is valid but we still need to verify the flags.
                 Ok(token) => {
                     if token.claims().flags.intersects(Flags::EDIT_SCORES) {
