@@ -42,7 +42,7 @@ impl Component for LiveBracket {
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = Self {
             websocket: None,
-            _producer: EventBus::bridge(ctx.link().callback(|msg| Message::WsMessage(msg))),
+            _producer: EventBus::bridge(ctx.link().callback(Message::WsMessage)),
             is_live: false,
             panel: Panel::default(),
         };

@@ -23,7 +23,7 @@ where
     type Message = ();
     type Properties = Props<S>;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {
             _marker: PhantomData,
         }
