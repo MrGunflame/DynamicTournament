@@ -168,6 +168,7 @@ impl Component for Bracket {
                             SystemId(1) => TournamentKind::SingleElimination,
                             SystemId(2) => TournamentKind::DoubleElimination,
                             SystemId(3) => TournamentKind::RoundRobin,
+                            SystemId(4) => TournamentKind::Swiss,
                             _ => unimplemented!(),
                         };
 
@@ -181,6 +182,7 @@ impl Component for Bracket {
                                 .unwrap(),
                             TournamentKind::DoubleElimination => TournamentOptionValues::default(),
                             TournamentKind::RoundRobin => TournamentOptionValues::default(),
+                            TournamentKind::Swiss => TournamentOptionValues::default(),
                         };
 
                         let entrants = ctx

@@ -230,6 +230,11 @@ where
             return;
         }
 
+        // Tournament done.
+        if self.matches_done == self.matches().len() {
+            return;
+        }
+
         self.scores.sort();
 
         let round = self.matches_done / self.matches_per_round();
