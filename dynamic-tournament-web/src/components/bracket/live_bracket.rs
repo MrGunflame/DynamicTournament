@@ -9,6 +9,7 @@ use yew_agent::{Bridge, Bridged};
 
 use super::live_state::LiveState;
 use super::Bracket as BracketComponent;
+use crate::components::Button;
 use crate::services::Message as WebSocketMessage;
 use crate::{
     components::{
@@ -31,17 +32,19 @@ pub struct LiveBracket {
     _producer: Box<dyn Bridge<EventBus>>,
 
     is_live: bool,
+    panel: Panel,
 }
 
 impl Component for LiveBracket {
-    type Message = WebSocketMessage;
+    type Message = Message;
     type Properties = Props;
 
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = Self {
             websocket: None,
-            _producer: EventBus::bridge(ctx.link().callback(|msg| msg)),
+            _producer: EventBus::bridge(ctx.link().callback(|msg| Message::WsMessage(msg))),
             is_live: false,
+            panel: Panel::default(),
         };
 
         this.changed(ctx);
@@ -65,32 +68,38 @@ impl Component for LiveBracket {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            WebSocketMessage::Response(_) => false,
-            WebSocketMessage::Close(tournament_id, bracket_id) => {
-                if ctx.props().tournament.id == tournament_id
-                    && ctx.props().bracket.id == bracket_id
-                {
-                    self.is_live = false;
-                    true
-                } else {
-                    false
+            Message::WsMessage(msg) => match msg {
+                WebSocketMessage::Response(_) => false,
+                WebSocketMessage::Close(tournament_id, bracket_id) => {
+                    if ctx.props().tournament.id == tournament_id
+                        && ctx.props().bracket.id == bracket_id
+                    {
+                        self.is_live = false;
+                        true
+                    } else {
+                        false
+                    }
                 }
-            }
-            WebSocketMessage::Connect(tournament_id, bracket_id) => {
-                if ctx.props().tournament.id == tournament_id
-                    && ctx.props().bracket.id == bracket_id
-                {
-                    // Resync once connected
-                    let mut ws = self.websocket.clone().unwrap();
-                    spawn_local(async move {
-                        let _ = ws.send(Request::SyncState).await;
-                    });
+                WebSocketMessage::Connect(tournament_id, bracket_id) => {
+                    if ctx.props().tournament.id == tournament_id
+                        && ctx.props().bracket.id == bracket_id
+                    {
+                        // Resync once connected
+                        let mut ws = self.websocket.clone().unwrap();
+                        spawn_local(async move {
+                            let _ = ws.send(Request::SyncState).await;
+                        });
 
-                    self.is_live = true;
-                    true
-                } else {
-                    false
+                        self.is_live = true;
+                        true
+                    } else {
+                        false
+                    }
                 }
+            },
+            Message::ChangePanel(panel) => {
+                self.panel = panel;
+                true
             }
         }
     }
@@ -103,12 +112,42 @@ impl Component for LiveBracket {
 
         let is_live = self.is_live;
 
-        let header = html! { <LiveState {is_live} /> };
+        let panel = self.panel;
+        let on_panel_toggle = ctx.link().callback(move |_| {
+            let panel = match panel {
+                Panel::Matches => Panel::Standings,
+                Panel::Standings => Panel::Matches,
+            };
+
+            Message::ChangePanel(panel)
+        });
+
+        let header = html! {
+            <div>
+                <Button onclick={on_panel_toggle} title="Toggle Standings">
+                    <span>{ "Standings" }</span>
+                </Button>
+                <LiveState {is_live} />
+            </div>
+        };
 
         html! {
             <MovableBoxed {header}>
-                <BracketComponent {tournament} {bracket} {entrants} {websocket} />
+                <BracketComponent {tournament} {bracket} {entrants} {websocket} panel={self.panel} />
             </MovableBoxed>
         }
     }
+}
+
+pub enum Message {
+    WsMessage(WebSocketMessage),
+    ChangePanel(Panel),
+}
+
+/// The currently displayed panel.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Panel {
+    #[default]
+    Matches,
+    Standings,
 }
