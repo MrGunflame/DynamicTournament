@@ -442,13 +442,15 @@ where
     }
 
     fn standings(&self) -> Standings {
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+        #[derive(Clone, Debug, PartialEq, Eq, Default)]
         struct Score {
             wins: u64,
             loses: u64,
             byes: u64,
             score: u64,
             buchholz: u64,
+            /// The opponents that this entrant has played against.
+            opponents: Vec<usize>,
         }
 
         impl PartialOrd for Score {
@@ -490,7 +492,7 @@ where
                     continue;
                 }
 
-                for entrant in &match_.entrants {
+                for (i, entrant) in match_.entrants.iter().enumerate() {
                     let node = entrant.unwrap_ref();
 
                     round_entrants.remove(&node.index);
@@ -501,6 +503,13 @@ where
                     } else {
                         score.loses += 1;
                     }
+
+                    let opponent = match i {
+                        0 => match_.entrants[1].unwrap_ref().index,
+                        _ => match_.entrants[0].unwrap_ref().index,
+                    };
+
+                    score.opponents.push(opponent);
                 }
             }
 
@@ -510,9 +519,38 @@ where
             }
         }
 
+        // Clone scores to avoid some borrowing things.
+        // FIXME: Remove this clone, which is not necessary as an entrant
+        // can never have itself as an opponent. (e.g. with UnsafeCell)
+        let scores2 = scores.clone();
         for cell in &self.scores {
             let mut scores = scores.get_mut(&cell.index).unwrap();
             scores.score += cell.score as u64;
+
+            // Calculate the Median-Buchholz rating.
+            // The "raw" score is equivalent to the number of wins. Draws
+            // are not considered in the current system.
+            let mut buchholz = 0;
+            let mut highest_score = 0;
+            let mut lowest_score = None;
+            for opponent in &scores.opponents {
+                let raw_score = scores2.get(opponent).unwrap().wins;
+
+                if raw_score > highest_score {
+                    buchholz += highest_score;
+                    highest_score = raw_score;
+                } else if raw_score < lowest_score.unwrap_or(0) {
+                    if let Some(lowest_score) = lowest_score {
+                        buchholz += lowest_score;
+                    }
+
+                    lowest_score = Some(raw_score);
+                } else {
+                    buchholz += raw_score;
+                }
+            }
+
+            scores.buchholz = buchholz;
         }
 
         // Sort the entries by wins and losses (reversed).
