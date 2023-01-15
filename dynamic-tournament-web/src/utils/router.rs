@@ -612,7 +612,7 @@ impl SwitchList {
         // Clone all active callbacks into a separate collection. Doing this is necessary if the
         // callback destroys a switch, causing `state.switches` to be borrowed mutably.
         let switches = state().switches.borrow();
-        let list: Vec<_> = switches.list.iter().map(|(_, cb)| cb.clone()).collect();
+        let list: Vec<_> = switches.list.values().cloned().collect();
         drop(switches);
 
         log::debug!("Waking {} waiting switches", list.len());
