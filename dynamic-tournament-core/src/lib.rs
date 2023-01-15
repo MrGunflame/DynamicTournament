@@ -29,12 +29,15 @@ pub mod render;
 mod double_elimination;
 mod round_robin;
 mod single_elimination;
+mod swiss;
 pub mod tournament;
+mod utils;
 
 pub use double_elimination::DoubleElimination;
 use render::{RenderState, Renderer};
 pub use round_robin::RoundRobin;
 pub use single_elimination::SingleElimination;
+pub use swiss::Swiss;
 
 use thiserror::Error;
 
@@ -274,6 +277,9 @@ impl<'a, T> Iterator for OccupiedMatchesIter<'a, T> {
 /// Some data that is stored within the bracket of the tournament. This is usually a score or
 /// something similar. See [`EntrantScore`] for an example.
 pub trait EntrantData: Default {
+    /// Returns `true` if this data represent a winner.
+    fn winner(&self) -> bool;
+
     /// Sets the winner state of the data to `winner`.
     fn set_winner(&mut self, winner: bool);
     /// Resets the data. This should cause the `Self` become the same value as `Self::default()`.
@@ -431,6 +437,14 @@ impl<T> Match<T> {
     #[inline]
     pub fn new(entrants: [EntrantSpot<T>; 2]) -> Self {
         Self { entrants }
+    }
+
+    /// Creates a new `Match` with all spots set to [`TBD`].
+    ///
+    /// [`TBD`]: EntrantSpot::TBD
+    #[inline]
+    pub fn tbd() -> Self {
+        Self::new([EntrantSpot::TBD, EntrantSpot::TBD])
     }
 
     /// Returns `true` if the match is a *placeholder match*. This is `true` when either spot
@@ -728,6 +742,11 @@ where
     fn set_winner(&mut self, winner: bool) {
         self.winner = winner;
     }
+
+    #[inline]
+    fn winner(&self) -> bool {
+        self.winner
+    }
 }
 
 impl<T> From<T> for EntrantSpot<T>
@@ -1008,6 +1027,9 @@ mod tests {
     impl EntrantData for u32 {
         fn set_winner(&mut self, _winner: bool) {}
         fn reset(&mut self) {}
+        fn winner(&self) -> bool {
+            false
+        }
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]

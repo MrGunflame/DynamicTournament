@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 
-use crate::options::TournamentOptionValues;
+use crate::options::{TournamentOptionValues, TournamentOptions};
 use crate::render::{Column, Element, Position, RenderState, Row};
 use crate::utils::NumExt;
 use crate::{
@@ -9,6 +9,14 @@ use crate::{
     Result, System,
 };
 
+/// A swiss group stage tournament.
+///
+/// # Implementation notes
+///
+/// The current pairing system is based on the Monrad system, the current tie-breaking system is
+/// based on the Buchholz system.
+///
+/// Note that the concrete implementation might change in the future.
 // Implementation based on the Monrad sytem:
 // The inital round is based on each opponent played against the next, i.e. #1 v #2, #3 v #4, etc
 // For all other rounds the entrants are sorted based on their score with first priority, and their
@@ -32,6 +40,7 @@ impl<T, D> Swiss<T, D>
 where
     D: EntrantData + Default,
 {
+    /// Creates a new `Swiss` tournament using the given `entrants`.
     pub fn new<I>(entrants: I) -> Self
     where
         I: Iterator<Item = T>,
@@ -39,6 +48,11 @@ where
         Self::new_with_options(entrants, TournamentOptionValues::default())
     }
 
+    /// Creates a new `Swiss` tournament using the given `entrants` and using the given `options`.
+    ///
+    /// If you don't need to specify the options consider using [`new`].
+    ///
+    /// [`new`]: Self::new
     pub fn new_with_options<I, O>(entrants: I, options: O) -> Self
     where
         I: Iterator<Item = T>,
@@ -101,6 +115,21 @@ where
         }
     }
 
+    /// Returns the [`TournamentOptions`] accepted by this system.
+    pub fn options() -> TournamentOptions {
+        TournamentOptions::builder()
+            .option("score_win", "How many points to award for a win.", 1u64)
+            .option("score_loss", "How many points to award for a loss.", 0u64)
+            .option("score_bye", "How many points to award for a bye.", 1u64)
+            .build()
+    }
+
+    /// Resumes the bracket from existing matches.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`enum@Error`] if `matches` has an invalid number of matches for `entrants` or
+    /// an [`Node`] in `matches` points to a value that is out-of-bounds.
     pub fn resume<O>(entrants: Entrants<T>, matches: Matches<D>, options: O) -> Result<Self>
     where
         O: Into<TournamentOptionValues>,
@@ -141,6 +170,12 @@ where
         unsafe { Ok(Self::resume_unchecked(entrants, matches, options)) }
     }
 
+    /// Resumes the bracket from existing matches without validating `matches`.
+    ///
+    /// # Safety
+    ///
+    /// Calling this function with a number of `matches` that is not valid for the length of
+    /// `entrants` or points to a entrant that is out-of-bounds is undefined behaivoir.
     pub unsafe fn resume_unchecked<O>(
         entrants: Entrants<T>,
         matches: Matches<D>,
@@ -332,28 +367,24 @@ where
             self.matches_done_vec[index] = true;
             self.matches_done += 1;
 
-            if let Some((index, _)) = res.winner {
-                if let EntrantSpot::Entrant(index) = index {
-                    let cell = self
-                        .scores
-                        .iter_mut()
-                        .find(|cell| cell.index == index)
-                        .unwrap();
+            if let Some((EntrantSpot::Entrant(index), _)) = res.winner {
+                let cell = self
+                    .scores
+                    .iter_mut()
+                    .find(|cell| cell.index == index)
+                    .unwrap();
 
-                    cell.score += self.options.score_win;
-                }
+                cell.score += self.options.score_win;
             }
 
-            if let Some((index, _)) = res.loser {
-                if let EntrantSpot::Entrant(index) = index {
-                    let cell = self
-                        .scores
-                        .iter_mut()
-                        .find(|cell| cell.index == index)
-                        .unwrap();
+            if let Some((EntrantSpot::Entrant(index), _)) = res.loser {
+                let cell = self
+                    .scores
+                    .iter_mut()
+                    .find(|cell| cell.index == index)
+                    .unwrap();
 
-                    cell.score += self.options.score_loss;
-                }
+                cell.score += self.options.score_loss;
             }
         }
 
