@@ -174,6 +174,23 @@ impl<T> Matches<T> {
             }
         }
     }
+
+    #[inline]
+    pub fn iter(&self) -> MatchesIter<'_, T> {
+        MatchesIter {
+            iter: self.matches.iter(),
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Matches<T> {
+    type Item = &'a Match<Node<T>>;
+    type IntoIter = MatchesIter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 impl<T> Deref for Matches<T> {
@@ -207,6 +224,50 @@ impl<T> From<Vec<Match<Node<T>>>> for Matches<T> {
     #[inline]
     fn from(matches: Vec<Match<Node<T>>>) -> Self {
         Self { matches }
+    }
+}
+
+/// An `Iterator` over all matches.
+#[derive(Clone, Debug)]
+pub struct MatchesIter<'a, T> {
+    iter: std::slice::Iter<'a, Match<Node<T>>>,
+}
+
+impl<'a, T> MatchesIter<'a, T> {
+    /// Creates a new `Iterator` over all occupied matches.
+    ///
+    /// Occupied matches are those that have all [`EntrantSpot`]s filled when entrants.
+    #[inline]
+    pub fn occupied(self) -> OccupiedMatchesIter<'a, T> {
+        OccupiedMatchesIter { iter: self.iter }
+    }
+}
+
+impl<'a, T> Iterator for MatchesIter<'a, T> {
+    type Item = &'a Match<Node<T>>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+/// An `Iterator` over matches that are occupied.
+///
+/// `OccupiedMatchesIter` is created by [`occupied`].
+///
+/// [`occupied`]: MatchesIter::occupied
+#[derive(Clone, Debug)]
+pub struct OccupiedMatchesIter<'a, T> {
+    iter: std::slice::Iter<'a, Match<Node<T>>>,
+}
+
+impl<'a, T> Iterator for OccupiedMatchesIter<'a, T> {
+    type Item = &'a Match<Node<T>>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().filter(|match_| match_.is_occupied())
     }
 }
 
@@ -380,6 +441,13 @@ impl<T> Match<T> {
             || matches!(self.entrants[1], EntrantSpot::Empty)
     }
 
+    /// Returns `true` if all spots in this match are occupied.
+    #[inline]
+    pub const fn is_occupied(&self) -> bool {
+        matches!(self.entrants[0], EntrantSpot::Entrant(_))
+            && matches!(self.entrants[1], EntrantSpot::Entrant(_))
+    }
+
     /// Returns a reference to the entrant at `index`.
     #[inline]
     pub fn get(&self, index: usize) -> Option<&EntrantSpot<T>> {
@@ -420,6 +488,20 @@ impl<T> Match<T> {
         F: FnMut(EntrantSpot<T>) -> U,
     {
         self.entrants.clone().map(f)
+    }
+}
+
+impl<S> Match<Node<EntrantScore<S>>> {
+    pub fn is_concluded(&self) -> bool {
+        for entrant in &self.entrants {
+            if let EntrantSpot::Entrant(entrant) = entrant {
+                if entrant.data.winner {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 

@@ -3,6 +3,7 @@ mod live_bracket;
 mod live_state;
 mod r#match;
 mod renderer;
+mod standings;
 
 use dynamic_tournament_api::v3::tournaments::brackets::matches::{
     ErrorResponse, Request, Response,
@@ -36,12 +37,16 @@ use renderer::HtmlRenderer;
 
 pub use live_bracket::LiveBracket;
 
+use self::live_bracket::Panel;
+use self::standings::Standings;
+
 use super::providers::{ClientProvider, Provider};
 
 pub struct Bracket {
     _producer: Box<dyn Bridge<EventBus>>,
     popup: Option<PopupState>,
     state: Option<Tournament<String, EntrantScore<u64>>>,
+    panel: Panel,
 }
 
 impl Component for Bracket {
@@ -63,13 +68,19 @@ impl Component for Bracket {
             state: None,
             _producer: EventBus::bridge(ctx.link().callback(Message::HandleResponse)),
             popup: None,
+            panel: Panel::default(),
         }
     }
 
     // Drop the existing state when changing to a new bracket.
-    fn changed(&mut self, _ctx: &Context<Self>) -> bool {
-        self.state = None;
+    fn changed(&mut self, ctx: &Context<Self>) -> bool {
+        // Don't reset the state when the panel changed.
+        if self.panel != ctx.props().panel {
+            self.panel = ctx.props().panel;
+            return true;
+        }
 
+        self.state = None;
         true
     }
 
@@ -319,13 +330,24 @@ impl Component for Bracket {
                 None => html! {},
             };
 
-            let bracket = HtmlRenderer::new(bracket, ctx).into_output();
+            match ctx.props().panel {
+                Panel::Matches => {
+                    let bracket = HtmlRenderer::new(bracket, ctx).into_output();
 
-            html! {
-                <>
-                    { bracket }
-                    { popup }
-                </>
+                    html! {
+                        <>
+                            { bracket }
+                            { popup }
+                        </>
+                    }
+                }
+                Panel::Standings => {
+                    let tournament = Rc::new(self.state.clone().unwrap());
+
+                    html! {
+                        <Standings<Tournament<String, EntrantScore<u64>>> {tournament} />
+                    }
+                }
             }
         } else {
             html! { <span>{ "Loading" }</span> }
@@ -355,6 +377,7 @@ pub struct Properties {
     pub bracket: Rc<ApiBracket>,
     pub entrants: Rc<Vec<Entrant>>,
     pub websocket: Option<WebSocketService>,
+    pub panel: Panel,
 }
 
 enum PopupState {
