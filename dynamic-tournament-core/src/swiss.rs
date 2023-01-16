@@ -472,9 +472,7 @@ where
         let mut scores = HashMap::new();
         // Make sure every entrant has an entry.
         for index in 0..self.entrants().len() {
-            if !scores.contains_key(&index) {
-                scores.insert(index, Score::default());
-            }
+            scores.insert(index, Score::default());
         }
 
         let rounds = self.matches.len() / self.matches_per_round();

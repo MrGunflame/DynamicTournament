@@ -1003,13 +1003,16 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     }
 
     fn standings(&self) -> Standings {
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, Debug, Default)]
         struct Score {
             wins: u64,
             loses: u64,
         }
 
         let mut scores = HashMap::new();
+        for index in 0..self.entrants().len() {
+            scores.insert(index, Score::default());
+        }
 
         for match_ in self.matches() {
             if match_.is_concluded() {
@@ -1018,26 +1021,14 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
                         continue;
                     };
 
-                    let mut score = match scores.get(&node.index) {
-                        Some(score) => *score,
-                        None => Score { wins: 0, loses: 0 },
-                    };
+                    let mut score = scores.get_mut(&node.index).unwrap();
 
                     if node.data.winner() {
                         score.wins += 1;
                     } else {
                         score.loses += 1;
                     }
-
-                    scores.insert(node.index, score);
                 }
-            }
-        }
-
-        // Make sure every entrant has an entry.
-        for index in 0..self.entrants().len() {
-            if !scores.contains_key(&index) {
-                scores.insert(index, Score { wins: 0, loses: 0 });
             }
         }
 
