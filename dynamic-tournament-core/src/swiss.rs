@@ -530,27 +530,18 @@ where
             // Calculate the Median-Buchholz rating.
             // The "raw" score is equivalent to the number of wins. Draws
             // are not considered in the current system.
-            let mut buchholz = 0;
-            let mut highest_score = 0;
-            let mut lowest_score = None;
+            let mut buchholz = Vec::new();
             for opponent in &scores.opponents {
                 let raw_score = scores2.get(opponent).unwrap().wins;
-
-                if raw_score > highest_score {
-                    buchholz += highest_score;
-                    highest_score = raw_score;
-                } else if raw_score < lowest_score.unwrap_or(0) {
-                    if let Some(lowest_score) = lowest_score {
-                        buchholz += lowest_score;
-                    }
-
-                    lowest_score = Some(raw_score);
-                } else {
-                    buchholz += raw_score;
-                }
+                buchholz.push(raw_score);
             }
 
-            scores.buchholz = buchholz;
+            if buchholz.len() > 2 {
+                buchholz.sort_unstable();
+                // let buchholz = buchholz.iter().skip(1).take(buchholz.len() - 2).sum();
+                let buchholz = buchholz.iter().sum();
+                scores.buchholz = buchholz;
+            }
         }
 
         // Sort the entries by wins and losses (reversed).
