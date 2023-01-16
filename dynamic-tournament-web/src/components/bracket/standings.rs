@@ -1,9 +1,8 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::marker::PhantomData;
 
-use dynamic_tournament_core::{EntrantScore, EntrantSpot, System};
+use dynamic_tournament_core::{EntrantScore, System};
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::utils::Rc;
@@ -30,59 +29,50 @@ where
     }
 
     fn view(&self, ctx: &Context<Self>) -> yew::Html {
-        // index => (wins, loses)
-        let mut scores: HashMap<usize, Score> = HashMap::new();
+        let standings = ctx.props().tournament.standings();
 
-        for match_ in ctx.props().tournament.matches().iter() {
-            for entrant in &match_.entrants {
-                let EntrantSpot::Entrant(entrant) = entrant else  {
-                    continue;
-                };
-
-                let mut score = match scores.get(&entrant.index) {
-                    Some(score) => *score,
-                    None => Score { wins: 0, loses: 0 },
-                };
-
-                if match_.is_concluded() {
-                    if entrant.data.winner {
-                        score.wins += 1;
-                    } else {
-                        score.loses += 1;
-                    }
-                }
-
-                scores.insert(entrant.index, score);
-            }
-        }
-
-        let mut scores: Vec<_> = scores.into_iter().collect();
-        scores.sort_by(|a, b| a.1.cmp(&b.1).reverse());
-
-        let scores = scores
-            .into_iter()
+        let scores = standings
+            .iter()
             .enumerate()
-            .map(|(position, (index, score))| {
-                let name = ctx.props().tournament.entrants().get(index).unwrap();
+            .map(|(pos, entry)| {
+                let name = ctx.props().tournament.entrants().get(entry.index).unwrap();
+
+                let values: Html = entry
+                    .values
+                    .iter()
+                    .map(|value| {
+                        html! {
+                            <td>
+                                { value }
+                            </td>
+                        }
+                    })
+                    .collect();
 
                 html! {
                     <tr>
                         <td>
-                            { format!("{}.", position + 1) }
+                            { format!("{}.", pos + 1) }
                         </td>
                         <td>
                             { name }
                         </td>
-                        <td>
-                            { score.wins }
-                        </td>
-                        <td>
-                            { score.loses }
-                        </td>
+                        { values }
                     </tr>
                 }
             })
             .collect::<Html>();
+
+        let keys: Html = standings
+            .keys()
+            .map(|key| {
+                html! {
+                    <th>
+                        { key }
+                    </th>
+                }
+            })
+            .collect();
 
         html! {
             <table class="dt-table-striped">
@@ -93,12 +83,7 @@ where
                     <th>
                         { "Name" }
                     </th>
-                    <th>
-                        { "W" }
-                    </th>
-                    <th>
-                        { "L" }
-                    </th>
+                    { keys }
                 </tr>
                 { scores }
             </table>

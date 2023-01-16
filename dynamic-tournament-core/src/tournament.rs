@@ -244,6 +244,15 @@ where
             InnerTournament::Swiss(t) => unsafe { std::mem::transmute(t.start_render()) },
         }
     }
+
+    fn standings(&self) -> crate::standings::Standings {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.standings(),
+            InnerTournament::DoubleElimination(t) => t.standings(),
+            InnerTournament::RountRobin(t) => t.standings(),
+            InnerTournament::Swiss(t) => t.standings(),
+        }
+    }
 }
 
 impl<T, D> Borrow<Entrants<T>> for Tournament<T, D>

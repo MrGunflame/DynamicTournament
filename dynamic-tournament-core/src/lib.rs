@@ -25,6 +25,7 @@
 
 pub mod options;
 pub mod render;
+pub mod standings;
 
 mod double_elimination;
 mod round_robin;
@@ -37,11 +38,13 @@ pub use double_elimination::DoubleElimination;
 use render::{RenderState, Renderer};
 pub use round_robin::RoundRobin;
 pub use single_elimination::SingleElimination;
+use standings::Standings;
 pub use swiss::Swiss;
 
 use thiserror::Error;
 
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::result;
 use std::vec::IntoIter;
@@ -505,11 +508,14 @@ impl<T> Match<T> {
     }
 }
 
-impl<S> Match<Node<EntrantScore<S>>> {
+impl<D> Match<Node<D>>
+where
+    D: EntrantData,
+{
     pub fn is_concluded(&self) -> bool {
         for entrant in &self.entrants {
             if let EntrantSpot::Entrant(entrant) = entrant {
-                if entrant.data.winner {
+                if entrant.data.winner() {
                     return true;
                 }
             }
@@ -994,6 +1000,55 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
         R: Renderer<Self, Self::Entrant, Self::NodeData>,
     {
         renderer.render(self.start_render().root);
+    }
+
+    fn standings(&self) -> Standings {
+        #[derive(Copy, Clone, Debug, Default)]
+        struct Score {
+            wins: u64,
+            loses: u64,
+        }
+
+        let mut scores = HashMap::new();
+        for index in 0..self.entrants().len() {
+            scores.insert(index, Score::default());
+        }
+
+        for match_ in self.matches() {
+            if match_.is_concluded() {
+                for entrant in &match_.entrants {
+                    let EntrantSpot::Entrant(node) = entrant else {
+                        continue;
+                    };
+
+                    let mut score = scores.get_mut(&node.index).unwrap();
+
+                    if node.data.winner() {
+                        score.wins += 1;
+                    } else {
+                        score.loses += 1;
+                    }
+                }
+            }
+        }
+
+        // Sort the entries by wins and losses (reversed).
+        let mut entries: Vec<_> = scores.into_iter().collect();
+        entries.sort_by(|(_, a), (_, b)| a.wins.cmp(&b.wins).reverse().then(a.loses.cmp(&b.loses)));
+
+        let mut builder = Standings::builder();
+
+        builder.key("Wins");
+        builder.key("Losses");
+
+        for (index, score) in entries {
+            builder.entry(index, |builder| {
+                builder.value(score.wins);
+                builder.value(score.loses);
+            });
+        }
+
+        builder.build()
     }
 }
 
