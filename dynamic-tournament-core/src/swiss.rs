@@ -290,15 +290,14 @@ where
             // Keep track of what entrants played in this round to remove
             // a potential unpaired bye point.
             let mut entrants = HashSet::new();
+            for index in 0..self.entrants.len() {
+                entrants.insert(index);
+            }
 
             let start = self.matches_per_round() * round;
             let end = start + self.matches_per_round();
 
             for m in self.matches.get_mut(start..end).unwrap() {
-                for index in 0..self.entrants.len() {
-                    entrants.insert(index);
-                }
-
                 // Revert scores from matches.
                 if m.is_concluded() {
                     for entrant in m.entrants.iter() {
@@ -329,9 +328,11 @@ where
                 *m = Match::tbd();
             }
 
-            if entrants.len() == 1 {
-                self.matches_done -= self.matches_per_round();
-            }
+            let num = self.matches_done_vec[start..end]
+                .iter()
+                .filter(|b| **b)
+                .count();
+            self.matches_done -= num;
 
             // Remove pairing allocated bye
             if entrants.len() == 1 {
@@ -354,6 +355,24 @@ where
         // Reset the match itself.
         self.matches_done_vec[index] = false;
         self.matches_done -= 1;
+
+        if self.matches[index].is_concluded() {
+            for entrant in &self.matches[index].entrants {
+                let node = entrant.unwrap_ref();
+
+                let cell = self
+                    .scores
+                    .iter_mut()
+                    .find(|cell| cell.index == node.index)
+                    .unwrap();
+
+                if node.data.winner() {
+                    cell.score -= self.options.score_win;
+                } else {
+                    cell.score -= self.options.score_loss;
+                }
+            }
+        }
 
         for entrant in &mut self.matches[index].entrants {
             let node = entrant.unwrap_ref_mut();
@@ -475,6 +494,15 @@ where
                     .unwrap();
 
                 cell.score += self.options.score_win;
+
+                for entrant in &mut match_.entrants {
+                    if let EntrantSpot::Entrant(node) = entrant {
+                        if node.index == index {
+                            node.data.set_winner(true);
+                            break;
+                        }
+                    }
+                }
             }
 
             if let Some((EntrantSpot::Entrant(index), _)) = res.loser {
@@ -759,7 +787,7 @@ mod tests {
         );
 
         let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
-        let tournament = Swiss::<i32, u32>::new(entrants);
+        let tournament = Swiss::<i32, EntrantScore<u32>>::new(entrants);
 
         assert_eq!(tournament.entrants, [0, 1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(
@@ -1052,7 +1080,7 @@ mod tests {
     #[test]
     fn test_swiss_update_match_reset() {
         let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
-        let mut tournament = Swiss::<i32, u32>::new(entrants);
+        let mut tournament = Swiss::<i32, EntrantScore<u32>>::new(entrants);
 
         assert_eq!(
             tournament.matches,
@@ -1090,6 +1118,51 @@ mod tests {
         assert_eq!(
             tournament.matches_done_vec,
             [false, false, false, false, false, false, false, false, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 0,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
         );
 
         // No effect.
@@ -1136,6 +1209,51 @@ mod tests {
             tournament.matches_done_vec,
             [false, false, false, false, false, false, false, false, false, false, false, false]
         );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 0,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
 
         for index in 0..4 {
             tournament.update_match(index, |m, res| {
@@ -1149,19 +1267,297 @@ mod tests {
             vec![
                 // Round 0
                 Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        1,
+                        EntrantScore {
+                            score: 0,
+                            winner: false
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        3,
+                        EntrantScore {
+                            score: 0,
+                            winner: false
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        5,
+                        EntrantScore {
+                            score: 0,
+                            winner: false
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        7,
+                        EntrantScore {
+                            score: 0,
+                            winner: false
+                        }
+                    )),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 4);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, false, false, false, false, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        // Should reset round 1.
+        tournament.update_match(0, |_, res| {
+            res.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
                     EntrantSpot::Entrant(Node::new(0)),
                     EntrantSpot::Entrant(Node::new(1)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(3)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(5)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 3);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [false, true, true, true, false, false, false, false, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 0,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        tournament.update_match(0, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(7)),
                 ]),
                 // Round 1
@@ -1193,9 +1589,215 @@ mod tests {
             tournament.matches_done_vec,
             [true, true, true, true, false, false, false, false, false, false, false, false]
         );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
 
-        // Should reset round 1.
-        tournament.update_match(0, |_, res| {
+        for index in 4..8 {
+            tournament.update_match(index, |m, res| {
+                res.winner_default(&m[0]);
+                res.loser_default(&m[1]);
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        1,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        5,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(3)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 8);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, true, true, true, true, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 2,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 2,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        tournament.update_match(5, |_, res| {
             res.reset_default();
         });
 
@@ -1204,15 +1806,334 @@ mod tests {
             vec![
                 // Round 0
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(1)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(3)),
                 ]),
                 Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
                     EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        1,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        5,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 7);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, true, false, true, true, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 2,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        tournament.update_match(5, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        1,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        5,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(3)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 8);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, true, true, true, true, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 2,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 2,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        tournament.update_match(3, |_, res| {
+            res.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(5)),
                 ]),
                 Match::new([
@@ -1234,10 +2155,55 @@ mod tests {
         assert_eq!(tournament.matches_done, 3);
         assert_eq!(
             tournament.matches_done_vec,
-            [false, true, true, true, false, false, false, false, false, false, false, false]
+            [true, true, true, false, false, false, false, false, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
         );
 
-        tournament.update_match(0, |m, res| {
+        tournament.update_match(3, |m, res| {
             res.winner_default(&m[0]);
             res.loser_default(&m[1]);
         });
@@ -1247,19 +2213,43 @@ mod tests {
             vec![
                 // Round 0
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(1)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(3)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(5)),
                 ]),
                 Match::new([
-                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
                     EntrantSpot::Entrant(Node::new(7)),
                 ]),
                 // Round 1
@@ -1290,6 +2280,213 @@ mod tests {
         assert_eq!(
             tournament.matches_done_vec,
             [true, true, true, true, false, false, false, false, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1,
+                },
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 0,
+                },
+            ]
+        );
+
+        for index in 4..8 {
+            tournament.update_match(index, |m, res| {
+                res.winner_default(&m[1]);
+                res.loser_default(&m[0]);
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        0,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        4,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        2,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        6,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        3,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new_with_data(
+                        7,
+                        EntrantScore {
+                            score: 0,
+                            winner: true
+                        }
+                    )),
+                ]),
+                // Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 8);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, true, true, true, true, false, false, false, false]
+        );
+        assert_eq!(
+            tournament.scores,
+            [
+                Cell {
+                    index: 2,
+                    initial_position: 2,
+                    score: 2,
+                },
+                Cell {
+                    index: 6,
+                    initial_position: 6,
+                    score: 2,
+                },
+                Cell {
+                    index: 0,
+                    initial_position: 0,
+                    score: 1,
+                },
+                Cell {
+                    index: 3,
+                    initial_position: 3,
+                    score: 1,
+                },
+                Cell {
+                    index: 4,
+                    initial_position: 4,
+                    score: 1,
+                },
+                Cell {
+                    index: 7,
+                    initial_position: 7,
+                    score: 1,
+                },
+                Cell {
+                    index: 1,
+                    initial_position: 1,
+                    score: 0,
+                },
+                Cell {
+                    index: 5,
+                    initial_position: 5,
+                    score: 0,
+                },
+            ]
         );
     }
 
