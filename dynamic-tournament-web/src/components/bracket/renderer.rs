@@ -65,12 +65,22 @@ where
     }
 
     fn render_row(&mut self, row: Row<'_, T>) -> Html {
+        let header = match &row.label {
+            Some(label) => html! {
+                <span>{ label }</span>
+            },
+            None => html! {},
+        };
+
         let inner = self.render_iter(row);
 
         html! {
-            <div class="dt-bracket-row">
-                { inner }
-            </div>
+            <>
+                { header }
+                <div class="dt-bracket-row">
+                    { inner }
+                </div>
+            </>
         }
     }
 

@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 use crate::options::{TournamentOptionValues, TournamentOptions};
-use crate::render::{Column, Element, Position, RenderState, Row};
+use crate::render::{Column, Element, Label, Position, RenderState, Row};
 use crate::standings::Standings;
 use crate::utils::NumExt;
 use crate::{
@@ -544,7 +544,7 @@ where
             }
 
             rounds.push(Element::new(Row {
-                label: None,
+                label: Some(Label::from(format!("Round {}", index + 1))),
                 position: Some(Position::Start),
                 children: round.into_iter(),
             }));

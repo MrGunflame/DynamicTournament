@@ -22,6 +22,7 @@
 use crate::System;
 
 use std::borrow::Cow;
+use std::fmt::{self, Display, Formatter};
 use std::marker::PhantomData;
 use std::vec::IntoIter;
 
@@ -50,6 +51,27 @@ impl<'a> AsRef<str> for Label<'a> {
     #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl<'a> From<&'a str> for Label<'a> {
+    #[inline]
+    fn from(value: &'a str) -> Self {
+        Self(Cow::Borrowed(value))
+    }
+}
+
+impl From<String> for Label<'static> {
+    #[inline]
+    fn from(value: String) -> Self {
+        Self(Cow::Owned(value))
+    }
+}
+
+impl<'a> Display for Label<'a> {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(self.as_str(), f)
     }
 }
 
