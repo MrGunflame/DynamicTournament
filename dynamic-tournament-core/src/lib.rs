@@ -1014,7 +1014,9 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
         for match_ in self.matches() {
             if match_.is_concluded() {
                 for entrant in &match_.entrants {
-                    let node = entrant.unwrap_ref();
+                    let EntrantSpot::Entrant(node) = entrant else {
+                        continue;
+                    };
 
                     let mut score = match scores.get(&node.index) {
                         Some(score) => *score,
