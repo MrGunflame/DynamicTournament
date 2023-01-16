@@ -276,6 +276,91 @@ where
         self.matches.get_mut(start..end).unwrap()
     }
 
+    fn reset_match(&mut self, index: usize) {
+        // No effect if match not done yet.
+        if !self.matches_done_vec[index] {
+            return;
+        }
+
+        let round = index / self.matches_per_round();
+        let total_rounds = self.matches.len() / self.matches_per_round();
+
+        // Reset all following rounds.
+        for round in round + 1..total_rounds {
+            // Keep track of what entrants played in this round to remove
+            // a potential unpaired bye point.
+            let mut entrants = HashSet::new();
+
+            let start = self.matches_per_round() * round;
+            let end = start + self.matches_per_round();
+
+            for m in self.matches.get_mut(start..end).unwrap() {
+                for index in 0..self.entrants.len() {
+                    entrants.insert(index);
+                }
+
+                // Revert scores from matches.
+                if m.is_concluded() {
+                    for entrant in m.entrants.iter() {
+                        let node = entrant.unwrap_ref();
+
+                        let cell = self
+                            .scores
+                            .iter_mut()
+                            .find(|cell| cell.index == node.index)
+                            .unwrap();
+
+                        if node.data.winner() {
+                            cell.score -= self.options.score_win;
+                        } else {
+                            cell.score -= self.options.score_loss;
+                        }
+                    }
+                }
+
+                for entrant in m.entrants.iter() {
+                    let EntrantSpot::Entrant(node) = &entrant else {
+                        continue;
+                    };
+
+                    entrants.remove(&node.index);
+                }
+
+                *m = Match::tbd();
+            }
+
+            if entrants.len() == 1 {
+                self.matches_done -= self.matches_per_round();
+            }
+
+            // Remove pairing allocated bye
+            if entrants.len() == 1 {
+                if let Some(index) = entrants.into_iter().next() {
+                    let cell = self
+                        .scores
+                        .iter_mut()
+                        .find(|cell| cell.index == index)
+                        .unwrap();
+
+                    cell.score -= self.options.score_bye;
+                }
+            }
+
+            for b in &mut self.matches_done_vec[start..end] {
+                *b = false;
+            }
+        }
+
+        // Reset the match itself.
+        self.matches_done_vec[index] = false;
+        self.matches_done -= 1;
+
+        for entrant in &mut self.matches[index].entrants {
+            let node = entrant.unwrap_ref_mut();
+            node.data = D::default();
+        }
+    }
+
     fn matches_per_round(&self) -> usize {
         (match self.entrants.len() % 2 {
             0 => self.entrants.len(),
@@ -374,7 +459,8 @@ where
         f(match_, &mut res);
 
         if res.reset {
-            unimplemented!();
+            self.reset_match(index);
+            return;
         }
 
         if !self.matches_done_vec[index] {
@@ -792,6 +878,11 @@ mod tests {
                 Match::tbd(),
             ]
         );
+        assert_eq!(tournament.matches_done, 0);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [false, false, false, false, false, false, false, false, false, false, false, false]
+        );
 
         // No effect until all matches of the round ended.
         tournament.update_match(0, |m, res| {
@@ -829,6 +920,11 @@ mod tests {
                 Match::tbd(),
                 Match::tbd(),
             ]
+        );
+        assert_eq!(tournament.matches_done, 1);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, false, false, false, false, false, false, false, false, false, false, false]
         );
 
         for index in 0..4 {
@@ -881,6 +977,11 @@ mod tests {
                 Match::tbd(),
                 Match::tbd(),
             ]
+        );
+        assert_eq!(tournament.matches_done, 4);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, false, false, false, false, false, false, false, false]
         );
 
         for index in 4..8 {
@@ -945,6 +1046,250 @@ mod tests {
                     EntrantSpot::Entrant(Node::new(7)),
                 ]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_swiss_update_match_reset() {
+        let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
+        let mut tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 0);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [false, false, false, false, false, false, false, false, false, false, false, false]
+        );
+
+        // No effect.
+        for index in 0..4 {
+            tournament.update_match(index, |_, res| {
+                res.reset_default();
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 0);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [false, false, false, false, false, false, false, false, false, false, false, false]
+        );
+
+        for index in 0..4 {
+            tournament.update_match(index, |m, res| {
+                res.winner_default(&m[0]);
+                res.loser_default(&m[1]);
+            });
+        }
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 4);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, false, false, false, false, false, false, false, false]
+        );
+
+        // Should reset round 1.
+        tournament.update_match(0, |_, res| {
+            res.reset_default();
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 3);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [false, true, true, true, false, false, false, false, false, false, false, false]
+        );
+
+        tournament.update_match(0, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+        assert_eq!(tournament.matches_done, 4);
+        assert_eq!(
+            tournament.matches_done_vec,
+            [true, true, true, true, false, false, false, false, false, false, false, false]
         );
     }
 
