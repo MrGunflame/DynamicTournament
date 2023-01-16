@@ -319,7 +319,7 @@ impl Component for MovableBoxed {
                             <FaExpand label="Fullscreen" />
                         </Button>
                     </div>
-                    <div>
+                    <div style="z-index: 5;">
                         { header }
                     </div>
                 </div>
