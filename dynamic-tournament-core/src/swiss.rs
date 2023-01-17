@@ -717,7 +717,7 @@ impl Ord for Cell {
 
 #[cfg(test)]
 mod tests {
-    use crate::options::TournamentOptionValues;
+    use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
     use crate::tests::{TColumn, TElement, TMatch, TRow, TestRenderer};
     use crate::{
         entrants, EntrantScore, EntrantSpot, Entrants, Error, Match, Matches, Node, System,
@@ -912,9 +912,16 @@ mod tests {
             [false, false, false, false, false, false, false, false, false, false, false, false]
         );
 
+        // No effect (out-of-bounds).
+        tournament.update_match(12, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
         // No effect until all matches of the round ended.
         tournament.update_match(0, |m, res| {
             res.winner_default(&m[0]);
+            // res.loser_default(&m[1]);
         });
 
         assert_eq!(
@@ -2488,6 +2495,17 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_swiss_options() {
+        let options = Swiss::<i32, u32>::options();
+        assert_eq!(options.get("score_win").unwrap().value, OptionValue::U64(1));
+        assert_eq!(
+            options.get("score_loss").unwrap().value,
+            OptionValue::U64(0)
+        );
+        assert_eq!(options.get("score_bye").unwrap().value, OptionValue::U64(1));
     }
 
     #[test]
