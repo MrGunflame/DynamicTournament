@@ -42,7 +42,7 @@ impl Component for LiveBracket {
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = Self {
             websocket: None,
-            _producer: EventBus::bridge(ctx.link().callback(Message::WsMessage)),
+            _producer: EventBus::bridge(ctx.link().callback(Message::Ws)),
             is_live: false,
             panel: Panel::default(),
         };
@@ -85,7 +85,7 @@ impl Component for LiveBracket {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::WsMessage(msg) => match msg {
+            Message::Ws(msg) => match msg {
                 WebSocketMessage::Response(_) => false,
                 WebSocketMessage::Close(tournament_id, bracket_id) => {
                     if ctx.props().tournament.id == tournament_id
@@ -168,7 +168,7 @@ impl Component for LiveBracket {
 }
 
 pub enum Message {
-    WsMessage(WebSocketMessage),
+    Ws(WebSocketMessage),
     ChangePanel(Panel),
     Authorize(String),
 }

@@ -717,7 +717,7 @@ impl Ord for Cell {
 
 #[cfg(test)]
 mod tests {
-    use crate::options::{OptionValue, TournamentOptionValues, TournamentOptions};
+    use crate::options::{OptionValue, TournamentOptionValues};
     use crate::tests::{TColumn, TElement, TMatch, TRow, TestRenderer};
     use crate::{
         entrants, EntrantScore, EntrantSpot, Entrants, Error, Match, Matches, Node, System,
