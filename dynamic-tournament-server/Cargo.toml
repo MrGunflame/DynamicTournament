@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-server"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 description = "The server for the dynamic tournament system"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -18,9 +18,9 @@ metrics = []
 limits = []
 
 [dependencies]
-dynamic-tournament-api = { version = "0.6.0", path = "../dynamic-tournament-api", features = ["server"] }
-dynamic-tournament-core = { version = "0.6.0", path = "../dynamic-tournament-core", features = ["serde"] }
-dynamic-tournament-macros = { version = "0.6.0", path = "../dynamic-tournament-macros", features = ["server"] }
+dynamic-tournament-api = { version = "0.6.1", path = "../dynamic-tournament-api", features = ["server"] }
+dynamic-tournament-core = { version = "0.6.1", path = "../dynamic-tournament-core", features = ["serde"] }
+dynamic-tournament-macros = { version = "0.6.1", path = "../dynamic-tournament-macros", features = ["server"] }
 tokio = { version = "1.23.0", features = ["full"] }
 sqlx = { version = "0.6.2", features = ["runtime-tokio-rustls", "mysql", "json", "chrono"] }
 serde = "1.0.151"

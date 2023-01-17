@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-cli"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 description = "A CLI tools for interacting with the DynamicTournament API"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -9,7 +9,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-dynamic-tournament-api = { version = "0.6.0", path = "../dynamic-tournament-api" }
+dynamic-tournament-api = { version = "0.6.1", path = "../dynamic-tournament-api" }
 clap = { version = "3.2.8", features = ["derive"] }
 tokio = { version = "1.19.2", features = ["rt", "rt-multi-thread", "macros"] }
 pretty_env_logger = "0.4.0"
