@@ -9,8 +9,8 @@ use yew_agent::{Bridge, Bridged};
 
 use super::live_state::LiveState;
 use super::Bracket as BracketComponent;
-use crate::components::Button;
 use crate::services::Message as WebSocketMessage;
+use crate::{api::Action, components::Button};
 use crate::{
     components::{
         movable_boxed::MovableBoxed,
@@ -46,6 +46,23 @@ impl Component for LiveBracket {
             is_live: false,
             panel: Panel::default(),
         };
+
+        // Watch for changes on API client and send a new authorization
+        // message when the login becomes available/changes.
+        // This will automatically refresh connections that live longer than
+        // the lifetime of the token. It also automatically authorizes when the
+        // token becomes available after the connection was already opened.
+        let client = ClientProvider::get(ctx);
+        let link = ctx.link().clone();
+        ctx.link().send_future_batch(async move {
+            loop {
+                let action = client.changed().await;
+                if matches!(action, Action::Login | Action::Refresh) {
+                    let token = client.authorization().auth_token().unwrap().clone();
+                    link.send_message(Message::Authorize(token.into_token()));
+                }
+            }
+        });
 
         this.changed(ctx);
         this
@@ -101,6 +118,17 @@ impl Component for LiveBracket {
                 self.panel = panel;
                 true
             }
+            Message::Authorize(token) => {
+                if let Some(ws) = &self.websocket {
+                    let mut ws = ws.clone();
+
+                    spawn_local(async move {
+                        let _ = ws.send(Request::Authorize(token)).await;
+                    });
+                }
+
+                false
+            }
         }
     }
 
@@ -142,6 +170,7 @@ impl Component for LiveBracket {
 pub enum Message {
     WsMessage(WebSocketMessage),
     ChangePanel(Panel),
+    Authorize(String),
 }
 
 /// The currently displayed panel.
