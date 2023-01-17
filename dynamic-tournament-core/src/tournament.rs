@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use crate::options::{TournamentOptionValues, TournamentOptions};
 use crate::{
     DoubleElimination, EntrantData, Entrants, Match, MatchResult, Matches, Node, Result,
-    SingleElimination, System,
+    RoundRobin, SingleElimination, Swiss, System,
 };
 
 #[derive(Clone, Debug)]
@@ -28,6 +28,10 @@ where
             TournamentKind::DoubleElimination => {
                 InnerTournament::DoubleElimination(DoubleElimination::new(vec![].into_iter()))
             }
+            TournamentKind::RoundRobin => {
+                InnerTournament::RountRobin(RoundRobin::new(vec![].into_iter()))
+            }
+            TournamentKind::Swiss => InnerTournament::Swiss(Swiss::new(vec![].into_iter())),
         };
 
         Self { inner }
@@ -37,6 +41,8 @@ where
         match kind {
             TournamentKind::SingleElimination => SingleElimination::<T, D>::options(),
             TournamentKind::DoubleElimination => TournamentOptions::default(),
+            TournamentKind::RoundRobin => TournamentOptions::default(),
+            TournamentKind::Swiss => Swiss::<T, D>::options(),
         }
     }
 
@@ -52,6 +58,12 @@ where
             ),
             TournamentKind::DoubleElimination => {
                 InnerTournament::DoubleElimination(DoubleElimination::resume(entrants, matches)?)
+            }
+            TournamentKind::RoundRobin => {
+                InnerTournament::RountRobin(RoundRobin::resume(entrants, matches)?)
+            }
+            TournamentKind::Swiss => {
+                InnerTournament::Swiss(Swiss::resume(entrants, matches, options)?)
             }
         };
 
@@ -70,6 +82,16 @@ where
                 entrants.push(entrant);
                 *t = DoubleElimination::new(entrants.entrants.into_iter());
             }
+            InnerTournament::RountRobin(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.push(entrant);
+                *t = RoundRobin::new(entrants.entrants.into_iter());
+            }
+            InnerTournament::Swiss(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.push(entrant);
+                *t = Swiss::new(entrants.entrants.into_iter());
+            }
         }
     }
 
@@ -80,6 +102,8 @@ where
         match &mut self.inner {
             InnerTournament::SingleElimination(t) => t.update_match(index, f),
             InnerTournament::DoubleElimination(t) => t.update_match(index, f),
+            InnerTournament::RountRobin(t) => t.update_match(index, f),
+            InnerTournament::Swiss(t) => t.update_match(index, f),
         }
     }
 }
@@ -104,6 +128,16 @@ where
                 entrants.extend(iter);
                 *t = DoubleElimination::new(entrants.entrants.into_iter());
             }
+            InnerTournament::RountRobin(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.extend(iter);
+                *t = RoundRobin::new(entrants.entrants.into_iter());
+            }
+            InnerTournament::Swiss(t) => {
+                let mut entrants = t.clone().into_entrants();
+                entrants.extend(iter);
+                *t = Swiss::new(entrants.entrants.into_iter());
+            }
         }
     }
 }
@@ -120,6 +154,8 @@ where
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.entrants(),
             InnerTournament::DoubleElimination(t) => t.entrants(),
+            InnerTournament::RountRobin(t) => t.entrants(),
+            InnerTournament::Swiss(t) => t.entrants(),
         }
     }
 
@@ -128,6 +164,8 @@ where
             match &mut self.inner {
                 InnerTournament::SingleElimination(t) => t.entrants_mut(),
                 InnerTournament::DoubleElimination(t) => t.entrants_mut(),
+                InnerTournament::RountRobin(t) => t.entrants_mut(),
+                InnerTournament::Swiss(t) => t.entrants_mut(),
             }
         }
     }
@@ -136,6 +174,8 @@ where
         match self.inner {
             InnerTournament::SingleElimination(t) => t.into_entrants(),
             InnerTournament::DoubleElimination(t) => t.into_entrants(),
+            InnerTournament::RountRobin(t) => t.into_entrants(),
+            InnerTournament::Swiss(t) => t.into_entrants(),
         }
     }
 
@@ -143,6 +183,8 @@ where
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.matches(),
             InnerTournament::DoubleElimination(t) => t.matches(),
+            InnerTournament::RountRobin(t) => t.matches(),
+            InnerTournament::Swiss(t) => t.matches(),
         }
     }
 
@@ -151,6 +193,8 @@ where
             match &mut self.inner {
                 InnerTournament::SingleElimination(t) => t.matches_mut(),
                 InnerTournament::DoubleElimination(t) => t.matches_mut(),
+                InnerTournament::RountRobin(t) => t.matches_mut(),
+                InnerTournament::Swiss(t) => t.matches_mut(),
             }
         }
     }
@@ -159,27 +203,8 @@ where
         match self.inner {
             InnerTournament::SingleElimination(t) => t.into_matches(),
             InnerTournament::DoubleElimination(t) => t.into_matches(),
-        }
-    }
-
-    fn next_bracket_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_bracket_round(range),
-            InnerTournament::DoubleElimination(t) => t.next_bracket_round(range),
-        }
-    }
-
-    fn next_bracket(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_bracket(range),
-            InnerTournament::DoubleElimination(t) => t.next_bracket(range),
-        }
-    }
-
-    fn next_round(&self, range: std::ops::Range<usize>) -> std::ops::Range<usize> {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.next_round(range),
-            InnerTournament::DoubleElimination(t) => t.next_round(range),
+            InnerTournament::RountRobin(t) => t.into_matches(),
+            InnerTournament::Swiss(t) => t.into_matches(),
         }
     }
 
@@ -187,13 +212,8 @@ where
         match &self.inner {
             InnerTournament::SingleElimination(t) => t.next_matches(index),
             InnerTournament::DoubleElimination(t) => t.next_matches(index),
-        }
-    }
-
-    fn render_match_position(&self, index: usize) -> crate::render::Position {
-        match &self.inner {
-            InnerTournament::SingleElimination(t) => t.render_match_position(index),
-            InnerTournament::DoubleElimination(t) => t.render_match_position(index),
+            InnerTournament::RountRobin(t) => t.next_matches(index),
+            InnerTournament::Swiss(t) => t.next_matches(index),
         }
     }
 
@@ -204,6 +224,33 @@ where
         match &mut self.inner {
             InnerTournament::SingleElimination(t) => t.update_match(index, f),
             InnerTournament::DoubleElimination(t) => t.update_match(index, f),
+            InnerTournament::RountRobin(t) => t.update_match(index, f),
+            InnerTournament::Swiss(t) => t.update_match(index, f),
+        }
+    }
+
+    fn start_render(&self) -> crate::render::RenderState<'_, Self> {
+        // Transmute the returned `RenderState<T>` into `RenderState<Self>`. This is safe since a
+        // `RenderState` only contains a reference to the system and all operations will go through
+        // `self`.
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => unsafe {
+                std::mem::transmute(t.start_render())
+            },
+            InnerTournament::DoubleElimination(t) => unsafe {
+                std::mem::transmute(t.start_render())
+            },
+            InnerTournament::RountRobin(t) => unsafe { std::mem::transmute(t.start_render()) },
+            InnerTournament::Swiss(t) => unsafe { std::mem::transmute(t.start_render()) },
+        }
+    }
+
+    fn standings(&self) -> crate::standings::Standings {
+        match &self.inner {
+            InnerTournament::SingleElimination(t) => t.standings(),
+            InnerTournament::DoubleElimination(t) => t.standings(),
+            InnerTournament::RountRobin(t) => t.standings(),
+            InnerTournament::Swiss(t) => t.standings(),
         }
     }
 }
@@ -222,6 +269,8 @@ where
 pub enum TournamentKind {
     SingleElimination,
     DoubleElimination,
+    RoundRobin,
+    Swiss,
 }
 
 #[derive(Clone, Debug)]
@@ -231,4 +280,6 @@ where
 {
     SingleElimination(SingleElimination<T, D>),
     DoubleElimination(DoubleElimination<T, D>),
+    RountRobin(RoundRobin<T, D>),
+    Swiss(Swiss<T, D>),
 }

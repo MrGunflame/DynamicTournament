@@ -5,7 +5,7 @@ use crate::StatusCodeError;
 
 use dynamic_tournament_api::v3::id::SystemId;
 use dynamic_tournament_api::v3::systems::{System, SystemOverview};
-use dynamic_tournament_core::{EntrantScore, SingleElimination};
+use dynamic_tournament_core::{EntrantScore, SingleElimination, Swiss};
 use dynamic_tournament_macros::{method, path};
 
 pub async fn route(mut ctx: Context) -> Result {
@@ -30,6 +30,14 @@ async fn list(_ctx: Context) -> Result {
             id: SystemId(2),
             name: "Double Elimination".into(),
         },
+        SystemOverview {
+            id: SystemId(3),
+            name: "Round Robin".into(),
+        },
+        SystemOverview {
+            id: SystemId(4),
+            name: "Swiss (Monrad/Buchholz)".into(),
+        },
     ];
 
     Ok(Response::ok().json(&systems))
@@ -46,6 +54,16 @@ async fn get(_ctx: Context, id: SystemId) -> Result {
             id: SystemId(2),
             name: "Double Elimination".into(),
             options: TournamentOptions::default(),
+        }),
+        3 => Some(System {
+            id: SystemId(3),
+            name: "Round Robin".into(),
+            options: TournamentOptions::default(),
+        }),
+        4 => Some(System {
+            id: SystemId(4),
+            name: "Swiss (Monrad/Buchholz)".into(),
+            options: Swiss::<u8, EntrantScore<u8>>::options(),
         }),
         _ => None,
     };

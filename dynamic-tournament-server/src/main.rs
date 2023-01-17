@@ -8,6 +8,8 @@
 //! is not enabled an the server is under high load or has low resource limits you will see an
 //! increase in connection errors. If this feature is disabled all checks are disabled and special
 //! features to avoid hitting limits are removed.
+#![deny(unused_crate_dependencies)]
+
 mod auth;
 mod config;
 mod http;

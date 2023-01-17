@@ -1,3 +1,4 @@
+#![deny(unused_crate_dependencies)]
 // Fix for html! macro doing unit value assignments. (yew 0.19.3)
 #![allow(clippy::let_unit_value)]
 

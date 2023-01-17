@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 #[cfg(feature = "server")]
 mod server;
 
@@ -103,5 +105,5 @@ pub fn load_asset(input: TokenStream) -> TokenStream {
 #[cfg(feature = "web")]
 #[proc_macro]
 pub fn include_asset_str(input: TokenStream) -> TokenStream {
-    web::include_asset(input)
+    web::include_asset_str(input)
 }

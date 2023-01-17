@@ -21,6 +21,7 @@ pub struct Client {
     // TODO: Use a broadcast channel to merge these
     on_login: Rc<Notify>,
     on_logout: Rc<Notify>,
+    on_refresh: Rc<Notify>,
 }
 
 impl Client {
@@ -41,6 +42,7 @@ impl Client {
             waker: Rc::new(Notify::new()),
             on_login: Rc::new(Notify::new()),
             on_logout: Rc::new(Notify::new()),
+            on_refresh: Rc::new(Notify::new()),
         };
 
         let client = this.clone();
@@ -76,6 +78,7 @@ impl Client {
         Changed {
             on_login: self.on_login.notified(),
             on_logout: self.on_logout.notified(),
+            on_refresh: self.on_refresh.notified(),
         }
     }
 
@@ -143,9 +146,15 @@ impl Client {
             return;
         }
 
+        // We continuously attempt to refresh our tokens while we have a valid
+        // refresh token. If a refreshing attempt fails (e.g. due to an network error)
+        // we retry after a fixed time span.
         loop {
             match self.inner.v3().auth().refresh().await {
-                Ok(()) => return,
+                Ok(()) => {
+                    self.on_refresh.notify_all();
+                    return;
+                }
                 Err(err) => log::error!("Failed to refresh: {:?}", err),
             }
 
@@ -178,26 +187,51 @@ impl PartialEq for Client {
 /// An change action from a [`Client`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
+    /// A `Login` action is triggered when the client is first logged in. Specifically this is
+    /// triggred when [`State`] changes from [`LoggedOut`] to [`LoggedIn`].
+    ///
+    /// [`LoggedOut`]: State::LoggedOut
+    /// [`LoggedIn`]: State::LoggedIn
     Login,
+    /// A `Logout` action is triggered when the client is logged out. Specifically this is triggred
+    /// when [`State`] changes from [`LoggedIn`] to [`LoggedOut`].
+    ///
+    /// [`LoggedIn`]: State::LoggedIn
+    /// [`LoggedOut`]: State::LoggedOut
     Logout,
+    /// A `Refresh` action is triggered when the client successfully refreshes its auth token.
+    /// Unlike other `Action`s this does not correspond to a [`State`] change.
+    Refresh,
+}
+
+impl Action {
+    /// Returns `true` if this `Action` is [`Action::Login`].
+    #[inline]
+    pub fn is_login(self) -> bool {
+        matches!(self, Self::Login)
+    }
 }
 
 pub struct Changed<'a> {
     on_login: Notified<'a>,
     on_logout: Notified<'a>,
+    on_refresh: Notified<'a>,
 }
 
 impl<'a> Changed<'a> {
     fn poll_on_login(self: &mut Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Action> {
         let on_login = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.on_login) };
-
         on_login.poll(cx).map(|_| Action::Login)
     }
 
-    fn poll_on_logout(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Action> {
-        let on_logout = unsafe { self.map_unchecked_mut(|this| &mut this.on_logout) };
-
+    fn poll_on_logout(self: &mut Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Action> {
+        let on_logout = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.on_logout) };
         on_logout.poll(cx).map(|_| Action::Logout)
+    }
+
+    fn poll_on_refesh(self: &mut Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Action> {
+        let on_refresh = unsafe { self.as_mut().map_unchecked_mut(|this| &mut this.on_refresh) };
+        on_refresh.poll(cx).map(|_| Action::Refresh)
     }
 }
 
@@ -209,7 +243,10 @@ impl<'a> Future for Changed<'a> {
             Poll::Ready(a) => Poll::Ready(a),
             Poll::Pending => match self.poll_on_logout(cx) {
                 Poll::Ready(a) => Poll::Ready(a),
-                Poll::Pending => Poll::Pending,
+                Poll::Pending => match self.poll_on_refesh(cx) {
+                    Poll::Ready(a) => Poll::Ready(a),
+                    Poll::Pending => Poll::Pending,
+                },
             },
         }
     }

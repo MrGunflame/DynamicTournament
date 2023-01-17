@@ -21,22 +21,31 @@
 #![deny(missing_debug_implementations)]
 #![deny(elided_lifetimes_in_paths)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_crate_dependencies)]
 
 pub mod options;
 pub mod render;
+pub mod standings;
 
 mod double_elimination;
+mod round_robin;
 mod single_elimination;
+mod swiss;
 pub mod tournament;
+mod utils;
 
 pub use double_elimination::DoubleElimination;
-use render::{BracketRounds, Position, Renderer};
+use render::{RenderState, Renderer};
+pub use round_robin::RoundRobin;
 pub use single_elimination::SingleElimination;
+use standings::Standings;
+pub use swiss::Swiss;
 
 use thiserror::Error;
 
 use std::borrow::Borrow;
-use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::result;
 use std::vec::IntoIter;
 
@@ -171,6 +180,23 @@ impl<T> Matches<T> {
             }
         }
     }
+
+    #[inline]
+    pub fn iter(&self) -> MatchesIter<'_, T> {
+        MatchesIter {
+            iter: self.matches.iter(),
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Matches<T> {
+    type Item = &'a Match<Node<T>>;
+    type IntoIter = MatchesIter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 impl<T> Deref for Matches<T> {
@@ -207,9 +233,56 @@ impl<T> From<Vec<Match<Node<T>>>> for Matches<T> {
     }
 }
 
+/// An `Iterator` over all matches.
+#[derive(Clone, Debug)]
+pub struct MatchesIter<'a, T> {
+    iter: std::slice::Iter<'a, Match<Node<T>>>,
+}
+
+impl<'a, T> MatchesIter<'a, T> {
+    /// Creates a new `Iterator` over all occupied matches.
+    ///
+    /// Occupied matches are those that have all [`EntrantSpot`]s filled when entrants.
+    #[inline]
+    pub fn occupied(self) -> OccupiedMatchesIter<'a, T> {
+        OccupiedMatchesIter { iter: self.iter }
+    }
+}
+
+impl<'a, T> Iterator for MatchesIter<'a, T> {
+    type Item = &'a Match<Node<T>>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+/// An `Iterator` over matches that are occupied.
+///
+/// `OccupiedMatchesIter` is created by [`occupied`].
+///
+/// [`occupied`]: MatchesIter::occupied
+#[derive(Clone, Debug)]
+pub struct OccupiedMatchesIter<'a, T> {
+    iter: std::slice::Iter<'a, Match<Node<T>>>,
+}
+
+impl<'a, T> Iterator for OccupiedMatchesIter<'a, T> {
+    type Item = &'a Match<Node<T>>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().filter(|match_| match_.is_occupied())
+    }
+}
+
 /// Some data that is stored within the bracket of the tournament. This is usually a score or
 /// something similar. See [`EntrantScore`] for an example.
 pub trait EntrantData: Default {
+    /// Returns `true` if this data represent a winner.
+    fn winner(&self) -> bool;
+
     /// Sets the winner state of the data to `winner`.
     fn set_winner(&mut self, winner: bool);
     /// Resets the data. This should cause the `Self` become the same value as `Self::default()`.
@@ -369,12 +442,27 @@ impl<T> Match<T> {
         Self { entrants }
     }
 
+    /// Creates a new `Match` with all spots set to [`TBD`].
+    ///
+    /// [`TBD`]: EntrantSpot::TBD
+    #[inline]
+    pub fn tbd() -> Self {
+        Self::new([EntrantSpot::TBD, EntrantSpot::TBD])
+    }
+
     /// Returns `true` if the match is a *placeholder match*. This is `true` when either spot
     /// contains an [`EntrantSpot::Empty`] variant.
     #[inline]
     pub(crate) fn is_placeholder(&self) -> bool {
         matches!(self.entrants[0], EntrantSpot::Empty)
             || matches!(self.entrants[1], EntrantSpot::Empty)
+    }
+
+    /// Returns `true` if all spots in this match are occupied.
+    #[inline]
+    pub const fn is_occupied(&self) -> bool {
+        matches!(self.entrants[0], EntrantSpot::Entrant(_))
+            && matches!(self.entrants[1], EntrantSpot::Entrant(_))
     }
 
     /// Returns a reference to the entrant at `index`.
@@ -409,6 +497,31 @@ impl<T> Match<T> {
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut EntrantSpot<T> {
         // SAFETY: The caller must guarantee that `index` is in bounds.
         unsafe { self.entrants.get_unchecked_mut(index) }
+    }
+
+    pub fn map<U, F>(&self, f: F) -> [U; 2]
+    where
+        T: Clone,
+        F: FnMut(EntrantSpot<T>) -> U,
+    {
+        self.entrants.clone().map(f)
+    }
+}
+
+impl<D> Match<Node<D>>
+where
+    D: EntrantData,
+{
+    pub fn is_concluded(&self) -> bool {
+        for entrant in &self.entrants {
+            if let EntrantSpot::Entrant(entrant) = entrant {
+                if entrant.data.winner() {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 
@@ -634,6 +747,11 @@ where
     #[inline]
     fn set_winner(&mut self, winner: bool) {
         self.winner = winner;
+    }
+
+    #[inline]
+    fn winner(&self) -> bool {
+        self.winner
     }
 }
 
@@ -874,35 +992,73 @@ pub trait System: Sized + Borrow<Entrants<Self::Entrant>> {
     where
         F: FnOnce(&mut Match<Node<Self::NodeData>>, &mut MatchResult<Self::NodeData>);
 
-    /// Returns the next bracket round between `range`. If `range` is empty or no bracket rounds
-    /// are between `range`, `0..0` should be returned.
-    fn next_bracket_round(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the next bracket between `range`.
-    fn next_bracket(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the next round between `range`.
-    fn next_round(&self, range: Range<usize>) -> Range<usize>;
-
-    /// Returns the [`Position`] at which to render the match with the given `index`.
-    fn render_match_position(&self, _index: usize) -> Position {
-        Position::default()
-    }
+    fn start_render(&self) -> RenderState<'_, Self>;
 
     /// Renders the tournament using the given [`Renderer`].
     fn render<R>(&self, renderer: &mut R)
     where
         R: Renderer<Self, Self::Entrant, Self::NodeData>,
     {
-        renderer.render(BracketRounds::new(self));
+        renderer.render(self.start_render().root);
+    }
+
+    fn standings(&self) -> Standings {
+        #[derive(Copy, Clone, Debug, Default)]
+        struct Score {
+            wins: u64,
+            loses: u64,
+        }
+
+        let mut scores = HashMap::new();
+        for index in 0..self.entrants().len() {
+            scores.insert(index, Score::default());
+        }
+
+        for match_ in self.matches() {
+            if match_.is_concluded() {
+                for entrant in &match_.entrants {
+                    let EntrantSpot::Entrant(node) = entrant else {
+                        continue;
+                    };
+
+                    let mut score = scores.get_mut(&node.index).unwrap();
+
+                    if node.data.winner() {
+                        score.wins += 1;
+                    } else {
+                        score.loses += 1;
+                    }
+                }
+            }
+        }
+
+        // Sort the entries by wins and losses (reversed).
+        let mut entries: Vec<_> = scores.into_iter().collect();
+        entries.sort_by(|(_, a), (_, b)| a.wins.cmp(&b.wins).reverse().then(a.loses.cmp(&b.loses)));
+
+        let mut builder = Standings::builder();
+
+        builder.key("Wins");
+        builder.key("Losses");
+
+        for (index, score) in entries {
+            builder.entry(index, |builder| {
+                builder.value(score.wins);
+                builder.value(score.loses);
+            });
+        }
+
+        builder.build()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{render::Renderer, EntrantSpot};
+    use std::marker::PhantomData;
 
-    use super::{BracketRounds, EntrantData, Match, Node, System};
+    use crate::render::{Column, Element, Match, Renderer, Row};
+
+    use super::{EntrantData, System};
 
     #[macro_export]
     macro_rules! entrants {
@@ -926,53 +1082,84 @@ mod tests {
     impl EntrantData for u32 {
         fn set_winner(&mut self, _winner: bool) {}
         fn reset(&mut self) {}
-    }
-
-    #[derive(Debug, Default)]
-    pub struct TestRenderer {
-        #[allow(clippy::type_complexity)]
-        matches: Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>,
-    }
-
-    impl<T, E, D> Renderer<T, E, D> for TestRenderer
-    where
-        T: System<Entrant = E, NodeData = D>,
-    {
-        fn render(&mut self, input: BracketRounds<'_, T>) {
-            for bracket_round in input {
-                let mut brackets = Vec::new();
-
-                for bracket in bracket_round {
-                    let mut rounds = Vec::new();
-
-                    for round in bracket {
-                        let mut matches = Vec::new();
-
-                        for r#match in round {
-                            let mut indexes = [EntrantSpot::Empty, EntrantSpot::Empty];
-
-                            for (index, entrant) in r#match.0.entrants.iter().enumerate() {
-                                indexes[index] =
-                                    entrant.as_ref().map(|entrant| Node::new(entrant.index));
-                            }
-
-                            matches.push(Match::new(indexes));
-                        }
-
-                        rounds.push(matches);
-                    }
-
-                    brackets.push(rounds);
-                }
-
-                self.matches.push(brackets);
-            }
+        fn winner(&self) -> bool {
+            false
         }
     }
 
-    impl PartialEq<Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>> for TestRenderer {
-        fn eq(&self, other: &Vec<Vec<Vec<Vec<Match<Node<u32>>>>>>) -> bool {
-            &self.matches == other
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum TElement {
+        Row(TRow),
+        Column(TColumn),
+        Match(TMatch),
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TColumn(pub Vec<TElement>);
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TRow(pub Vec<TElement>);
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct TMatch {
+        pub index: usize,
+    }
+
+    #[derive(Debug)]
+    pub struct TestRenderer<T> {
+        root: Option<TElement>,
+        _marker: PhantomData<T>,
+    }
+
+    impl<T> TestRenderer<T>
+    where
+        T: System,
+    {
+        pub fn new() -> Self {
+            Self {
+                root: None,
+                _marker: PhantomData,
+            }
+        }
+
+        fn render_element(&self, elem: Element<'_, T>) -> TElement {
+            match elem {
+                Element::Row(row) => TElement::Row(self.render_row(row)),
+                Element::Column(col) => TElement::Column(self.render_column(col)),
+                Element::Match(m) => TElement::Match(self.render_match(m)),
+            }
+        }
+
+        fn render_column(&self, iter: Column<'_, T>) -> TColumn {
+            let children = iter.map(|elem| self.render_element(elem)).collect();
+            TColumn(children)
+        }
+
+        fn render_row(&self, iter: Row<'_, T>) -> TRow {
+            let children = iter.map(|elem| self.render_element(elem)).collect();
+            TRow(children)
+        }
+
+        fn render_match(&self, m: Match<'_, T>) -> TMatch {
+            TMatch { index: m.index }
+        }
+    }
+
+    impl<T, E, D> Renderer<T, E, D> for TestRenderer<T>
+    where
+        T: System<Entrant = E, NodeData = D>,
+    {
+        fn render(&mut self, root: Element<'_, T>) {
+            self.root = Some(self.render_element(root));
+        }
+    }
+
+    impl<T> PartialEq<TElement> for TestRenderer<T> {
+        fn eq(&self, other: &TElement) -> bool {
+            match &self.root {
+                Some(this) => this == other,
+                None => false,
+            }
         }
     }
 }
