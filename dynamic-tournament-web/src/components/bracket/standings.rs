@@ -75,7 +75,7 @@ where
             .collect();
 
         html! {
-            <table class="dt-table-striped">
+            <table class="dt-table dt-table-striped">
                 <tr>
                     <th>
                         { "Position" }

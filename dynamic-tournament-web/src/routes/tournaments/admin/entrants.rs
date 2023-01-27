@@ -290,7 +290,7 @@ impl Component for Entrants {
                         <h2>{ "Entrants" }</h2>
                         <p>
                             { "Deleted entrants that are still placed in a bracket will be replaced with a placeholder string. "}
-                            <strong>{ "Once deleted they cannot be stored." }</strong>
+                            <strong>{ "Once deleted they cannot be restored." }</strong>
                         </p>
                         <div class="admin-entrants-actions">
                             <Button title="Add" onclick={create}>
