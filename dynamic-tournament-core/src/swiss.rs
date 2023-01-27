@@ -527,6 +527,9 @@ where
             _ => self.entrants.len() - 1,
         } / 2;
 
+        // Round counter
+        let mut round_index = 0;
+
         let mut index = 0;
         while index < self.matches.len() {
             let mut round = Vec::new();
@@ -544,10 +547,12 @@ where
             }
 
             rounds.push(Element::new(Row {
-                label: Some(Label::from(format!("Round {}", index + 1))),
+                label: Some(Label::from(format!("Round {}", round_index + 1))),
                 position: Some(Position::Start),
                 children: round.into_iter(),
             }));
+
+            round_index += 1;
         }
 
         RenderState {
