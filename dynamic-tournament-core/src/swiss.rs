@@ -237,16 +237,54 @@ where
             return;
         }
 
+        // Sort the entrants based on the monrad system.
+        // If a match is encountered that was already played, the second
+        // entrant is swapped with the next.
         self.scores.sort();
 
+        // The round being constructed. All previous rounds are guaranteed to be
+        // properly filled.
         let round = self.matches_done / self.matches_per_round();
 
+        let mut played = HashSet::new();
+        for r in 0..round - 1 {
+            for match_ in self.round(r) {
+                let first = match_[0].as_ref().unwrap().index;
+                let second = match_[1].as_ref().unwrap().index;
+
+                played.insert((first, second));
+            }
+        }
+
         // FIXME: Get rid of this clone.
-        let entrants = self.scores.clone();
+        let mut scores = self.scores.clone();
         let mut index = 0;
         for match_ in self.round_mut(round) {
-            let first = entrants[index].index;
-            let second = entrants[index + 1].index;
+            let first_index = index;
+            let mut second_index = index + 1;
+
+            let (mut first, mut second);
+
+            loop {
+                first = scores[first_index].index;
+                second = scores[second_index].index;
+
+                // Match is good.
+                if !played.contains(&(first, second)) && !played.contains(&(second, first)) {
+                    // Out of bounds, i.e. all possible games already played.
+                    // Use the last checked entrant.
+                    if scores.get(second_index).is_none() {
+                        second_index -= 1;
+                    }
+
+                    scores.swap(index + 1, second_index);
+                    break;
+                }
+
+                // The expected match was already played.
+                // Retry with second + 1 entrant.
+                second_index += 1;
+            }
 
             *match_ = Match::new([
                 EntrantSpot::Entrant(Node::new(first)),
@@ -2498,6 +2536,187 @@ mod tests {
                     initial_position: 5,
                     score: 0,
                 },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_swiss_no_duplicates() {
+        let entrants = entrants![0, 1, 2, 3, 4, 5, 6, 7];
+        let mut tournament = Swiss::<i32, u32>::new(entrants);
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(0, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        tournament.update_match(1, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+
+        tournament.update_match(2, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        tournament.update_match(3, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                // Round 2
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(4, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        tournament.update_match(5, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+
+        tournament.update_match(6, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+
+        tournament.update_match(7, |m, res| {
+            res.winner_default(&m[1]);
+            res.loser_default(&m[0]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            vec![
+                // Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(6)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                // Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(5)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                // Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(7)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(3)),
+                    EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(1)),
+                    EntrantSpot::Entrant(Node::new(5)),
+                ]),
             ]
         );
     }
