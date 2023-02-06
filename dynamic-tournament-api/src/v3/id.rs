@@ -67,3 +67,4 @@ id!(RoleId, u64);
 id!(SystemId, u64);
 id!(EntrantId, u64);
 id!(UserId, u64);
+id!(EventId, u64);
