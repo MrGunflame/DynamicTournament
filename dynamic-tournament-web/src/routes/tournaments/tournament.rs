@@ -6,6 +6,7 @@ use crate::components::providers::{ClientProvider, Provider};
 use crate::utils::router::{Link, PathBuf, Routable, Switch};
 use crate::utils::{FetchData, Rc};
 
+use super::log::Log;
 use super::navbar::Navbar;
 use super::{Admin, Brackets, Entrants, Overview};
 use crate::components::icons::FaAngleLeft;
@@ -61,6 +62,7 @@ pub enum Route {
     Index,
     Brackets,
     Entrants,
+    Log,
     Admin,
 }
 
@@ -70,6 +72,7 @@ impl Routable for Route {
             None => Some(Self::Index),
             Some("brackets") => Some(Self::Brackets),
             Some("entrants") => Some(Self::Entrants),
+            Some("log") => Some(Self::Log),
             Some("admin") => Some(Self::Admin),
             Some(_) => None,
         }
@@ -80,6 +83,7 @@ impl Routable for Route {
             Self::Index => String::from("/"),
             Self::Brackets => String::from("/brackets"),
             Self::Entrants => String::from("/entrants"),
+            Self::Log => String::from("/log"),
             Self::Admin => String::from("/admin"),
         }
     }
@@ -99,6 +103,9 @@ fn switch(tournament: Rc<ApiTournament>) -> impl Fn(&Route) -> Html {
                 },
                 Route::Entrants => html! {
                     <Entrants tournament_id={tournament.id} />
+                },
+                Route::Log => html! {
+                    <Log {tournament} />
                 },
                 Route::Admin => html! {
                     <Admin {tournament} />

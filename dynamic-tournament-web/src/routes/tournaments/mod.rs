@@ -1,6 +1,7 @@
 mod admin;
 mod brackets;
 mod entrants;
+mod log;
 mod navbar;
 mod overview;
 mod tournament;

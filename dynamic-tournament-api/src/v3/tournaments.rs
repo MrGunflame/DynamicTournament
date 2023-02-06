@@ -3,7 +3,9 @@ pub mod entrants;
 pub mod log;
 pub mod roles;
 
-use self::{brackets::BracketsClient, entrants::EntrantsClient, roles::RolesClient};
+use self::{
+    brackets::BracketsClient, entrants::EntrantsClient, log::EventLogClient, roles::RolesClient,
+};
 
 use super::id::TournamentId;
 use crate::{Client, Result};
@@ -271,5 +273,9 @@ impl<'a> TournamentsClient<'a> {
 
     pub fn roles(&self, tournament_id: TournamentId) -> RolesClient {
         RolesClient::new(self.client, tournament_id)
+    }
+
+    pub fn log(&self, tournament_id: TournamentId) -> EventLogClient {
+        EventLogClient::new(self.client, tournament_id)
     }
 }

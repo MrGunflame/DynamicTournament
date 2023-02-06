@@ -455,6 +455,22 @@ h3.dt-title {
   justify-content: space-around;
 }
 
+/* EVENT LOG */
+
+.dt-evlog {
+  margin: 10px;
+}
+
+.dt-evlog-author {
+  color: var(--color-orange);
+}
+
+.dt-evlog-date {
+  font-size: small;
+  color: gray;
+}
+
+
 /* IDS */
 
 #dt-popup-host {
