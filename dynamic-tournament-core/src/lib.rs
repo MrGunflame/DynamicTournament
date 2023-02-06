@@ -512,6 +512,7 @@ impl<D> Match<Node<D>>
 where
     D: EntrantData,
 {
+    /// Returns `true` if the match contains at least one winner.
     pub fn is_concluded(&self) -> bool {
         for entrant in &self.entrants {
             if let EntrantSpot::Entrant(entrant) = entrant {

@@ -634,6 +634,10 @@ where
 
         let rounds = self.matches.len() / self.matches_per_round();
         for round in 0..rounds {
+            // The round is final (in terms of initialized) when
+            // at least one match is not done.
+            let mut is_final_round = false;
+
             let round = self.round(round);
 
             let mut round_entrants = HashSet::new();
@@ -642,15 +646,19 @@ where
             }
 
             for match_ in round {
-                // Skip matches that are not complete.
-                if !match_.is_concluded() {
-                    continue;
-                }
-
                 for (i, entrant) in match_.entrants.iter().enumerate() {
-                    let node = entrant.unwrap_ref();
+                    // Skip matches that are not complete.
+                    let EntrantSpot::Entrant(node) = entrant else {
+                        continue;
+                    };
 
                     round_entrants.remove(&node.index);
+
+                    if !match_.is_concluded() {
+                        is_final_round = true;
+                        continue;
+                    }
+
                     let mut score = scores.get_mut(&node.index).unwrap();
 
                     if node.data.winner() {
@@ -671,6 +679,10 @@ where
             // One entrant may have a bye.
             if let Some(index) = round_entrants.into_iter().next() {
                 scores.get_mut(&index).unwrap().byes += 1;
+            }
+
+            if is_final_round {
+                break;
             }
         }
 
