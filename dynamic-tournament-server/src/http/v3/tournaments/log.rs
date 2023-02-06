@@ -1,3 +1,4 @@
+use dynamic_tournament_api::auth::Flags;
 use dynamic_tournament_api::v3::id::TournamentId;
 use dynamic_tournament_macros::{method, path};
 
@@ -12,6 +13,8 @@ pub async fn route(mut ctx: Context, id: TournamentId) -> Result {
 }
 
 async fn list(ctx: Context, id: TournamentId) -> Result {
+    ctx.require_authentication(Flags::ADMIN)?;
+
     let events = ctx.state.store.event_log(id).list().await?;
     Ok(Response::ok().json(&events))
 }
