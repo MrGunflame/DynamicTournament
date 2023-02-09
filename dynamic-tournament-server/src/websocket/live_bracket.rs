@@ -3,8 +3,10 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
-use dynamic_tournament_api::v3::id::{BracketId, EntrantId, SystemId, TournamentId};
+use chrono::Utc;
+use dynamic_tournament_api::v3::id::{BracketId, EntrantId, EventId, SystemId, TournamentId};
 use dynamic_tournament_api::v3::tournaments::brackets::matches::Response;
+use dynamic_tournament_api::v3::tournaments::log::{LogEvent, LogEventBody};
 use dynamic_tournament_core::{
     tournament::{Tournament, TournamentKind},
     EntrantScore, EntrantSpot, Matches, System,
@@ -19,10 +21,16 @@ use crate::{store::Store, Error};
 
 #[derive(Clone, Debug)]
 pub struct LiveBracket {
+    /// Id of the connected user.
+    user_id: Option<u64>,
     inner: Arc<LiveBracketInner>,
 }
 
 impl LiveBracket {
+    pub fn set_user_id(&mut self, id: u64) {
+        self.user_id = Some(id);
+    }
+
     pub fn update(&self, index: u64, nodes: [EntrantScore<u64>; 2]) {
         let mut bracket = self.inner.bracket.write();
 
@@ -50,8 +58,23 @@ impl LiveBracket {
 
         self.notify(BracketChange::UpdateMatch { index, nodes });
 
+        let log_event = LogEvent {
+            id: EventId(0),
+            date: Utc::now(),
+            author: self.user_id.unwrap_or(0),
+            body: LogEventBody::UpdateMatch {
+                bracket_id: self.inner.bracket_id,
+                index,
+                nodes,
+            },
+        };
+
         let bracket = self.clone();
         tokio::task::spawn(async move {
+            if let Err(err) = bracket.log(log_event).await {
+                log::error!("Failed to log event: {}", err);
+            }
+
             if let Err(err) = bracket.store().await {
                 log::error!("Failed to save bracket state: {}", err);
             }
@@ -67,8 +90,22 @@ impl LiveBracket {
 
         self.notify(BracketChange::ResetMatch { index });
 
+        let log_event = LogEvent {
+            id: EventId(0),
+            date: Utc::now(),
+            author: self.user_id.unwrap_or(0),
+            body: LogEventBody::ResetMatch {
+                bracket_id: self.inner.bracket_id,
+                index: index as u64,
+            },
+        };
+
         let bracket = self.clone();
         tokio::task::spawn(async move {
+            if let Err(err) = bracket.log(log_event).await {
+                log::error!("Failed to log event: {}", err);
+            }
+
             if let Err(err) = bracket.store().await {
                 log::error!("Failed to save bracket state: {}", err);
             }
@@ -116,6 +153,14 @@ impl LiveBracket {
             )
             .await?;
         Ok(())
+    }
+
+    pub async fn log(&self, event: LogEvent) -> Result<(), Error> {
+        self.inner
+            .store
+            .event_log(self.inner.tournament_id)
+            .insert(&event)
+            .await
     }
 }
 
@@ -165,6 +210,7 @@ impl LiveBrackets {
         let bracket = self.inner.read();
         let bracket = bracket.get(&(tournament_id, bracket_id))?;
         Some(LiveBracket {
+            user_id: None,
             inner: bracket.clone().upgrade().unwrap(),
         })
     }
@@ -220,6 +266,7 @@ impl LiveBrackets {
         let (tx, _) = broadcast::channel(32);
 
         let bracket = LiveBracket {
+            user_id: None,
             inner: Arc::new(LiveBracketInner {
                 store: self.store.clone(),
                 tournament_id,
