@@ -56,6 +56,7 @@ pub struct Properties {
     pub onclick: Option<Callback<()>>,
     #[prop_or_default]
     pub disabled: bool,
+    #[prop_or_default]
     pub title: &'static str,
     #[prop_or("dt-button")]
     pub classes: &'static str,

@@ -297,7 +297,7 @@ impl Component for Entrants {
                                 <FaPlus label="Add" />
                             </Button>
                         </div>
-                        <table class="dt-table-striped">
+                        <table class="dt-table dt-table-striped">
                             { head }
                             { body }
                         </table>
