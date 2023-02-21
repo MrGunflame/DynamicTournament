@@ -17,7 +17,7 @@ all: build assets hash
 wasm-pack:
 	@if [ ! -f "$(PATH_BUILD)/bin/wasm-pack" ]; \
 	then \
-		$(CARGO) install wasm-pack --root $(PATH_BUILD); \
+		$(CARGO) install wasm-pack --root $(PATH_BUILD) --no-default-features; \
 	fi
 
 build: wasm-pack
