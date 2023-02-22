@@ -34,6 +34,19 @@ h6 {
   margin: 2px;
 }
 
+.dt-button-red {
+  cursor: pointer;
+  border-radius: 2px;
+  border: none;
+  background-color: #a50909;
+  text-decoration: none;
+  text-transform: uppercase;
+  font-size: 0.88em;
+  padding: calc(1em /2);
+  color: white;
+  margin: 2px;
+}
+
 .dt-table {
   border-collapse: collapse;
 }
@@ -196,6 +209,7 @@ h3.dt-title {
   flex-direction: column;
   align-items: stretch;
   padding: 10px;
+  min-width: 600px;
 }
 
 .dt-popup-close-wrapper {
@@ -224,12 +238,6 @@ h3.dt-title {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-.dt-popup-team {
-  background-color: gray;
-  margin: 10px;
-  padding: 4px;
 }
 
 /* NAVBAR */
@@ -379,7 +387,7 @@ h3.dt-title {
 }
 
 .dt-bracket-match-teams {
-  min-width: 70%;
+  min-width: 180px;
   width: 100%;
 }
 
@@ -460,6 +468,22 @@ h3.dt-title {
   margin: 10px;
   justify-content: space-around;
 }
+
+/* EVENT LOG */
+
+.dt-evlog {
+  margin: 10px;
+}
+
+.dt-evlog-author {
+  color: var(--color-orange);
+}
+
+.dt-evlog-date {
+  font-size: small;
+  color: gray;
+}
+
 
 /* IDS */
 

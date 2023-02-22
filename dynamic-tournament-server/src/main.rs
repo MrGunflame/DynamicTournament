@@ -71,37 +71,37 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let tables = [
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}tournaments (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            date TIMESTAMP NOT NULL,
-            kind TINYINT UNSIGNED NOT NULL
-        )",
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        date TIMESTAMP NOT NULL,
+                        kind TINYINT UNSIGNED NOT NULL
+                    )",
                     prefix
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}entrants (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            tournament_id BIGINT UNSIGNED NOT NULL,
-            data BLOB NOT NULL
-        )",
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        tournament_id BIGINT UNSIGNED NOT NULL,
+                        data BLOB NOT NULL
+                    )",
                     prefix
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}brackets (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            tournament_id BIGINT UNSIGNED NOT NULL,
-            data BLOB NOT NULL,
-            state BLOB NOT NULL
-        )",
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        tournament_id BIGINT UNSIGNED NOT NULL,
+                        data BLOB NOT NULL,
+                        state BLOB NOT NULL
+                    )",
                     prefix
                 ),
                 format!(
                     "CREATE TABLE IF NOT EXISTS {}roles (
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            tournament_id BIGINT UNSIGNED NOT NULL,
-            name TEXT NOT NULL
-        )",
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        tournament_id BIGINT UNSIGNED NOT NULL,
+                        name TEXT NOT NULL
+                    )",
                     prefix
                 ),
                 format!(
@@ -109,7 +109,17 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         id BIGINT UNSIGNED PRIMARY KEY,
                         name TEXT NOT NULL,
                         password TEXT NOT NULL
-                        )",
+                    )",
+                    prefix
+                ),
+                format!(
+                    "CREATE TABLE IF NOT EXISTS {}log (
+                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                        tournament_id BIGINT UNSIGNED NOT NULL,
+                        date TIMESTAMP NOT NULL,
+                        author BIGINT UNSIGNED NOT NULL,
+                        data BLOB NOT NULL
+                    )",
                     prefix
                 ),
             ];

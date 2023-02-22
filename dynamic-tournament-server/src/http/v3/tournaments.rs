@@ -1,5 +1,6 @@
 mod brackets;
 mod entrants;
+mod log;
 mod roles;
 
 use std::hash::{Hash, Hasher};
@@ -36,6 +37,7 @@ pub async fn route(mut ctx: Context) -> Result {
                 "entrants" => entrants::route(ctx, id).await,
                 "brackets" => brackets::route(ctx, id).await,
                 "roles" => roles::route(ctx, id).await,
+                "log" => log::route(ctx, id).await,
                 @ => method!(ctx, {
                     GET => get(ctx, id).await,
                     PATCH => patch(ctx, id).await,

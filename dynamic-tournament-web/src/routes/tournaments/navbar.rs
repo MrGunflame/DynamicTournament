@@ -31,6 +31,7 @@ impl Component for Navbar {
             (Route::Index, "Overview", None),
             (Route::Brackets, "Brackets", None),
             (Route::Entrants, "Entrants", None),
+            (Route::Log, "Log", Some(Flags::ADMIN)),
             (Route::Admin, "Admin", Some(Flags::ADMIN)),
         ];
 

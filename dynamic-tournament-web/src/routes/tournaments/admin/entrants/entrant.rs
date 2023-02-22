@@ -144,7 +144,7 @@ impl Component for UpdateEntrant {
                                 <FaPlus label="Add" />
                             </Button>
                         </div>
-                        <table class="table-striped">
+                        <table class="dt-table dt-table-striped">
                             <tr>
                                 <th>{ "Name" }</th>
                                 <th>{ "Role" }</th>

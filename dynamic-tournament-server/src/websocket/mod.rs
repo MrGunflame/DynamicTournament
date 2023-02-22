@@ -354,6 +354,7 @@ where
                 Ok(token) => {
                     if token.claims().flags.intersects(Flags::EDIT_SCORES) {
                         self.client_user = Some(token.claims().sub);
+                        self.bracket.set_user_id(token.claims().sub);
                         None
                     } else {
                         Some(Response::Error(ErrorResponse::Unauthorized))

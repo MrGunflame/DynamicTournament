@@ -2,6 +2,7 @@ use dynamic_tournament_api::v3::tournaments::Tournament;
 use yew::{html, Component, Context, Html, Properties};
 
 use crate::components::confirmation::Confirmation;
+use crate::components::Button;
 use crate::utils::Rc;
 use crate::{
     components::providers::{ClientProvider, Provider},
@@ -94,8 +95,8 @@ impl Component for DangerZone {
                 <div>
                     <h2>{ "The Danger Zone" }</h2>
 
-                    <button class="dt-button">{ "Reset Tournament" }</button>
-                    <button class="dt-button" onclick={delete}>{ "Delete Tournament" }</button>
+                    <Button classes="dt-button-red">{ "Reset Tournament" }</Button>
+                    <Button classes="dt-button-red" onclick={delete}>{ "Delete Tournament" }</Button>
                 </div>
             </>
         }

@@ -142,7 +142,7 @@ impl Component for Settings {
             <div>
                 <h2>{ "Settings" }</h2>
                 <div>
-                    <table class="dt-table-striped">
+                    <table class="dt-table dt-table-striped">
                         <tr>
                             <td>
                                 { "Name" }

@@ -1,6 +1,7 @@
 use crate::Error;
-use dynamic_tournament_api::v3::id::RoleId;
+use dynamic_tournament_api::v3::id::{EventId, RoleId};
 use dynamic_tournament_api::v3::tournaments::brackets::Bracket;
+use dynamic_tournament_api::v3::tournaments::log::LogEvent;
 use dynamic_tournament_api::v3::tournaments::roles::Role;
 use dynamic_tournament_api::v3::tournaments::PartialTournament;
 use dynamic_tournament_api::v3::users::User;
@@ -39,6 +40,11 @@ impl Store {
     #[inline]
     pub fn users(&self) -> UsersClient<'_> {
         UsersClient { store: self }
+    }
+
+    #[inline]
+    pub fn event_log(&self, id: TournamentId) -> EventLogClient<'_> {
+        EventLogClient { store: self, id }
     }
 
     pub async fn insert_tournament(&self, tournament: &Tournament) -> Result<TournamentId, Error> {
@@ -671,6 +677,59 @@ impl<'a> UsersClient<'a> {
         .bind(user.id.0)
         .bind(&user.username)
         .bind(&user.password)
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct EventLogClient<'a> {
+    store: &'a Store,
+    id: TournamentId,
+}
+
+impl<'a> EventLogClient<'a> {
+    pub async fn list(&self) -> Result<Vec<LogEvent>, Error> {
+        let sql = format!(
+            "SELECT id, date, author, data FROM {}log WHERE tournament_id = ?",
+            self.store.table_prefix
+        );
+
+        let mut rows = sqlx::query(&sql).bind(self.id.0).fetch(&self.store.pool);
+
+        let mut events = Vec::new();
+        while let Some(row) = rows.try_next().await? {
+            let id = row.try_get("id")?;
+            let date = row.try_get("date")?;
+            let author = row.try_get("author")?;
+            let data: Vec<u8> = row.try_get("data")?;
+
+            let body = serde_json::from_slice(&data)?;
+
+            events.push(LogEvent {
+                id: EventId(id),
+                date,
+                author,
+                body,
+            });
+        }
+
+        Ok(events)
+    }
+
+    pub async fn insert(&self, event: &LogEvent) -> Result<(), Error> {
+        let body = serde_json::to_vec(&event.body)?;
+
+        sqlx::query(&format!(
+            "INSERT INTO {}log (tournament_id, date, author, data) VALUES (?, ?, ?, ?)",
+            self.store.table_prefix
+        ))
+        .bind(self.id.0)
+        .bind(event.date)
+        .bind(event.author)
+        .bind(body)
         .execute(&self.store.pool)
         .await?;
 

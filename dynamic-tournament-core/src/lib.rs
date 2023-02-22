@@ -450,6 +450,13 @@ impl<T> Match<T> {
         Self::new([EntrantSpot::TBD, EntrantSpot::TBD])
     }
 
+    /// Returns `true` if all spots are [`EntrantSpot::Empty`].
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        matches!(self.entrants[0], EntrantSpot::Empty)
+            && matches!(self.entrants[1], EntrantSpot::Empty)
+    }
+
     /// Returns `true` if the match is a *placeholder match*. This is `true` when either spot
     /// contains an [`EntrantSpot::Empty`] variant.
     #[inline]
@@ -512,6 +519,7 @@ impl<D> Match<Node<D>>
 where
     D: EntrantData,
 {
+    /// Returns `true` if the match contains at least one winner.
     pub fn is_concluded(&self) -> bool {
         for entrant in &self.entrants {
             if let EntrantSpot::Entrant(entrant) = entrant {

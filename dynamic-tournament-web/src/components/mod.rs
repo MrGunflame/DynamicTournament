@@ -12,6 +12,7 @@ pub mod parse_input;
 pub mod popup;
 pub mod protected;
 pub mod providers;
+pub mod time;
 pub mod update_bracket;
 
 pub use bracket_list::BracketList;
@@ -19,3 +20,4 @@ pub use button::Button;
 pub use input::Input;
 pub use parse_input::ParseInput;
 pub use protected::Protected;
+pub use time::Time;

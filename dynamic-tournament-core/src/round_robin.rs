@@ -260,6 +260,8 @@ where
 
         let matches_per_round = self.entrants_even() / 2;
 
+        let mut round_index = 0;
+
         let mut index = 0;
         while index < self.matches.len() {
             let mut round = Vec::new();
@@ -277,10 +279,12 @@ where
             }
 
             rounds.push(Element::new(Row {
-                label: None,
+                label: Some(format!("Round {}", round_index + 1).into()),
                 position: Some(Position::Start),
                 children: round.into_iter(),
             }));
+
+            round_index += 1;
         }
 
         RenderState {
