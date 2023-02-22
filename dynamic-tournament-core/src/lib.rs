@@ -1058,6 +1058,7 @@ mod tests {
     use std::marker::PhantomData;
 
     use crate::render::{Column, Element, Match, Renderer, Row};
+    use crate::Node;
 
     use super::{EntrantData, System};
 
