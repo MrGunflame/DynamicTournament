@@ -109,6 +109,18 @@ where
             index += 1;
         }
 
+        // Lower-bracket matches are completely empty must already
+        // forward to the next round.
+        let mut index = 0;
+        while index < initial_matches / 2 {
+            if matches[lower_bracket_index + index].is_empty() {
+                let idx = lower_bracket_index + index + initial_matches / 2;
+                matches[idx].entrants[0] = EntrantSpot::Empty;
+            }
+
+            index += 1;
+        }
+
         log::debug!(
             "Created a new DoubleElimination bracket with {} matches",
             matches.len()
@@ -1985,6 +1997,449 @@ mod tests {
                 Match::new([
                     EntrantSpot::Entrant(Node::new(4)),
                     EntrantSpot::Entrant(Node::new(6)),
+                ]),
+                // DOWN Round 3
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // Finals
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_double_elimination_update_match_partial() {
+        let entrants = entrants![0, 1, 2, 3, 4];
+        let mut tournament = DoubleElimination::<i32, u32>::new(entrants);
+
+        assert_eq!(tournament.entrants, [0, 1, 2, 3, 4]);
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(1))]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::tbd(),
+                // DOWN Round 0
+                Match::new([EntrantSpot::TBD, EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::tbd(),
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
+                // DOWN Round 2
+                Match::tbd(),
+                // DOWN Round 3
+                Match::tbd(),
+                // Finals
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(0, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::tbd(),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::TBD]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
+                // DOWN Round 2
+                Match::tbd(),
+                // DOWN Round 3
+                Match::tbd(),
+                // Finals
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(4, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::TBD]),
+                // DOWN Round 2
+                Match::tbd(),
+                // DOWN Round 3
+                Match::tbd(),
+                // Finals
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(5, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 3
+                Match::tbd(),
+                // Finals
+                Match::tbd(),
+            ]
+        );
+
+        tournament.update_match(6, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 3
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(2))]),
+                // Finals
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(9, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // DOWN Round 3
+                Match::new([EntrantSpot::TBD, EntrantSpot::Entrant(Node::new(2))]),
+                // Finals
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(11, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // DOWN Round 3
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // Finals
+                Match::new([EntrantSpot::Entrant(Node::new(0)), EntrantSpot::TBD]),
+            ]
+        );
+
+        tournament.update_match(12, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // DOWN Round 3
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // Finals
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+            ]
+        );
+
+        tournament.update_match(13, |m, res| {
+            res.winner_default(&m[0]);
+            res.loser_default(&m[1]);
+        });
+
+        assert_eq!(
+            tournament.matches,
+            [
+                // UP Round 0
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(4)),
+                ]),
+                Match::new([EntrantSpot::Entrant(Node::new(1)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(2)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Entrant(Node::new(3)), EntrantSpot::Empty]),
+                // UP Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(2)),
+                    EntrantSpot::Entrant(Node::new(3)),
+                ]),
+                // UP Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(0)),
+                    EntrantSpot::Entrant(Node::new(2)),
+                ]),
+                // DOWN Round 0
+                Match::new([EntrantSpot::Entrant(Node::new(4)), EntrantSpot::Empty]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Empty]),
+                // DOWN Round 1
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(1)),
+                ]),
+                Match::new([EntrantSpot::Empty, EntrantSpot::Entrant(Node::new(3))]),
+                // DOWN Round 2
+                Match::new([
+                    EntrantSpot::Entrant(Node::new(4)),
+                    EntrantSpot::Entrant(Node::new(3)),
                 ]),
                 // DOWN Round 3
                 Match::new([
