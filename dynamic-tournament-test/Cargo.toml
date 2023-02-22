@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-test"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 description = "A utility crate for creating testing data for the API"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -9,7 +9,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-dynamic-tournament-api = { version = "0.6.1", path = "../dynamic-tournament-api" }
+dynamic-tournament-api = { version = "0.6.2", path = "../dynamic-tournament-api" }
 
 chrono = "0.4.19"
 rand = "0.8.5"

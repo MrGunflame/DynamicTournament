@@ -1,6 +1,6 @@
 [package]
 name = "dynamic-tournament-web"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 description = "The Web UI part of the DynamicTournament system"
 authors = ["MrGunflame <git@robbsrv.de>"]
@@ -12,9 +12,9 @@ publish = false
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-dynamic-tournament-api = { version = "0.6.1", path = "../dynamic-tournament-api", features = ["local-storage"] }
-dynamic-tournament-core = { version = "0.6.1", path = "../dynamic-tournament-core", features = ["serde"] }
-dynamic-tournament-macros = { version = "0.6.1", path = "../dynamic-tournament-macros", features = ["web"] }
+dynamic-tournament-api = { version = "0.6.2", path = "../dynamic-tournament-api", features = ["local-storage"] }
+dynamic-tournament-core = { version = "0.6.2", path = "../dynamic-tournament-core", features = ["serde"] }
+dynamic-tournament-macros = { version = "0.6.2", path = "../dynamic-tournament-macros", features = ["web"] }
 
 yew = "0.19.3"
 yew-agent = "0.1.0"
