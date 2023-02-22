@@ -296,95 +296,9 @@ where
         }
     }
 
-    // pub fn next_matches(&self, index: usize) -> NextMatches {
-    //     // The number of matches in the first round of the upper bracket.
-    //     let initial_matches = self.entrants.len().next_power_of_two() / 2;
-
-    //     match index {
-    //         // Final match or out-of-bounds: no next matches.
-    //         i if i >= self.final_bracket_index() => NextMatches::default(),
-    //         // Lower bracket match
-    //         i if i >= self.lower_bracket_index => {
-    //             let mut round_index = 0;
-    //             let mut buffer = 0;
-    //             let mut num_matches = initial_matches / 2;
-    //             while index - self.lower_bracket_index >= buffer + num_matches {
-    //                 round_index += 1;
-    //                 buffer += num_matches;
-
-    //                 if round_index % 2 == 0 {
-    //                     num_matches /= 2;
-    //                 }
-    //             }
-
-    //             let winner = index - buffer - self.lower_bracket_index;
-
-    //             let (winner, position) = match round_index {
-    //                 i if i == self.final_bracket_index() - 1 => (self.final_bracket_index(), 1),
-    //                 i if i % 2 == 0 => (index + num_matches, 0),
-    //                 _ => (index + (num_matches - winner + winner / 2), (index - 1) % 2),
-    //             };
-
-    //             NextMatches::new(Some((winner, position)), None)
-    //         }
-    //         // Upper bracket match
-    //         i => match i {
-    //             // Final match in the upper bracket: Move the winner to the final bracket (spot 1)
-    //             // and the loser to the last match in the lower bracket (spot 2).
-    //             i if i == self.lower_bracket_index - 1 => {
-    //                 let winner_index = self.final_bracket_index();
-    //                 let loser_index = self.final_bracket_index() - 1;
-
-    //                 NextMatches::new(Some((winner_index, 0)), Some((loser_index, 1)))
-    //             }
-    //             // The first round of matches. All matches in the lower bracket need to be filled.
-    //             i if i < initial_matches => {
-    //                 let winner_index = initial_matches + i / 2;
-    //                 let loser_index = self.lower_bracket_index + (i / 2);
-
-    //                 NextMatches::new(
-    //                     Some((winner_index, index % 2)),
-    //                     Some((loser_index, index % 2)),
-    //                 )
-    //             }
-    //             index => {
-    //                 let winner_index = initial_matches + index / 2;
-
-    //                 // Find the index of the match in second round of the lower bracket with the
-    //                 // same number of matches as in the current round.
-    //                 let mut buffer = initial_matches;
-    //                 let mut num_matches = initial_matches / 2;
-    //                 let mut lower_buffer = 0;
-    //                 while index - self.upper_match_index(index) >= buffer {
-    //                     buffer += num_matches;
-    //                     lower_buffer += num_matches * 2;
-    //                     num_matches /= 2;
-    //                 }
-
-    //                 let loser_index =
-    //                     self.lower_bracket_index + lower_buffer + self.upper_match_index(index)
-    //                         - num_matches * 2;
-
-    //                 NextMatches::new(Some((winner_index, index % 2)), Some((loser_index, 1)))
-    //             }
-    //         },
-    //     }
-    // }
-
     /// Returns the index of the starting match of the final bracket.
     fn final_bracket_index(&self) -> usize {
         self.matches.len().saturating_sub(1)
-    }
-
-    fn upper_match_index(&self, index: usize) -> usize {
-        let mut buffer = 0;
-        let mut start = self.entrants.len().next_power_of_two();
-        while index >= buffer + start {
-            buffer += start;
-            start /= 2;
-        }
-
-        index - buffer
     }
 
     /// Calculates the number of matches required to build a [`DoubleElimination`] tournament
