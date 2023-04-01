@@ -38,6 +38,11 @@ impl Store {
     }
 
     #[inline]
+    pub fn brackets(&self, _id: TournamentId) -> BracketsClient<'_> {
+        BracketsClient { store: self }
+    }
+
+    #[inline]
     pub fn users(&self) -> UsersClient<'_> {
         UsersClient { store: self }
     }
@@ -730,6 +735,25 @@ impl<'a> EventLogClient<'a> {
         .bind(event.date)
         .bind(event.author)
         .bind(body)
+        .execute(&self.store.pool)
+        .await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct BracketsClient<'a> {
+    store: &'a Store,
+}
+
+impl<'a> BracketsClient<'a> {
+    pub async fn delete(&self, id: BracketId) -> Result<(), Error> {
+        sqlx::query(&format!(
+            "DELETE FROM {}brackets WHERE id = ?",
+            self.store.table_prefix
+        ))
+        .bind(id.0)
         .execute(&self.store.pool)
         .await?;
 

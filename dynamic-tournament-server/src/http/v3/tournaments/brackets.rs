@@ -25,6 +25,7 @@ pub async fn route(mut ctx: Context, tournament_id: TournamentId) -> Result {
         id => path!(ctx, {
             @ => method!(ctx, {
                 GET => get(ctx, tournament_id, id).await,
+                DELETE => delete(ctx, tournament_id, id).await,
             }),
             "matches" => matches::route(ctx, tournament_id, id).await,
         })
@@ -100,4 +101,11 @@ async fn create(mut ctx: Context, tournament_id: TournamentId) -> Result {
     }
 
     Ok(Response::created().json(&brackets))
+}
+
+async fn delete(ctx: Context, tournament_id: TournamentId, id: BracketId) -> Result {
+    ctx.require_authentication(Flags::ADMIN)?;
+
+    ctx.state.store.brackets(tournament_id).delete(id).await?;
+    Ok(Response::ok())
 }
