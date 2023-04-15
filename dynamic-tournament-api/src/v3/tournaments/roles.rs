@@ -43,12 +43,11 @@ impl<'a> RolesClient<'a> {
         self.client.send(req).await?.json().await
     }
 
-    pub async fn create(&self, role: &Role) -> Result<()> {
+    pub async fn create(&self, role: &Role) -> Result<Role> {
         let uri = format!("/v3/tournaments/{}/roles", self.tournament_id);
 
-        let req = self.client.request().uri(&uri).body(role).build();
+        let req = self.client.request().post().uri(&uri).body(role).build();
 
-        self.client.send(req).await?;
-        Ok(())
+        self.client.send(req).await?.json().await;
     }
 }
