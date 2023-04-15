@@ -48,6 +48,6 @@ impl<'a> RolesClient<'a> {
 
         let req = self.client.request().post().uri(&uri).body(role).build();
 
-        self.client.send(req).await?.json().await;
+        self.client.send(req).await?.json().await
     }
 }
